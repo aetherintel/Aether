@@ -1,0 +1,48 @@
+# --- Global ---
+*.env
+*.env.*
+__pycache__/
+*.py[cod]
+*.sqlite3
+.DS_Store
+*.log
+
+# --- Python / FastAPI ---
+backend/__pycache__/
+backend/*.pyc
+backend/*.pyo
+backend/.pytest_cache/
+backend/.mypy_cache/
+backend/venv/
+backend/env/
+backend/.venv/
+
+# --- Node / React ---
+frontend/node_modules/
+frontend/.next/
+frontend/.cache/
+frontend/dist/
+frontend/build/
+frontend/.env*
+frontend/.turbo/
+
+# --- OS and Editor specific ---
+*.swp
+*.swo
+*.bak
+*.tmp
+*.idea/
+*.vscode/
+*.VSCodeCounter/
+Thumbs.db
+
+# --- Docker ---
+**/.docker-compose.override.yml
+**/docker-compose.override.yml
+
+# --- Logs ---
+*.log
+
+# --- Volumes ---
+volumes/
+postgres_data/
