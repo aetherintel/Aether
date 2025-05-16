@@ -3,9 +3,23 @@ import reactLogo from './assets/react.svg'
 import viteLogo from '/vite.svg'
 import './App.css'
 import { Button } from "@/components/ui/button"
+import axios from 'axios';
 
 function App() {
   const [count, setCount] = useState(0)
+
+  axios.get('/api')
+  .then(function (response) {
+    // handle success
+    console.log(response);
+  })
+  .catch(function (error) {
+    // handle error
+    console.log(error);
+  })
+  .finally(function () {
+    // always executed
+  });
 
   return (
     <>
