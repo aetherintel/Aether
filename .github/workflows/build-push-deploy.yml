@@ -8,8 +8,8 @@ jobs:
   build-push-frontend:
     runs-on: ubuntu-latest
     steps:
-      - name: Check Out Repo
-        uses: actions/checkout@v2
+      - name: Checkout code
+        uses: actions/checkout@v3
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v1
@@ -40,8 +40,8 @@ jobs:
     needs: build-push-frontend
     runs-on: ubuntu-latest  
     steps:
-      - name: Check Out Repo
-        uses: actions/checkout@v2
+      - name: Checkout code
+        uses: actions/checkout@v3
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v1
@@ -72,12 +72,26 @@ jobs:
     needs: build-push-backend
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Copy docker-compose.yml to prod
+        uses: appleboy/scp-action@v1
+        with:
+          host: ${{ secrets.PROD_HOST }}
+          username: ${{ secrets.PROD_USER }}
+          key: ${{ secrets.PROD_SSH_KEY }}
+          source: "docker-compose.yml"
+          target: "/var/www/app/"
+
       - name: Deploy to Prod
-        uses: appleboy/ssh-action@master
+        uses: appleboy/ssh-action@v1
         with:
           host: ${{ secrets.PROD_HOST }}
           username: ${{ secrets.PROD_USER }}
           key: ${{ secrets.PROD_SSH_KEY }}
           script: |
+            cd /var/www/app
+            docker login -u ${{ secrets.DOCKER_USERNAME }} -p ${{ secrets.DOCKER_PASSWORD }}
             docker compose pull
             docker compose up -d
