@@ -1,7 +1,6 @@
 services:
   backend:
-    image: ${DOCKER_USERNAME}/monitor-backend:latest
-    container_name: backend
+    build: ./backend
     ports:
       - "8000:8000"
     volumes:
@@ -9,25 +8,11 @@ services:
     restart: always
 
   frontend:
-    image: ${DOCKER_USERNAME}/monitor-frontend:latest
-    container_name: frontend
+    build: ./frontend
     ports:
       - "80:80"
       - "443:443"
-    environment:
-      - PROD_DOMAIN=${PROD_DOMAIN}
     volumes:
       - ./frontend:/app
-      - ./certbot/www:/var/www/certbot
-      - ./certbot/conf:/etc/letsencrypt
+      - ./frontend/nginx-dev.conf:/etc/nginx/conf.d/default.conf:ro
     restart: always
-    depends_on: 
-      - backend
-
-  certbot:
-    image: certbot/certbot
-    container_name: certbot
-    volumes:
-      - ./certbot/www:/var/www/certbot
-      - ./certbot/conf:/etc/letsencrypt
-    entrypoint: "/bin/sh -c 'sleep 10 && certbot certonly --webroot -w /var/www/certbot -d ${PROD_DOMAIN} --email ${PROD_MAIL} --agree-tos --non-interactive'"
