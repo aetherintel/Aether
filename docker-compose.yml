@@ -13,8 +13,21 @@ services:
     container_name: frontend
     ports:
       - "80:80"
+      - "443:443"
+    environment:
+      - PROD_DOMAIN=${PROD_DOMAIN}
     volumes:
       - ./frontend:/app
+      - ./certbot/www:/var/www/certbot
+      - ./certbot/conf:/etc/letsencrypt
     restart: always
     depends_on: 
       - backend
+
+  certbot:
+    image: certbot/certbot
+    container_name: certbot
+    volumes:
+      - ./certbot/www:/var/www/certbot
+      - ./certbot/conf:/etc/letsencrypt
+    entrypoint: "/bin/sh -c 'sleep 10 && certbot certonly --webroot -w /var/www/certbot -d ${PROD_DOMAIN} --email ${PROD_MAIL} --agree-tos --non-interactive'"
