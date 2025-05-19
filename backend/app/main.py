@@ -1,15 +1,9 @@
-from typing import Union
-
 from fastapi import FastAPI
+from controller import auth_controller
+from services.config import settings
 
-app = FastAPI()
+print("Using Keycloak URL:", settings.KEYCLOAK_URL)
 
+app = FastAPI(title="FastAPI with Keycloak")
 
-@app.get("/")
-def read_root():
-    return {"Hello": "World"}
-
-
-@app.get("/items/{item_id}")
-def read_item(item_id: int, q: Union[str, None] = None):
-    return {"item_id": item_id, "q": q}
+app.include_router(auth_controller.router, prefix="/api")
