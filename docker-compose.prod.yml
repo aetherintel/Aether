@@ -1,13 +1,59 @@
 services:
+  postgres:
+    image: postgres:15
+    container_name: postgres
+    restart: always
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: keycloak
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./docker/db-init:/docker-entrypoint-initdb.d
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:24.0.2
+    container_name: keycloak
+    depends_on:
+      - postgres
+    command: start-dev --import-realm  # ✅ easy bootstrap, switch to `start` later
+    ports:
+      - "8080:8080"
+    restart: always
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
+      KC_DB_USERNAME: ${DB_USER}
+      KC_DB_PASSWORD: ${DB_PASSWORD}
+      KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN}
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
+    volumes:
+      - ./keycloak/exports:/opt/keycloak/data/export
+      
   backend:
     image: ${DOCKER_USERNAME}/monitor-backend:latest
     container_name: backend
+    environment:
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_URL: postgres://${DB_USER}:${DB_PASSWORD}@postgres:5432/myproject
+      SWAGGER_TOKEN_URL: http://keycloak:8080/realms/HotTopics/protocol/openid-connect/token
+      KEYCLOAK_BASE_URL: http://keycloak:8080
+      KEYCLOAK_URL: http://${KEYCLOAK_HOSTNAME}:8080/realms/HotTopics
+      KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN}
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
+      KEYCLOAK_HOSTNAME: keycloak
+      KEYCLOAK_CLIENT_ID: HotTopics
+      KEYCLOAK_CLIENT_SECRET: ${KEYCLOAK_CLIENT_SECRET}
     ports:
       - "8000:8000"
     volumes:
       - ./backend:/app
     restart: always
-
+    depends_on:
+      - postgres
+      - keycloak
+      
   frontend:
     image: ${DOCKER_USERNAME}/monitor-frontend:latest
     container_name: frontend
