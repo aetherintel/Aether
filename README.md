@@ -70,6 +70,8 @@ KEYCLOAK_ADMIN_PASSWORD=admin
 KEYCLOAK_HOSTNAME=keycloak
 KEYCLOAK_CLIENT_ID=HotTopics
 KEYCLOAK_CLIENT_SECRET=changeme
+KEYCLOAK_ADMIN_CLIENT_ID=backend-admin-client
+KEYCLOAK_ADMIN_CLIENT_SECRET=changeme
 SWAGGER_TOKEN_URL=http://keycloak:8080/realms/HotTopics/protocol/openid-connect/token
 KEYCLOAK_BASE_URL=http://keycloak:8080
 ````
