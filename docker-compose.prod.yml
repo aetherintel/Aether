@@ -77,3 +77,6 @@ services:
       - ./certbot/www:/var/www/certbot
       - ./certbot/conf:/etc/letsencrypt
     entrypoint: "/bin/sh -c 'sleep 10 && certbot certonly --webroot -w /var/www/certbot -d ${PROD_DOMAIN} --email ${PROD_MAIL} --agree-tos --non-interactive'"
+
+volumes:
+  pgdata:
