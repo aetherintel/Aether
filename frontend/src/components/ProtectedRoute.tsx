@@ -1,17 +1,13 @@
-import type { ReactNode } from 'react'
-import { Navigate } from 'react-router'
-import { useAuth } from '../context/AuthContext'
+import React from 'react';
+import { Navigate } from 'react-router';
 
-interface ProtectedRouteProps {
-  children: ReactNode
+interface Props {
+  children: React.ReactNode;
 }
 
-export default function ProtectedRoute({ children }: ProtectedRouteProps) {
-  const { user } = useAuth()
+const PrivateRoute: React.FC<Props> = ({ children }) => {
+  const token = localStorage.getItem('token');
+  return token ? <>{children}</> : <Navigate to="/login" />;
+};
 
-  if (!user) {
-    return <Navigate to="/login" replace />
-  }
-
-  return children
-}
+export default PrivateRoute;
