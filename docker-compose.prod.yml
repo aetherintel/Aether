@@ -30,6 +30,7 @@ services:
       KC_FRONTEND_URL: https://htit-monitor.marvin-carstensen.com/keycloak
       KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN}
       KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
+      PROXY_ADDRESS_FORWARDING: true
     volumes:
       - ./keycloak/exports:/opt/keycloak/data/export
       
