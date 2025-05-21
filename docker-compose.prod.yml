@@ -16,7 +16,7 @@ services:
     container_name: keycloak
     depends_on:
       - postgres
-    command: start-dev --import-realm --hostname https://htit-monitor.marvin-carstensen.com/keycloak --hostname-admin https://htit-monitor.marvin-carstensen.com/keycloak/admin --proxy-headers xforwarded
+    command: start-dev --import-realm
 
     ports:
       - "8080:8080"
