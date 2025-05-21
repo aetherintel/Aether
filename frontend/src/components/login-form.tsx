@@ -9,12 +9,37 @@ import {
 } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { NavLink } from "react-router"
+import { NavLink, useNavigate } from "react-router"
+import React, { useState } from 'react';
+import { login, type LoginCredentials } from '../context/auth';
 
 export function LoginForm({
   className,
   ...props
 }: React.ComponentProps<"div">) {
+  const [form, setForm] = useState<LoginCredentials>({ username: '', password: '' });
+  const [error, setError] = useState<string | null>(null);
+  const navigate = useNavigate();
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setForm({ ...form, [e.target.name]: e.target.value });
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    try {
+      const response = await login(form);
+      // Store token (localStorage, context, etc.)
+      localStorage.setItem('token', response.access_token);
+      navigate('/'); // Redirect after successful login
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    } catch (err) {
+      setError('Invalid credentials');
+    }
+  };
+
+
   return (
     <div className={cn("flex flex-col gap-6", className)} {...props}>
       <Card>
@@ -25,15 +50,18 @@ export function LoginForm({
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <form>
+          <form onSubmit={handleSubmit}>
             <div className="grid gap-6">
               <div className="grid gap-6">
                 <div className="grid gap-3">
-                  <Label htmlFor="email">Email</Label>
+                  <Label htmlFor="email">Username</Label>
                   <Input
-                    id="email"
-                    type="email"
+                    id="username"
+                    name="username"
+                    type="text"
                     placeholder="m@example.com"
+                    value={form.username}
+                    onChange={handleChange}
                     required
                   />
                 </div>
@@ -47,11 +75,19 @@ export function LoginForm({
                       Forgot your password?
                     </a>
                   </div>
-                  <Input id="password" type="password" required />
+                  <Input
+                      id="password"
+                      name="password"
+                      type="password"
+                      value={form.password}
+                      onChange={handleChange}
+                      required
+                  />
                 </div>
                 <Button type="submit" className="w-full">
                   Login
                 </Button>
+                {error && <p style={{ color: 'red' }}>{error}</p>}
               </div>
               <div className="text-center text-sm">
                 Don&apos;t have an account?{" "}

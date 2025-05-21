@@ -84,4 +84,4 @@ Dann öffne:
 
     🔐 Keycloak UI: http://localhost:8080
 
-    ⚙️ FastAPI Swagger UI: http://localhost:8000/docs
+    ⚙️ FastAPI Swagger UI: http://localhost:8000/api/docs

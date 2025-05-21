@@ -1,7 +1,7 @@
 import { Routes, Route } from 'react-router'
 import Login from './components/Login'
 import Register from './components/Register'
-import Dashboard from './components/Dashboard'
+import Page from './app/dashboard/dashboard'
 import ProtectedRoute from './components/ProtectedRoute'
 import axios from 'axios';
 
@@ -24,7 +24,7 @@ function App() {
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
-        <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+        <Route path="/" element={<ProtectedRoute><Page /></ProtectedRoute>} />
       </Routes>
     </>
   )
