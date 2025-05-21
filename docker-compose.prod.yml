@@ -42,6 +42,7 @@ services:
       DB_PASSWORD: ${DB_PASSWORD}
       DB_URL: postgres://${DB_USER}:${DB_PASSWORD}@postgres:5432/myproject
       SWAGGER_TOKEN_URL: http://keycloak:8080/realms/HotTopics/protocol/openid-connect/token
+      KEYCLOAK_BASE_URL: http://keycloak:8080
       KEYCLOAK_URL: http://keycloak:8080/realms/HotTopics
       KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN}
       KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
