@@ -28,7 +28,9 @@ services:
       KC_DB_PASSWORD: ${DB_PASSWORD}
       KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN}
       KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
-      PROXY_ADDRESS_FORWARDING: true
+      KC_HTTP_RELATIVE_PATH: /keycloak
+      KC_HOSTNAME: htit-monitor.marvin-carstensen.com
+      KC_PROXY: edge
     volumes:
       - ./keycloak/exports:/opt/keycloak/data/export
       
