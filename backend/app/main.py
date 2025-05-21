@@ -4,6 +4,6 @@ from services.config import settings
 
 print("Using Keycloak URL:", settings.KEYCLOAK_URL)
 
-app = FastAPI(title="FastAPI with Keycloak")
+app = FastAPI(title="FastAPI with Keycloak",root_path="/api")
 
-app.include_router(auth_controller.router, prefix="/api")
+app.include_router(auth_controller.router)
