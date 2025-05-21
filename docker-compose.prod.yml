@@ -16,7 +16,8 @@ services:
     container_name: keycloak
     depends_on:
       - postgres
-    command: start-dev --import-realm  # ✅ easy bootstrap, switch to `start` later
+    command: start-dev --import-realm --hostname-strict false --proxy-headers forwarded
+
     ports:
       - "8080:8080"
     restart: always
