@@ -1,3 +1,4 @@
+const apiUrl = import.meta.env.VITE_API_URL;
 export interface LoginCredentials {
   username: string;
   password: string;
@@ -9,7 +10,7 @@ export interface LoginResponse {
 }
 
 export const login = async (credentials: LoginCredentials): Promise<LoginResponse> => {
-  const response = await fetch('http://localhost:8000/api/auth/login', {
+  const response = await fetch(apiUrl ? apiUrl : 'http://localhost:8000/api' + '/auth/login', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -18,7 +19,7 @@ export const login = async (credentials: LoginCredentials): Promise<LoginRespons
   });
 
   if (!response.ok) {
-    throw new Error('Login failed');
+    throw new Error('application/json');
   }
 
   return response.json();
