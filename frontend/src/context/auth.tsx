@@ -10,7 +10,7 @@ export interface LoginResponse {
 }
 
 export const login = async (credentials: LoginCredentials): Promise<LoginResponse> => {
-  const response = await fetch(apiUrl ? apiUrl : 'http://localhost:8000/api' + '/auth/login', {
+  const response = await fetch((apiUrl ? apiUrl : 'http://localhost:8000/api') + '/auth/login', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
