@@ -67,7 +67,8 @@ services:
       - "80:80"
       - "443:443"
     environment:
-      - PROD_DOMAIN=${PROD_DOMAIN}
+      PROD_DOMAIN: ${PROD_DOMAIN}
+      VITE_API_URL: https://htit-monitor.marvin-carstensen.com/api
     volumes:
       - ./frontend:/app
       - ./certbot/www:/var/www/certbot
