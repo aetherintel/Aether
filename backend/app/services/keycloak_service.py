@@ -6,7 +6,7 @@ import requests
 from services.config import settings
 
 # OAuth2 configuration for Swagger UI
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl=settings.SWAGGER_TOKEN_URL)
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 
 # JWKS endpoint
 PUBLIC_KEY_URL = f"{settings.KEYCLOAK_URL}/protocol/openid-connect/certs"
