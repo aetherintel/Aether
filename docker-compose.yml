@@ -10,7 +10,6 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./docker/db-init:/docker-entrypoint-initdb.d
-
   keycloak:
     image: quay.io/keycloak/keycloak:24.0.2
     container_name: keycloak
@@ -28,7 +27,8 @@ services:
       KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN}
       KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
     volumes:
-      - ./keycloak/exports:/opt/keycloak/data/export
+      - keycloak_data:/opt/keycloak/data
+      - ./keycloak/exports:/opt/keycloak/data/import
   backend:
     build: ./backend/app
     restart: on-failure
@@ -37,7 +37,7 @@ services:
     environment:
       DB_URL: postgres://${DB_USER}:${DB_PASSWORD}@postgres:5432/myproject
       KEYCLOAK_URL: http://${KEYCLOAK_HOSTNAME}:8080/realms/HotTopics
-      SWAGGER_TOKEN_URL: http://keycloak:8080/realms/HotTopics/protocol/openid-connect/token
+      SWAGGER_TOKEN_URL: http://localhost:8080/realms/HotTopics/protocol/openid-connect/token
     depends_on:
       - postgres
       - keycloak
@@ -56,6 +56,50 @@ services:
     restart: always
     depends_on:
       - backend
+  neo4j:
+    image: neo4j:5.18
+    container_name: neo4j
+    restart: unless-stopped
+    ports:
+      - "7474:7474"   # HTTP browser (optional)
+      - "7687:7687"   # Bolt (for drivers like your scraper)
+    environment:
+      NEO4J_AUTH: ${NEO4J_USER}/${NEO4J_PASSWORD}
+      NEO4J_PLUGINS: '["apoc","graph-data-science"]'
+    volumes:
+      - neo4j_data:/data
+      - neo4j_logs:/logs
+    healthcheck:
+      test: ["CMD", "cypher-shell", "-u", "${NEO4J_USER}", "-p", "${NEO4J_PASSWORD}", "RETURN 1"]
+      interval: 10s
+      retries: 10
+    
+  telegram-job:
+    build:
+      context: ./telegram_scraper
+    image: telegram-job:latest
+    entrypoint: ["sleep", "infinity"]  # Keeps image warm but does nothing unless called
+    volumes:
+      - tg_default:/app/session        # ⬅️ Session volume (Telegram auth)
+    profiles: ["scraper"] 
+  job-launcher:
+    build: ./job_launcher
+    ports:
+      - "9001:9001"
+    environment:
+      JOB_SECRET_TOKEN: ${JOB_SECRET_TOKEN}
+      NEO4J_URI: bolt://neo4j:7687
+      NEO4J_USER: ${NEO4J_USER}
+      NEO4J_PASSWORD: ${NEO4J_PASSWORD}
+      TG_API_ID: ${TG_API_ID}
+      TG_API_HASH: ${TG_API_HASH}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - tg_default:/app/session
 volumes:
   pgdata:
+  tg_default:
+  neo4j_data:
+  neo4j_logs:
+  keycloak_data:
 
