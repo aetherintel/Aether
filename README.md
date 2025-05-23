@@ -125,6 +125,25 @@ Dienst	URL
 ⚙️ FastAPI Swagger	http://localhost:8000/docs
 🧠 Neo4j Browser	http://localhost:7474
 
+## Telegram Scraper
+### Doku von diesem Github Repo geklaut: https://github.com/unnohwn/telegram-scraper
+
+Getting Telegram API Credentials 🔑
+
+Visit https://my.telegram.org/auth
+Log in with your phone number
+Click on "API development tools"
+Fill in the form:
+App title: Your app name
+Short name: Your app short name
+Platform: Can be left as "Desktop"
+Description: Brief description of your app
+Click "Create application"
+You'll receive:
+api_id: A number
+api_hash: A string of letters and numbers
+Keep these credentials safe, you'll need them to run the script!
+
 ### In Swagger UI mit USER und Passwort Authentifizieren -> Dann können similarity search und Scraper gestartet werden.
 ### Similarity macht eine Abfrage und schmeißt das Ergebnis in die NEO4j
 ### Scraper bleibt solange als Container am Leben bis er gekillt wird ...
