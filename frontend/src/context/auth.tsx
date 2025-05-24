@@ -9,8 +9,8 @@ export interface LoginResponse {
   token_type: string;
 }
 
-export const login = async (credentials: LoginCredentials): Promise<LoginResponse> => {
-  const response = await fetch((apiUrl ? apiUrl : 'http://localhost:8000/api') + '/auth/login', {
+export const keycloakLogin = async (credentials: LoginCredentials): Promise<LoginResponse> => {
+  const response = await fetch(`${apiUrl ? apiUrl : 'http://localhost:8000/api'}/auth/login`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
