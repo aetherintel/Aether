@@ -10,12 +10,16 @@ export interface LoginResponse {
 }
 
 export const keycloakLogin = async (credentials: LoginCredentials): Promise<LoginResponse> => {
+  const body = new URLSearchParams();
+  body.append('username', credentials.username);
+  body.append('password', credentials.password);
+
   const response = await fetch(`${apiUrl ? apiUrl : 'http://localhost:8000/api'}/auth/login`, {
     method: 'POST',
     headers: {
-      'Content-Type': 'application/json',
+      'Content-Type': 'application/x-www-form-urlencoded',
     },
-    body: JSON.stringify(credentials),
+    body: body.toString(),
   });
 
   if (!response.ok) {
