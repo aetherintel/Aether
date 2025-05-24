@@ -1,13 +1,12 @@
-import React from 'react';
-import { Navigate } from 'react-router';
+import { Navigate, Outlet } from 'react-router-dom';
 
-interface Props {
-  children: React.ReactNode;
-}
-
-const PrivateRoute: React.FC<Props> = ({ children }) => {
+export function ProtectedRoute() {
   const token = localStorage.getItem('token');
-  return token ? <>{children}</> : <Navigate to="/login" />;
-};
 
-export default PrivateRoute;
+  // TODO: verify token with backend here
+  if (!token) {
+    return <Navigate to="/login" replace />;
+  }
+
+  return <Outlet />;
+}

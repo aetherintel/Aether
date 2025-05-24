@@ -1,33 +1,11 @@
-import { Routes, Route } from 'react-router'
-import Login from './components/Login'
-import Register from './components/Register'
-import Page from './app/dashboard/dashboard'
-import ProtectedRoute from './components/ProtectedRoute'
-import axios from 'axios';
+import { MantineProvider } from '@mantine/core';
+import { Router } from './Router';
+import { theme } from './theme';
 
-function App() {
-  axios.get('/api')
-  .then(function (response) {
-    // handle success
-    console.log(response);
-  })
-  .catch(function (error) {
-    // handle error
-    console.log(error);
-  })
-  .finally(function () {
-    // always executed
-  });
-
+export default function App() {
   return (
-    <>
-      <Routes>
-        <Route path="/login" element={<Login />} />
-        <Route path="/register" element={<Register />} />
-        <Route path="/" element={<ProtectedRoute><Page /></ProtectedRoute>} />
-      </Routes>
-    </>
-  )
+    <MantineProvider theme={theme}>
+      <Router />
+    </MantineProvider>
+  );
 }
-
-export default App
