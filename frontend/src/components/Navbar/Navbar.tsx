@@ -1,9 +1,6 @@
 import { useState } from 'react';
 import {
-  IconCalendarStats,
-  IconDeviceDesktopAnalytics,
-  IconFingerprint,
-  IconGauge,
+  IconFiles,
   IconHome2,
   IconLogout,
   IconSettings,
@@ -38,16 +35,13 @@ function NavbarLink({ icon: Icon, label, active, onClick }: NavbarLinkProps) {
 
 const mockdata = [
   { icon: IconHome2, label: 'Home' },
-  { icon: IconGauge, label: 'Dashboard' },
-  { icon: IconDeviceDesktopAnalytics, label: 'Analytics' },
-  { icon: IconCalendarStats, label: 'Releases' },
+  { icon: IconFiles, label: 'Cases' },
   { icon: IconUser, label: 'Account' },
-  { icon: IconFingerprint, label: 'Security' },
   { icon: IconSettings, label: 'Settings' },
 ];
 
 export function Navbar({ isNavbarOpen }: NavbarProps) {
-  const [active, setActive] = useState(2);
+  const [active, setActive] = useState(1);
   const { logout } = useAuthStore();
   const navigate = useNavigate();
 
