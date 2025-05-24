@@ -1,13 +1,21 @@
-from fastapi import APIRouter, Depends, HTTPException
+from typing import List
+from fastapi import APIRouter, Depends, HTTPException, Form
+from fastapi.security import OAuth2PasswordRequestForm
+from fastapi.security import OAuth2PasswordBearer
+import os
 import requests
-from services.config import settings
 from services.keycloak_service import get_current_user, has_role
+from controller.telegram_controller import run_similarity, start_scraper
 from pydantic import BaseModel
+
 router = APIRouter(prefix="/auth", tags=["auth"])
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 
 class LoginRequest(BaseModel):
     username: str
     password: str
+    client_id: str
+    client_secret: str
 
 class TokenRefreshRequest(BaseModel):
     refresh_token: str
@@ -19,6 +27,23 @@ class RegisterRequest(BaseModel):
     lastname: str
     password: str
 
+class ChannelInput(BaseModel):
+    channel: str
+
+class ChannelListInput(BaseModel):
+    channels: List[str]
+
+def get_admin_token():
+    token_url = f"{os.getenv('KEYCLOAK_BASE_URL')}/realms/HotTopics/protocol/openid-connect/token"
+    data = {
+        "grant_type": "client_credentials",
+        "client_id": os.getenv("KEYCLOAK_ADMIN_CLIENT_ID"),
+        "client_secret": os.getenv("KEYCLOAK_ADMIN_CLIENT_SECRET")
+    }
+    response = requests.post(token_url, data=data)
+    if response.status_code != 200:
+        raise HTTPException(status_code=500, detail="Admin login failed")
+    return response.json()["access_token"]
 
 @router.get("/public")
 def public_route():
@@ -33,28 +58,30 @@ def admin_route(user=Depends(has_role(["admin"]))):
     return {"message": f"Hello, Admin {user['preferred_username']}!"}
 
 @router.post("/login")
-def login(data: LoginRequest):
-    token_url = f"{settings.KEYCLOAK_URL}/protocol/openid-connect/token"
+def login(form_data: OAuth2PasswordRequestForm = Depends()):
+    token_url = f"{os.getenv('KEYCLOAK_URL')}/protocol/openid-connect/token"
     payload = {
         "grant_type": "password",
-        "client_id": settings.KEYCLOAK_CLIENT_ID,
-        "client_secret": settings.KEYCLOAK_CLIENT_SECRET,
-        "username": data.username,
-        "password": data.password,
+        "client_id": form_data.client_id or os.getenv("KEYCLOAK_CLIENT_ID"),
+        "client_secret": form_data.client_secret or os.getenv("KEYCLOAK_CLIENT_SECRET"),
+        "username": form_data.username,
+        "password": form_data.password,
     }
     headers = { "Content-Type": "application/x-www-form-urlencoded" }
+
     response = requests.post(token_url, data=payload, headers=headers)
     if response.status_code != 200:
         raise HTTPException(status_code=401, detail="Login failed")
+
     return response.json()
 
 @router.post("/refresh")
 def refresh(data: TokenRefreshRequest):
-    token_url = f"{settings.KEYCLOAK_URL}/protocol/openid-connect/token"
+    token_url = f"{os.getenv('KEYCLOAK_INTERNAL_URL')}/protocol/openid-connect/token"
     payload = {
         "grant_type": "refresh_token",
-        "client_id": settings.KEYCLOAK_CLIENT_ID,
-        "client_secret": settings.KEYCLOAK_CLIENT_SECRET,
+        "client_id": os.getenv("KEYCLOAK_CLIENT_ID"),
+        "client_secret": os.getenv("KEYCLOAK_CLIENT_SECRET"),
         "refresh_token": data.refresh_token,
     }
     response = requests.post(token_url, data=payload)
@@ -64,30 +91,16 @@ def refresh(data: TokenRefreshRequest):
 
 @router.post("/logout")
 def logout(data: TokenRefreshRequest):
-    logout_url = f"{settings.KEYCLOAK_URL}/protocol/openid-connect/logout"
+    logout_url = f"{os.getenv('KEYCLOAK_URL')}/protocol/openid-connect/logout"
     payload = {
-        "client_id": settings.KEYCLOAK_CLIENT_ID,
-        "client_secret": settings.KEYCLOAK_CLIENT_SECRET,
+        "client_id": os.getenv("KEYCLOAK_CLIENT_ID"),
+        "client_secret": os.getenv("KEYCLOAK_CLIENT_SECRET"),
         "refresh_token": data.refresh_token,
     }
     response = requests.post(logout_url, data=payload)
     if response.status_code != 204:
         raise HTTPException(status_code=400, detail="Logout failed")
     return {"message": "Logged out"}
-
-def get_admin_token():
-    token_url = f"{settings.KEYCLOAK_BASE_URL}/realms/HotTopics/protocol/openid-connect/token"
-    data = {
-        "grant_type": "client_credentials",
-        "client_id": settings.KEYCLOAK_ADMIN_CLIENT_ID,
-        "client_secret": settings.KEYCLOAK_ADMIN_CLIENT_SECRET
-    }
-    response = requests.post(token_url, data=data)
-    print(response)
-    if response.status_code != 200:
-        raise HTTPException(status_code=500, detail="Admin login failed")
-    return response.json()["access_token"]
-
 
 @router.post("/register")
 def register(data: RegisterRequest):
@@ -96,8 +109,7 @@ def register(data: RegisterRequest):
         "Authorization": f"Bearer {token}",
         "Content-Type": "application/json"
     }
-    print(token)
-    user_url = f"{settings.KEYCLOAK_BASE_URL}/admin/realms/HotTopics/users"
+    user_url = f"{os.getenv('KEYCLOAK_BASE_URL')}/admin/realms/HotTopics/users"
 
     user_payload = {
         "username": data.username,
@@ -105,7 +117,6 @@ def register(data: RegisterRequest):
         "enabled": True,
         "firstName": data.firstname,
         "lastName": data.lastname,
-        "enabled": True,
         "credentials": [{
             "type": "password",
             "value": data.password,
@@ -121,3 +132,17 @@ def register(data: RegisterRequest):
         raise HTTPException(status_code=409, detail="User already exists")
     else:
         raise HTTPException(status_code=500, detail=f"Failed to register user {response.status_code}: {response.text}")
+    
+@router.get("/me")
+def get_user(token: str = Depends(oauth2_scheme)):
+    return {"token": token}
+
+@router.post("/telegram/similar")
+def telegram_similar(req: ChannelInput, user=Depends(oauth2_scheme)):
+    result = run_similarity(req.channel)
+    return {"similar": result}
+
+@router.post("/telegram/scrape")
+def telegram_scrape(req: ChannelListInput, user=Depends(oauth2_scheme)):
+    container_id = start_scraper(req.channels)
+    return {"message": "Scraper started", "container_id": container_id}
