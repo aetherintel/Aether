@@ -4,3 +4,9 @@ python-dotenv
 python-jose[cryptography]
 requests
 pydantic-settings
+docker 
+telethon==1.40
+psycopg2-binary
+python-dotenv
+neo4j
+python-multipart
