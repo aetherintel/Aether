@@ -41,16 +41,13 @@ export const keycloakLogin = async (credentials: LoginCredentials): Promise<Logi
 export const keycloakRegister = async (
   credentials: RegisterCredentials
 ): Promise<LoginResponse> => {
-  const response = await fetch(
-    `${apiUrl ? apiUrl : 'http://localhost:8000/api'}/auth/register`,
-    {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(credentials),
-    }
-  );
+  const response = await fetch(`${apiUrl ? apiUrl : 'http://localhost:8000/api'}/auth/register`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(credentials),
+  });
 
   if (!response.ok) {
     throw new Error('Registration failed');

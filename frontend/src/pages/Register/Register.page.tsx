@@ -39,7 +39,7 @@ export function Register() {
     try {
       const { username, email, firstname, lastname, password } = values;
       const response = await keycloakRegister({ username, email, firstname, lastname, password });
-      
+
       notifications.show({
         title: 'Login erfolgreich',
         message: response.token_type || 'Welcone back!',
@@ -62,7 +62,10 @@ export function Register() {
       </Title>
 
       <Text className={classes.subtitle}>
-        Already have an account? <Anchor component={Link} to="/login">Sign in</Anchor>
+        Already have an account?{' '}
+        <Anchor component={Link} to="/login">
+          Sign in
+        </Anchor>
       </Text>
 
       <Paper withBorder shadow="sm" p={22} mt={30} radius="md">

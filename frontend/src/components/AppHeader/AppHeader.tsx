@@ -1,15 +1,10 @@
-import {
-  IconMessageCircle,
-  IconSearch,
-  IconSettings,
-  IconTrash,
-} from '@tabler/icons-react';
+import { IconMessageCircle, IconSearch, IconSettings, IconTrash } from '@tabler/icons-react';
 import { SearchNormal1 } from 'iconsax-react';
+import { Link } from 'react-router-dom';
 import { Avatar, Burger, Flex, Group, Input, Menu, rem, Text } from '@mantine/core';
 import { useMediaQuery } from '@mantine/hooks';
 import { useStore } from '../../store/client/useStore';
 import ThemeSwitch from '../ThemeSwitch/ThemeSwitch';
-import { Link } from 'react-router-dom';
 
 interface Props {
   opened: boolean;
@@ -53,7 +48,11 @@ export default function AppHeader({ opened, toggle }: Props) {
 
           <Menu.Dropdown>
             <Menu.Label>Monitor</Menu.Label>
-            <Menu.Item leftSection={<IconSettings style={{ width: rem(14), height: rem(14) }} />} component={Link} to="/settings">
+            <Menu.Item
+              leftSection={<IconSettings style={{ width: rem(14), height: rem(14) }} />}
+              component={Link}
+              to="/settings"
+            >
               Settings
             </Menu.Item>
             <Menu.Item

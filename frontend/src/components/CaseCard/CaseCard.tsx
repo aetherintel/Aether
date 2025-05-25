@@ -1,33 +1,23 @@
-
-import {
-  ActionIcon,
-  Box,
-  Divider,
-  Flex,
-  Group,
-  Menu,
-  rem,
-  Text,
-} from '@mantine/core';
-import { CaseFile } from '../TabSection/TabSection';
-import classes from './CaseCard.module.css';
-import { LineChart } from '@mantine/charts';
 import { IconLink, IconShare, IconTrash, IconUser } from '@tabler/icons-react';
+import { LineChart } from '@mantine/charts';
+import { ActionIcon, Box, Divider, Flex, Group, Menu, rem, Text } from '@mantine/core';
+import { CaseFile } from '../CaseFileList/CaseFileList';
+import classes from './CaseCard.module.css';
 
 const exampleChartData = [
-      {
-        date: 'Mar 22',
-        posts: 2890,
-      },
-      {
-        date: 'Mar 23',
-        posts: 2756,
-      },
-      {
-        date: 'Mar 24',
-        posts: 5322,
-      }
-    ];
+  {
+    date: 'Mar 22',
+    posts: 2890,
+  },
+  {
+    date: 'Mar 23',
+    posts: 2756,
+  },
+  {
+    date: 'Mar 24',
+    posts: 5322,
+  },
+];
 
 interface CaseCardProps {
   caseFile: CaseFile;
@@ -35,7 +25,6 @@ interface CaseCardProps {
 }
 
 export default function CaseCard({ caseFile, onDelete }: CaseCardProps) {
-
   const handleDeleteCaseClick = () => {
     onDelete(caseFile.id);
   };
@@ -53,29 +42,26 @@ export default function CaseCard({ caseFile, onDelete }: CaseCardProps) {
 
               <Divider component="span" orientation="vertical" />
               <Text fz={12} component="span">
-                {caseFile.postCount} posts 
+                {caseFile.postCount} posts
               </Text>
             </Flex>
           </Flex>
         </Group>
 
-
         <LineChart
-              h={110}
-              data={exampleChartData}
-              dataKey="date"
-              series={[
-                { name: 'posts', label: 'Posts', color: 'blue' },
-              ]}
-              curveType="natural"
-              tickLine="none"
-              gridAxis="none"
-              withXAxis={false}
-              withYAxis={false}
-              withDots={false}
-              withTooltip={false}
-              mx={rem(-21)}
-            />
+          h={110}
+          data={exampleChartData}
+          dataKey="date"
+          series={[{ name: 'posts', label: 'Posts', color: 'blue' }]}
+          curveType="natural"
+          tickLine="none"
+          gridAxis="none"
+          withXAxis={false}
+          withYAxis={false}
+          withDots={false}
+          withTooltip={false}
+          mx={rem(-21)}
+        />
 
         <Menu shadow="md" width={200}>
           <Menu.Target>
@@ -137,7 +123,6 @@ export default function CaseCard({ caseFile, onDelete }: CaseCardProps) {
           </Menu.Dropdown>
         </Menu>
       </Box>
-
     </Box>
   );
 }

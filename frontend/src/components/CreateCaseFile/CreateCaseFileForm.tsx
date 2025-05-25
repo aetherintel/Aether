@@ -1,6 +1,6 @@
-import { Button, TextInput, Stack, NumberInput } from '@mantine/core';
-import { useForm } from '@mantine/form';
 import { useState } from 'react';
+import { Button, NumberInput, Stack, TextInput } from '@mantine/core';
+import { useForm } from '@mantine/form';
 import { notifications } from '@mantine/notifications';
 
 const apiUrl = import.meta.env.VITE_API_URL;
@@ -23,7 +23,6 @@ export function CreateCaseFileForm() {
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (values: CaseFileFormValues) => {
-
     setLoading(true);
     try {
       const res = await fetch(`${apiUrl ? apiUrl : 'http://localhost:8000/api'}/casefiles`, {
@@ -42,15 +41,14 @@ export function CreateCaseFileForm() {
       notifications.show({
         title: 'CaseFile',
         message: `CaseFile created with ID: ${data.id}`,
-      })
+      });
       form.reset();
-    } catch (error) {
-      console.error(error);
-
+    } catch (err: any) {
       notifications.show({
         title: 'Error creating CaseFile',
-        message: ''
-      })
+        message: err.message || 'Unknown error',
+        color: 'red',
+      });
     } finally {
       setLoading(false);
     }
@@ -62,7 +60,9 @@ export function CreateCaseFileForm() {
         <TextInput label="Title" {...form.getInputProps('title')} required />
         <TextInput label="Category" {...form.getInputProps('category')} required />
         <NumberInput label="Post count" {...form.getInputProps('postCount')} required />
-        <Button type="submit" loading={loading}>Create CaseFile</Button>
+        <Button type="submit" loading={loading}>
+          Create CaseFile
+        </Button>
       </Stack>
     </form>
   );
