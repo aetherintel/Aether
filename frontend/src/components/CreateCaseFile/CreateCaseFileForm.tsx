@@ -49,7 +49,7 @@ export function CreateCaseFileForm() {
   const handleSubmit = async (values: CaseFileFormValues) => {
     setLoading(true);
     try {
-      const res = await fetch(`${apiUrl ? apiUrl : 'http://localhost:8000/api'}/casefiles`, {
+      const res = await fetch(`${apiUrl ? apiUrl : 'http://localhost:8000/api'}/casefiles/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
