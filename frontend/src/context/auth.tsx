@@ -1,6 +1,15 @@
 const apiUrl = import.meta.env.VITE_API_URL;
+
 export interface LoginCredentials {
   username: string;
+  password: string;
+}
+
+export interface RegisterCredentials {
+  username: string;
+  email: string;
+  firstname: string;
+  lastname: string;
   password: string;
 }
 
@@ -24,6 +33,27 @@ export const keycloakLogin = async (credentials: LoginCredentials): Promise<Logi
 
   if (!response.ok) {
     throw new Error('application/json');
+  }
+
+  return response.json();
+};
+
+export const keycloakRegister = async (
+  credentials: RegisterCredentials
+): Promise<LoginResponse> => {
+  const response = await fetch(
+    `${apiUrl ? apiUrl : 'http://localhost:8000/api'}/auth/register`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(credentials),
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error('Registration failed');
   }
 
   return response.json();
