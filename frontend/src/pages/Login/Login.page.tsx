@@ -62,7 +62,10 @@ export function Login() {
       </Title>
 
       <Text className={classes.subtitle}>
-        Do not have an account yet? <Anchor component={Link} to="/register">Create account</Anchor>
+        Do not have an account yet?{' '}
+        <Anchor component={Link} to="/register">
+          Create account
+        </Anchor>
       </Text>
 
       <Paper withBorder shadow="sm" p={22} mt={30} radius="md">

@@ -1,21 +1,20 @@
 import { IconPlus } from '@tabler/icons-react';
+import { useNavigate } from 'react-router-dom';
 import { ActionIcon, Grid, Group, Stack } from '@mantine/core';
+import BreadcrumbsBar from '@/components/BreadcrumbsBar/BreadcrumbsBar';
 import TabSection from '@/components/TabSection/TabSection';
 import ActionCard from '../components/ActionCard/ActionCard';
-import { useNavigate } from 'react-router-dom';
-import BreadcrumbsBar from '@/components/BreadcrumbsBar/BreadcrumbsBar';
-
 
 export default function CaseOverview() {
   const navigate = useNavigate();
-  
+
   const handleNewCaseClick = () => {
     navigate('/cases/createCaseFile');
   };
 
   return (
     <div>
-      <BreadcrumbsBar/>
+      <BreadcrumbsBar />
       <Stack gap={40}>
         <Group w="100%" align="start" justify="space-between">
           <Grid flex={1} columns={12} align="center" gutter={14}>

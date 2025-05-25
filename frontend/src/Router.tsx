@@ -1,10 +1,10 @@
 import { createBrowserRouter, RouterProvider } from 'react-router-dom';
 import AppContainer from './components/AppContainer/AppContainer';
 import { ProtectedRoute } from './components/ProtectedRoute';
-import { Login } from './pages/Login/Login.page';
-import { HomePage } from './pages/Home.page';
-import { CreateCaseFilePage } from './pages/CreateCaseFile.page';
 import CaseOverview from './pages/CaseOverview.page';
+import { CreateCaseFilePage } from './pages/CreateCaseFile.page';
+import { HomePage } from './pages/Home.page';
+import { Login } from './pages/Login/Login.page';
 import { Register } from './pages/Register/Register.page';
 
 const router = createBrowserRouter([
