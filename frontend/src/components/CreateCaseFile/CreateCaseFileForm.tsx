@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Button, NumberInput, Stack, TextInput } from '@mantine/core';
 import { useForm } from '@mantine/form';
 import { notifications } from '@mantine/notifications';
+import { useNavigate } from 'react-router-dom';
 
 const apiUrl = import.meta.env.VITE_API_URL;
 
@@ -12,6 +13,8 @@ interface CaseFileFormValues {
 }
 
 export function CreateCaseFileForm() {
+  const navigate = useNavigate();
+
   const form = useForm<CaseFileFormValues>({
     initialValues: {
       title: '',
@@ -43,6 +46,7 @@ export function CreateCaseFileForm() {
         message: `CaseFile created with ID: ${data.id}`,
       });
       form.reset();
+      navigate("/cases");
     } catch (err: any) {
       notifications.show({
         title: 'Error creating CaseFile',
