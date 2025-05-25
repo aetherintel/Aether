@@ -5,11 +5,12 @@ import classes from './ActionCard.module.css';
 interface Props {
   icon: Icon;
   content: string;
+  onClick?: () => void;
 }
 
-export default function ActionCard({ icon: Icon, content }: Props) {
+export default function ActionCard({ icon: Icon, content, onClick }: Props) {
   return (
-    <Box className={classes.root}>
+    <Box className={classes.root} onClick={onClick}>
       <Icon size={20} />
       <Text className={classes.content} fz={13}>
         {content}
