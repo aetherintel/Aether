@@ -1,6 +1,7 @@
 import { createBrowserRouter, RouterProvider } from 'react-router-dom';
 import AppContainer from './components/AppContainer/AppContainer';
 import { ProtectedRoute } from './components/ProtectedRoute';
+import { CaseFileDetail } from './pages/CaseFileDetail.page';
 import CaseOverview from './pages/CaseOverview.page';
 import { CreateCaseFilePage } from './pages/CreateCaseFile.page';
 import { HomePage } from './pages/Home.page';
@@ -19,6 +20,10 @@ const router = createBrowserRouter([
       {
         element: <ProtectedRoute />,
         children: [{ path: '/cases', element: <CaseOverview /> }],
+      },
+      {
+        element: <ProtectedRoute />,
+        children: [{ path: '/cases/:id', element: <CaseFileDetail /> }],
       },
       {
         element: <ProtectedRoute />,

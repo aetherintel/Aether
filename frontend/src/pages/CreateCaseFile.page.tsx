@@ -4,8 +4,7 @@ import { CreateCaseFileForm } from '../components/CreateCaseFile/CreateCaseFileF
 export function CreateCaseFilePage() {
   return (
     <div>
-      <BreadcrumbsBar />
-      <h1>Create New Case File</h1>
+      <BreadcrumbsBar overrides={{ [`/cases/createCaseFile`]: "Create new case" }} />
       <CreateCaseFileForm />
     </div>
   );

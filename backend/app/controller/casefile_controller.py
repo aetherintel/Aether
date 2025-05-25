@@ -4,6 +4,7 @@ from typing import List
 from sqlalchemy import Column, Integer, String, create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session
+from sqlalchemy.dialects.postgresql import ARRAY
 import os
 
 router = APIRouter(prefix="/casefiles", tags=["casefiles"])
@@ -21,12 +22,18 @@ class CaseFileModel(Base):
     title = Column(String, index=True)
     category = Column(String)
     postCount = Column(Integer)
+    topics = Column(ARRAY(String))
+    terms = Column(ARRAY(String))
+    duration = Column(Integer)
 
 # --- Pydantic schemas ---
 class CaseFileCreate(BaseModel):
     title: str
     category: str
     postCount: int
+    topics: List[str]
+    terms: List[str]
+    duration: int
 
 class CaseFile(CaseFileCreate):
     id: int
