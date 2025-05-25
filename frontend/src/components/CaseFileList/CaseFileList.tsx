@@ -23,9 +23,7 @@ export function CaseFileList() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    console.log(apiUrl);
-    console.log(`${apiUrl ? apiUrl : 'http://localhost:8000/api'}/casefiles`);
-    fetch(`${apiUrl ? apiUrl : 'http://localhost:8000/api'}/casefiles`)
+    fetch(`${apiUrl ? apiUrl : 'http://localhost:8000/api'}/casefiles/`)
       .then((res) => res.json())
       .then((data) => setCaseFiles(data))
       .catch((err) => {
