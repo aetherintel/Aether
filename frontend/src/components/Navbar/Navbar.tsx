@@ -34,14 +34,14 @@ function NavbarLink({ icon: Icon, label, active, onClick }: NavbarLinkProps) {
 }
 
 const mockdata = [
-  { icon: IconHome2, label: 'Home' },
-  { icon: IconFiles, label: 'Cases' },
-  { icon: IconUser, label: 'Account' },
-  { icon: IconSettings, label: 'Settings' },
+  { icon: IconHome2, label: 'Home', href: '/' },
+  { icon: IconFiles, label: 'Cases', href: '/cases' },
+  { icon: IconUser, label: 'Account', href: '/account' },
+  { icon: IconSettings, label: 'Settings', href: '/settings' },
 ];
 
 export function Navbar({ isNavbarOpen }: NavbarProps) {
-  const [active, setActive] = useState(1);
+  const [active, setActive] = useState(0);
   const { logout } = useAuthStore();
   const navigate = useNavigate();
 
@@ -55,7 +55,10 @@ export function Navbar({ isNavbarOpen }: NavbarProps) {
       {...link}
       key={link.label}
       active={index === active}
-      onClick={() => setActive(index)}
+      onClick={() => {
+        setActive(index);
+        navigate(link.href);
+      }}
     />
   ));
 

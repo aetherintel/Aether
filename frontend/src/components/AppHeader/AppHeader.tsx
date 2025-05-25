@@ -1,7 +1,5 @@
 import {
-  IconArrowsLeftRight,
   IconMessageCircle,
-  IconPhoto,
   IconSearch,
   IconSettings,
   IconTrash,
@@ -11,6 +9,7 @@ import { Avatar, Burger, Flex, Group, Input, Menu, rem, Text } from '@mantine/co
 import { useMediaQuery } from '@mantine/hooks';
 import { useStore } from '../../store/client/useStore';
 import ThemeSwitch from '../ThemeSwitch/ThemeSwitch';
+import { Link } from 'react-router-dom';
 
 interface Props {
   opened: boolean;
@@ -53,17 +52,14 @@ export default function AppHeader({ opened, toggle }: Props) {
           </Menu.Target>
 
           <Menu.Dropdown>
-            <Menu.Label>Application</Menu.Label>
-            <Menu.Item leftSection={<IconSettings style={{ width: rem(14), height: rem(14) }} />}>
+            <Menu.Label>Monitor</Menu.Label>
+            <Menu.Item leftSection={<IconSettings style={{ width: rem(14), height: rem(14) }} />} component={Link} to="/settings">
               Settings
             </Menu.Item>
             <Menu.Item
               leftSection={<IconMessageCircle style={{ width: rem(14), height: rem(14) }} />}
             >
-              Messages
-            </Menu.Item>
-            <Menu.Item leftSection={<IconPhoto style={{ width: rem(14), height: rem(14) }} />}>
-              Gallery
+              Notifications
             </Menu.Item>
             <Menu.Item
               leftSection={<IconSearch style={{ width: rem(14), height: rem(14) }} />}
@@ -78,12 +74,6 @@ export default function AppHeader({ opened, toggle }: Props) {
 
             <Menu.Divider />
 
-            <Menu.Label>Danger zone</Menu.Label>
-            <Menu.Item
-              leftSection={<IconArrowsLeftRight style={{ width: rem(14), height: rem(14) }} />}
-            >
-              Transfer my data
-            </Menu.Item>
             <Menu.Item
               color="red"
               leftSection={<IconTrash style={{ width: rem(14), height: rem(14) }} />}
