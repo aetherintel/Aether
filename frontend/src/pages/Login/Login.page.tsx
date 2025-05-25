@@ -1,4 +1,4 @@
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import {
   Anchor,
   Button,
@@ -15,9 +15,9 @@ import { useForm } from '@mantine/form';
 import { notifications } from '@mantine/notifications';
 import { keycloakLogin, type LoginCredentials } from '../../context/auth';
 import { useAuthStore } from '../../store/client/authStore';
-import classes from './Authentication.module.css';
+import classes from './Login.module.css';
 
-export function Authentication() {
+export function Login() {
   const { login } = useAuthStore();
   const navigate = useNavigate();
 
@@ -58,18 +58,18 @@ export function Authentication() {
   return (
     <Container size={420} my={40}>
       <Title ta="center" className={classes.title}>
-        Welcome back!
+        HTIT-Monitor
       </Title>
 
       <Text className={classes.subtitle}>
-        Do not have an account yet? <Anchor>Create account</Anchor>
+        Do not have an account yet? <Anchor component={Link} to="/register">Create account</Anchor>
       </Text>
 
       <Paper withBorder shadow="sm" p={22} mt={30} radius="md">
         <form onSubmit={form.onSubmit(handleLogin)}>
           <TextInput
             label="Email"
-            placeholder="you@mantine.dev"
+            placeholder="you@example.com"
             required
             radius="md"
             {...form.getInputProps('username')}

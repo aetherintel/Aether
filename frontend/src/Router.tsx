@@ -1,8 +1,11 @@
 import { createBrowserRouter, RouterProvider } from 'react-router-dom';
 import AppContainer from './components/AppContainer/AppContainer';
 import { ProtectedRoute } from './components/ProtectedRoute';
-import { Authentication } from './pages/Authentication/Authentication.page';
+import { Login } from './pages/Login/Login.page';
 import { HomePage } from './pages/Home.page';
+import { CreateCaseFilePage } from './pages/CreateCaseFile.page';
+import CaseOverview from './pages/CaseOverview.page';
+import { Register } from './pages/Register/Register.page';
 
 const router = createBrowserRouter([
   {
@@ -13,9 +16,26 @@ const router = createBrowserRouter([
         element: <ProtectedRoute />,
         children: [{ path: '/', element: <HomePage /> }],
       },
+      {
+        element: <ProtectedRoute />,
+        children: [{ path: '/cases', element: <CaseOverview /> }],
+      },
+      {
+        element: <ProtectedRoute />,
+        children: [{ path: '/cases/createCaseFile', element: <CreateCaseFilePage /> }],
+      },
+      {
+        element: <ProtectedRoute />,
+        children: [{ path: '/account', element: <HomePage /> }],
+      },
+      {
+        element: <ProtectedRoute />,
+        children: [{ path: '/settings', element: <HomePage /> }],
+      },
     ],
   },
-  { path: '/login', element: <Authentication /> },
+  { path: '/login', element: <Login /> },
+  { path: '/register', element: <Register /> },
 ]);
 
 export function Router() {
