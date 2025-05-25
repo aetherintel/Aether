@@ -1,7 +1,11 @@
 import { Link, useLocation } from 'react-router-dom';
 import { Anchor, Breadcrumbs, useComputedColorScheme } from '@mantine/core';
 
-export default function BreadcrumbsBar() {
+interface BreadcrumbsBarProps {
+  overrides?: Record<string, string>;
+}
+
+export default function BreadcrumbsBar({ overrides = {} }: BreadcrumbsBarProps) {
   const computedColorScheme = useComputedColorScheme('light', {
     getInitialValueInEffect: true,
   });
@@ -12,7 +16,7 @@ export default function BreadcrumbsBar() {
 
   const crumbs = pathnames.map((segment, index) => {
     const to = `/${pathnames.slice(0, index + 1).join('/')}`;
-    const title = segment.charAt(0).toUpperCase() + segment.slice(1); // optional: format title
+    const title = overrides[to] || segment.charAt(0).toUpperCase() + segment.slice(1); // optional: format title
 
     return (
       <Anchor

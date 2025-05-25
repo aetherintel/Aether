@@ -1,4 +1,5 @@
 import { IconLink, IconShare, IconTrash, IconUser } from '@tabler/icons-react';
+import { Link } from 'react-router-dom';
 import { LineChart } from '@mantine/charts';
 import { ActionIcon, Box, Divider, Flex, Group, Menu, rem, Text } from '@mantine/core';
 import { CaseFile } from '../CaseFileList/CaseFileList';
@@ -33,7 +34,7 @@ export default function CaseCard({ caseFile, onDelete }: CaseCardProps) {
     <Box className={classes.root}>
       <Box className={classes.imageSection}>
         <Group w="100%" align="center" justify="space-between">
-          <Flex direction="column" align="start" gap={3}>
+          <Flex direction="column" align="start" gap={3} component={Link} to={`/cases/${caseFile.id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
             <Text lh={1} className={classes.title}>
               {caseFile.title}
             </Text>
