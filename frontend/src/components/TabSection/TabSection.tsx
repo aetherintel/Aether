@@ -1,13 +1,8 @@
 import { useState } from 'react';
 import { Box, Flex, FloatingIndicator, Grid, Tabs, Text } from '@mantine/core';
-import Image1 from '../../assets/images/image-1.jpeg';
-import Image2 from '../../assets/images/image-2.jpeg';
-import Image3 from '../../assets/images/image-3.jpeg';
-import Image4 from '../../assets/images/image-4.jpeg';
-import Image5 from '../../assets/images/image-5.jpeg';
-import Image6 from '../../assets/images/image-6.jpeg';
-import FolderCard from '../FolderCard/FolderCard';
+import CaseCard from '../CaseCard/CaseCard';
 import classes from './TabSection.module.css';
+import { CaseFileList } from '../CaseFileList/CaseFileList';
 
 export default function TabSection() {
   const [rootRef, setRootRef] = useState<HTMLDivElement | null>(null);
@@ -20,7 +15,7 @@ export default function TabSection() {
 
   return (
     <Flex w="100%" direction="column" align="start" gap={16}>
-      <Text className={classes.title}>All folders</Text>
+      <Text className={classes.title}>All cases</Text>
 
       <Tabs w="100%" variant="none" value={value} onChange={setValue}>
         <Tabs.List ref={setRootRef} className={classes.list}>
@@ -31,12 +26,6 @@ export default function TabSection() {
             Favourites
           </Tabs.Tab>
           <Tabs.Tab value="3" ref={setControlRef('3')} className={classes.tab}>
-            Share
-          </Tabs.Tab>
-          <Tabs.Tab value="4" ref={setControlRef('4')} className={classes.tab}>
-            External
-          </Tabs.Tab>
-          <Tabs.Tab value="5" ref={setControlRef('5')} className={classes.tab}>
             Achieved
           </Tabs.Tab>
 
@@ -49,13 +38,7 @@ export default function TabSection() {
 
         <Box w="100%" my={30}>
           <Tabs.Panel w="100%" value="1">
-            <Grid columns={3} gutter={20}>
-              {folders.map((folder) => (
-                <Grid.Col key={folder.id} span={{ base: 3, md: 1 }}>
-                  <FolderCard {...folder} />
-                </Grid.Col>
-              ))}
-            </Grid>
+            <CaseFileList/>
           </Tabs.Panel>
           <Tabs.Panel value="2">Second tab content</Tabs.Panel>
           <Tabs.Panel value="3">Third tab content</Tabs.Panel>
@@ -65,49 +48,127 @@ export default function TabSection() {
   );
 }
 
-export type Folder = (typeof folders)[number];
+export type CaseFile = (typeof caseFiles)[number];
 
-const folders = [
+const caseFiles = [
   {
     id: 1,
-    title: 'Design',
-    imageCount: 18,
-    size: '92MB',
-    image: Image1,
+    title: 'Example Case 1',
+    postCount: 18,
+    category: 'Event',
+    chartData: [
+      {
+        date: 'Mar 22',
+        posts: 2890,
+      },
+      {
+        date: 'Mar 23',
+        posts: 2756,
+      },
+      {
+        date: 'Mar 24',
+        posts: 3322,
+      }
+    ]
   },
   {
     id: 2,
-    title: 'Landing Web Design',
-    imageCount: 32,
-    size: '188MB',
-    image: Image2,
+    title: 'Example Case 2',
+    postCount: 32,
+    category: 'Event',
+    chartData: [
+      {
+        date: 'Mar 22',
+        posts: 2890,
+      },
+      {
+        date: 'Mar 23',
+        posts: 2756,
+      },
+      {
+        date: 'Mar 24',
+        posts: 3322,
+      }
+    ]
   },
   {
     id: 3,
-    title: 'UI presentations',
-    imageCount: 8,
-    size: '286MB',
-    image: Image3,
+    title: 'Example Case 3',
+    postCount: 8,
+    category: 'Event',
+    chartData: [
+      {
+        date: 'Mar 22',
+        posts: 2890,
+      },
+      {
+        date: 'Mar 23',
+        posts: 2756,
+      },
+      {
+        date: 'Mar 24',
+        posts: 3322,
+      }
+    ]
   },
   {
     id: 4,
-    title: 'Team photos',
-    imageCount: 246,
-    size: '1.28GB',
-    image: Image4,
+    title: 'Example Case 4',
+    postCount: 246,
+    category: 'Event',
+    chartData: [
+      {
+        date: 'Mar 22',
+        posts: 2890,
+      },
+      {
+        date: 'Mar 23',
+        posts: 2756,
+      },
+      {
+        date: 'Mar 24',
+        posts: 3322,
+      }
+    ]
   },
   {
     id: 5,
-    title: 'Movie Web Design',
-    imageCount: 42,
-    size: '126MB',
-    image: Image5,
+    title: 'Example Case 4',
+    postCount: 42,
+    category: 'Event',
+    chartData: [
+      {
+        date: 'Mar 22',
+        posts: 2890,
+      },
+      {
+        date: 'Mar 23',
+        posts: 2756,
+      },
+      {
+        date: 'Mar 24',
+        posts: 3322,
+      }
+    ]
   },
   {
     id: 6,
-    title: 'Dashboard 3.0',
-    imageCount: 22,
-    size: '96MB',
-    image: Image6,
+    title: 'Example Case 5',
+    postCount: 22,
+    category: 'Event',
+    chartData: [
+      {
+        date: 'Mar 22',
+        posts: 2890,
+      },
+      {
+        date: 'Mar 23',
+        posts: 2756,
+      },
+      {
+        date: 'Mar 24',
+        posts: 3322,
+      }
+    ]
   },
 ];

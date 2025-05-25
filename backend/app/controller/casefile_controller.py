@@ -19,12 +19,14 @@ class CaseFileModel(Base):
     __tablename__ = "casefiles"
     id = Column(Integer, primary_key=True, index=True)
     title = Column(String, index=True)
-    description = Column(String)
+    category = Column(String)
+    postCount = Column(Integer)
 
 # --- Pydantic schemas ---
 class CaseFileCreate(BaseModel):
     title: str
-    description: str
+    category: str
+    postCount: int
 
 class CaseFile(CaseFileCreate):
     id: int

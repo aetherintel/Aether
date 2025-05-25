@@ -1,4 +1,5 @@
 import '@mantine/core/styles.css';
+import '@mantine/notifications/styles.css';
 
 import { Suspense, useEffect } from 'react';
 import { Outlet } from 'react-router-dom';
