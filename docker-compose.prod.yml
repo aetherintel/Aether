@@ -117,15 +117,15 @@ services:
       retries: 10
     
   telegram-job:
-    build:
-      context: ./telegram_scraper
-    image: telegram-job:latest
+    image: ${DOCKER_USERNAME}/monitor-telegram_scraper:latest
+    container_name: telegram_scraper
     entrypoint: ["sleep", "infinity"]  # Keeps image warm but does nothing unless called
     volumes:
       - tg_default:/app/session        # ⬅️ Session volume (Telegram auth)
     profiles: ["scraper"] 
   job-launcher:
-    build: ./job_launcher
+    image: ${DOCKER_USERNAME}/monitor-job_launcher:latest
+    container_name: job_launcher
     ports:
       - "9001:9001"
     environment:
