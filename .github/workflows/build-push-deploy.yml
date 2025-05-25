@@ -103,6 +103,12 @@ jobs:
             export KEYCLOAK_ADMIN_PASSWORD=${{ secrets.KEYCLOAK_ADMIN_PASSWORD }}
             export KEYCLOAK_CLIENT_SECRET=${{ secrets.KEYCLOAK_CLIENT_SECRET }}
             export KEYCLOAK_ADMIN_CLIENT_SECRET=${{ secrets.KEYCLOAK_ADMIN_CLIENT_SECRET }}
+            export TG_API_ID=${{ secrets.TG_API_ID }}
+            export TG_API_HASH=${{ secrets.TG_API_HASH }}
+            export TG_PHONE=${{ secrets.TG_PHONE }}
+            export POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}
+            export NEO4J_PASSWORD=${{ secrets.NEO4J_PASSWORD }}
+            export JOB_SECRET_TOKEN=${{ secrets.JOB_SECRET_TOKEN }}
             cd /var/www/app
             mv /var/www/app/docker-compose.prod.yml /var/www/app/docker-compose.yml
             echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u ${{ secrets.DOCKER_USERNAME }} --password-stdin
