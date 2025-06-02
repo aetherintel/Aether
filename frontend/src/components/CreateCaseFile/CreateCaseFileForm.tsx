@@ -5,6 +5,7 @@ import { useForm } from '@mantine/form';
 import { notifications } from '@mantine/notifications';
 import { TermMultiSelect } from '../TermMultiSelect';
 import { TopicMultiSelect } from '../TopicMultiSelect';
+import { TgChannelMultiSelect } from '../TgChannelMultiSelect';
 
 const apiUrl = import.meta.env.VITE_API_URL;
 
@@ -12,6 +13,7 @@ interface CaseFileFormValues {
   title: string;
   category: string;
   postCount: number;
+  tgchannels: string[],
   topics: string[],
   terms: string[],
   duration: number,
@@ -28,7 +30,7 @@ const marks = [
 
 export function CreateCaseFileForm() {
   const [active, setActive] = useState(0);
-  const nextStep = () => setActive((current) => (current < 3 ? current + 1 : current));
+  const nextStep = () => setActive((current) => (current < 4 ? current + 1 : current));
   const prevStep = () => setActive((current) => (current > 0 ? current - 1 : current));
 
   const navigate = useNavigate();
@@ -38,6 +40,7 @@ export function CreateCaseFileForm() {
       title: '',
       category: '',
       postCount: 0,
+      tgchannels: [],
       topics: [],
       terms: [],
       duration: 20,
@@ -94,6 +97,15 @@ export function CreateCaseFileForm() {
             <NumberInput label="Post count" {...form.getInputProps('postCount')} required />
           </Stack>
         </Stepper.Step>
+        <Stepper.Step label="Telegram Channels" description="Which telegram channels?">
+          <Stack>
+            <Text mt="md">Telegram channels start searching from?</Text>
+            <TgChannelMultiSelect
+              value={form.values.tgchannels}
+              onChange={(val) => form.setFieldValue('tgchannels', val)}
+            />
+          </Stack>
+        </Stepper.Step>
         <Stepper.Step label="Terms" description="Which terms?">
           <Stack>
             <Text mt="md">Which terms are used to refer to this case?</Text>
@@ -138,7 +150,7 @@ export function CreateCaseFileForm() {
           </Button>
         )}
 
-        {active < 3 && (
+        {active < 4 && (
           <Button
             onClick={() => {
               const isValid = form.validate().hasErrors === false;
@@ -149,7 +161,7 @@ export function CreateCaseFileForm() {
           </Button>
         )}
 
-        {active === 3 && (
+        {active === 4 && (
           <Button
             type="submit"
             loading={loading}

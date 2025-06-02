@@ -35,6 +35,7 @@ export function CaseFileDetail() {
       <Text>Post count: {caseFile.postCount}</Text>
       <Text>Topics: {caseFile.topics?.join(', ')}</Text>
       <Text>Terms: {caseFile.terms?.join(', ')}</Text>
+      <Text>Telegram Channels: {caseFile.tgchannels?.join(', ')}</Text>
       <Text>Duration: {caseFile.duration}</Text>
       {/* Render chartData or other fields as needed */}
     </div>

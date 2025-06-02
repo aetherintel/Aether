@@ -22,6 +22,7 @@ class CaseFileModel(Base):
     title = Column(String, index=True)
     category = Column(String)
     postCount = Column(Integer)
+    tgchannels = Column(ARRAY(String))
     topics = Column(ARRAY(String))
     terms = Column(ARRAY(String))
     duration = Column(Integer)
@@ -31,6 +32,7 @@ class CaseFileCreate(BaseModel):
     title: str
     category: str
     postCount: int
+    tgchannels: List[str]
     topics: List[str]
     terms: List[str]
     duration: int
