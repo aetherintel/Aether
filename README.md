@@ -148,3 +148,15 @@ Keep these credentials safe, you'll need them to run the script!
 ### Similarity macht eine Abfrage und schmeißt das Ergebnis in die NEO4j
 ### Scraper bleibt solange als Container am Leben bis er gekillt wird ...
 #### TODO: Parameter für SCraper wie lange er am Leben bleibt
+
+### Troubleshooting
+Temporär: Sollte bei Starten des Scrapers folgender Fehler auftreten:
+```
+docker.errors.ImageNotFound: 404 Client Error for http+docker://localhost/v1.48/images/create?tag=latest&fromImage=telegram-job: Not Found ("pull access denied for telegram-job, repository does not exist or may require 'docker login'") 
+```
+
+Muss einmalig das "telegram-job" Image gebuilded werden:
+```
+cd telegram_scraper
+docker build -t telegram-job:latest .
+```
