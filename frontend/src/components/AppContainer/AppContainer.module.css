@@ -15,7 +15,7 @@
 
 .navbar {
   z-index: var(--app-header-z-index) - 1; /* No need in actual implementation */
-  position: absolute; /* No need in actual implementation */
+  position: fixed; /* No need in actual implementation */
   height: 100%;
 
   @media (min-width: 48em) {
