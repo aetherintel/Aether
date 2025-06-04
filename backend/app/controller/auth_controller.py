@@ -5,11 +5,16 @@ from fastapi.security import OAuth2PasswordBearer
 import os
 import requests
 from services.keycloak_service import get_current_user, has_role
-from controller.telegram_controller import run_similarity, start_scraper
+from controller.telegram_controller import run_similarity, start_scraper, launch_full_scrape_job, launch_live_scrape_job
 from pydantic import BaseModel
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
+
+class ExtendedScrapeRequest(BaseModel):
+    channel: str
+    recursive: bool = True
+    neo4j: bool = True
 
 class LoginRequest(BaseModel):
     username: str
@@ -146,3 +151,14 @@ def telegram_similar(req: ChannelInput, user=Depends(oauth2_scheme)):
 def telegram_scrape(req: ChannelListInput, user=Depends(oauth2_scheme)):
     container_id = start_scraper(req.channels)
     return {"message": "Scraper started", "container_id": container_id}
+
+@router.post("/telegram/full")
+def telegram_full_scrape(req: ExtendedScrapeRequest, user=Depends(oauth2_scheme)):
+    return launch_full_scrape_job(
+        channel=req.channel,
+        recursive=req.recursive,
+        neo4j=req.neo4j
+    )
+@router.post("/telegram/live")
+def telegram_live_scrape(req: ChannelListInput, user=Depends(oauth2_scheme)):
+    return launch_live_scrape_job(channels=req.channels)
