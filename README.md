@@ -160,3 +160,34 @@ Muss einmalig das "telegram-job" Image gebuilded werden:
 cd telegram_scraper
 docker build -t telegram-job:latest .
 ```
+
+## 🕵️‍♂️ Telegram Scraper
+
+### ✅ Features
+
+- Supports multiple `MODE`s:
+  - `similar` – recommends similar channels based on Telegram's API and optionally writes to Neo4j.
+  - `scrape` – scrapes historical + live messages.
+  - `full` – scrapes + finds similar channels + scrapes those too.
+  - `live` – only listens for new messages (no backfill).
+- Recursive scraping through invite links.
+- Channels are only marked as `scraped` if actual messages are saved.
+- Optional flag `SKIP_HISTORY=1` to ignore past messages and only do live tracking.
+- Uses containerized scraper jobs triggered dynamically via `job-launcher`.
+
+---
+
+### ⚙️ ENV Parameters – Additions
+
+```env
+# Scraper control flags
+MODE=full               # scrape | full | similar | live
+CHANNELS=cryptovalleyweek
+SESSION_NAME=default
+RECURSIVE=1             # Enables invite link discovery
+NEO4J_WRITE=1           # Writes similarity output to Neo4j
+SKIP_HISTORY=1          # Disables historic backfill, useful for live-only
+
+# Job Launcher
+JOB_LAUNCHER_URL=http://job-launcher:9001
+JOB_SECRET_TOKEN=supersecure
