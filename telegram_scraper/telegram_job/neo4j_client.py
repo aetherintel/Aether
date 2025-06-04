@@ -14,38 +14,45 @@ driver = AsyncGraphDatabase.driver(
 async def close():
     await driver.close()
 
-async def _save_message(tx, channel_id, message, sender):
+async def save_message(channel_id, username, message, sender):
+    async with driver.session() as session:
+        await session.execute_write(_save_message, channel_id, username, message, sender)
+
+async def _save_message(tx, channel_id, username, message, sender):
     cypher = """
-    MERGE (ch:Channel {channel_id:$cid})
-    MERGE (u:User {user_id:$uid})
-      ON CREATE SET u.first_name=$fname, u.last_name=$lname, u.username=$uusername
-    MERGE (m:Message {message_id:$mid})
-      ON CREATE SET m.date=$date, m.text=$text,
-                    m.media_type=$mtype
+    MERGE (ch:Channel {channel_id: $cid})
+    ON CREATE SET ch.username = $uname
+
+    MERGE (u:User {user_id: $uid})
+    ON CREATE SET u.first_name=$fname, u.last_name=$lname, u.username=$uusername
+
+    MERGE (m:Message {mid: $cid + "-" + $mid})
+    ON CREATE SET m.date=$date, m.text=$text, m.media_type=$mtype
+
     MERGE (ch)-[:HAS_MESSAGE]->(m)
     MERGE (u)-[:SENT]->(m)
+
     FOREACH (_ IN CASE WHEN $reply_to IS NOT NULL THEN [1] ELSE [] END |
-      MERGE (rm:Message {message_id:$reply_to})
-      MERGE (m)-[:REPLY_TO]->(rm)
-    )
+        MERGE (rm:Message {mid: $cid + "-" + $reply_to})
+        MERGE (m)-[:REPLY_TO]->(rm)
+        )
+
     """
     await tx.run(
         cypher,
         cid=str(channel_id),
-        uid=sender.id,
+        uname=username,
+        uid=sender.id or None,
         fname=getattr(sender, "first_name", None),
         lname=getattr(sender, "last_name", None),
         uusername=getattr(sender, "username", None),
-        mid=message.id,
+        mid=f"{channel_id}-{message.id}",
         date=message.date.isoformat(),
         text=message.message,
         mtype=message.media.__class__.__name__ if message.media else None,
         reply_to=message.reply_to_msg_id
     )
 
-async def save_message(channel_id, message, sender):
-    async with driver.session() as session:
-        await session.execute_write(_save_message, channel_id, message, sender)
 
 async def write_recommendations(root, recs):
     async with driver.session() as s:
@@ -70,3 +77,26 @@ async def write_recommendations(root, recs):
             rec_username=r.get("username"),
             rec_title=r.get("title"))
 
+async def is_scraped(username: str) -> bool:
+    async with driver.session() as session:
+        result = await session.run(
+            """
+            MATCH (c:Channel {username: $username})-[:HAS_MESSAGE]->(:Message)
+            RETURN count(*) > 0 AS scraped
+            """,
+            username=username
+        )
+        record = await result.single()
+        return record and record["scraped"]
+
+
+
+async def mark_scraped(username: str):
+    async with driver.session() as session:
+        await session.run(
+            """
+            MERGE (c:Channel {username: $username})
+            SET c.scraped = true, c.scraped_at = timestamp()
+            """,
+            username=username
+        )

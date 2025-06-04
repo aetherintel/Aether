@@ -1,6 +1,7 @@
 from telethon import functions, types
 from telegram_job.telegram_client import client
 from telethon.errors.rpcerrorlist import UsernameInvalidError
+from telegram_job.scraper import run_scraper
 
 async def similar_channels(username: str):
     entity = await client.get_input_entity(username)
@@ -41,3 +42,14 @@ async def similar_channels_flexible(user_input: str, limit: int = 15):
 
     # 3️⃣ fall back to keyword search
     return await _search_fallback(user_input, limit)
+
+def run_similarity_and_scrape(channel: str, recursive: bool = False) -> dict:
+    similar = similar_channels_flexible(channel)
+    usernames = [c["username"] for c in similar if c.get("username")]
+    if usernames:
+        try:
+            run_scraper(usernames, recursive=recursive)
+        except Exception as e:
+            print(f"[WARN] Scraper error after similarity run: {e}")
+    return similar
+
