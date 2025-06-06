@@ -27,7 +27,7 @@ async def get_channel_list():
             ch.title as title,
             msg_count as message_count,
             latest as last_message_date,
-            count(other) as recommended_by
+            count(other) as recommended_by,
             ch.scraped as is_scraped,
             ch.scraped_at as scraped_at
         ORDER BY last_message_date DESC
@@ -38,9 +38,12 @@ async def get_channel_list():
             channels.append({
                 "channel_id": record["channel_id"],
                 "username": record["username"],
+                "title": record["title"],
                 "message_count": record["message_count"],
                 "last_active": record["last_message_date"],
-                "recommended_by": record["recommended_by"]
+                "recommended_by": record["recommended_by"],
+                "is_scraped": record["is_scraped"],
+                "scraped_at": record["scraped_at"]
             })
         return channels
 
