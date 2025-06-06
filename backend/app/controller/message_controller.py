@@ -8,7 +8,7 @@ from telegram_job.neo4j_client import (
     get_channel_by_id
 )
 
-router = APIRouter(prefix="/api/messages", tags=["messages"])
+router = APIRouter(prefix="/messages", tags=["messages"])
 
 class Author(BaseModel):
     id: str
