@@ -1,4 +1,6 @@
 from fastapi import FastAPI
+
+from backend.app.controller import message_controller
 from controller import auth_controller
 from controller import casefile_controller
 from fastapi.middleware.cors import CORSMiddleware
@@ -7,6 +9,8 @@ app = FastAPI(title="FastAPI with Keycloak",root_path="/api")
 
 app.include_router(auth_controller.router)
 app.include_router(casefile_controller.router)
+app.include_router(message_controller.router)
+
 
 origins = [
     "http://localhost:5173",
