@@ -56,3 +56,13 @@ async def list_channels():
         return channels
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Fehler beim Abrufen der Channel-Liste: {str(e)}")
+
+@router.get("/channels/{channel_id}", response_model=ChannelDetail)
+async def get_channel_details(channel_id: str):
+    try:
+        channel = await get_channel_by_id(channel_id)
+        if not channel:
+            raise HTTPException(status_code=404, detail=f"Channel {channel_id} nicht gefunden")
+        return channel
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Fehler beim Abrufen der Channel-Details: {str(e)}")
