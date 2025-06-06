@@ -19,12 +19,17 @@ async def get_channel_list():
         query = """
         MATCH (ch:Channel)
         OPTIONAL MATCH (ch)-[:HAS_MESSAGE]->(m:Message)
+        WITH ch, count(m) as msg_count, max(m.date) as latest
+        OPTIONAL MATCH (other)-[:RECOMMENDS]->(ch)
         RETURN 
             ch.channel_id as channel_id,
             ch.username as username,
             ch.title as title,
-            count(m) as message_count,
-            max(m.date) as last_message_date
+            msg_count as message_count,
+            latest as last_message_date,
+            count(other) as recommended_by
+            ch.scraped as is_scraped,
+            ch.scraped_at as scraped_at
         ORDER BY last_message_date DESC
         """
         result = await session.run(query)
@@ -33,9 +38,9 @@ async def get_channel_list():
             channels.append({
                 "channel_id": record["channel_id"],
                 "username": record["username"],
-                "title": record["title"],
                 "message_count": record["message_count"],
-                "last_message": record["last_message_date"]
+                "last_active": record["last_message_date"],
+                "recommended_by": record["recommended_by"]
             })
         return channels
 
