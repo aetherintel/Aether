@@ -20,9 +20,10 @@ async def get_channel_list():
         MATCH (ch:Channel)
         OPTIONAL MATCH (ch)-[:HAS_MESSAGE]->(m:Message)
         RETURN 
+            ch.channel_id as channel_id,
             ch.username as username,
             ch.title as title,
-            count(m) as message_count,  
+            count(m) as message_count,
             max(m.date) as last_message_date
         ORDER BY last_message_date DESC
         """
@@ -30,6 +31,7 @@ async def get_channel_list():
         channels = []
         async for record in result:
             channels.append({
+                "channel_id": record["channel_id"],
                 "username": record["username"],
                 "title": record["title"],
                 "message_count": record["message_count"],
