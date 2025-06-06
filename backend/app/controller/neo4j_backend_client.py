@@ -47,10 +47,14 @@ async def get_messages_for_channel(channel_id: str, limit: int = 100):
             m.text as text,
             m.date as date,
             m.media_type as media_type,
+            m.mid as message_id,
+            u.user_id as user_id,
             u.username as username,
             u.first_name as first_name,
             u.last_name as last_name,
+            ch.channel_id as channel_id,
             ch.username as channel_name
+            ch.username as channel_username
         ORDER BY m.date DESC
         LIMIT $limit
         """
@@ -61,11 +65,18 @@ async def get_messages_for_channel(channel_id: str, limit: int = 100):
         async for record in result:
             author_name = record["username"] or f"{record['first_name'] or ''} {record['last_name'] or ''}".strip() or "Unknown"
             messages.append({
+                "message_id": record["message_id"],
                 "text": record["text"],
                 "date": record["date"],
                 "media_type": record["media_type"],
-                "author": author_name,
-                "channel": record["channel_name"]
+                 "author": {
+                    "id": record["user_id"],
+                    "name": author_name
+                },
+                "channel": {
+                    "id": record["channel_id"],
+                    "username": record["channel_username"]
+                }
             })
         return messages
 
