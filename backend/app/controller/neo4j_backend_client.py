@@ -118,6 +118,10 @@ async def get_channel_by_id(channel_id: str):
                 "title": record["title"],
                 "message_count": record["message_count"],
                 "first_message": record["first_message"],
-                "last_message": record["last_message"]
+                "last_message": record["last_message"],
+                "recommends_count": record["recommends_count"],
+                "recommended_by_count": record["recommended_by_count"],
+                "is_scraped": record["is_scraped"],
+                "scraped_at": record["scraped_at"]
             }
         return None
