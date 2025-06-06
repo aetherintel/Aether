@@ -91,13 +91,19 @@ async def get_channel_by_id(channel_id: str):
         query = """
         MATCH (ch:Channel {channel_id: $channel_id})
         OPTIONAL MATCH (ch)-[:HAS_MESSAGE]->(m:Message)
+        OPTIONAL MATCH (ch)-[:RECOMMENDS]->(rec:Channel)
+        OPTIONAL MATCH (other:Channel)-[:RECOMMENDS]->(ch)
         RETURN 
             ch.channel_id as channel_id,
             ch.username as username,
             ch.title as title,
-            count(m) as message_count,
+            count(DISTINCT m) as message_count,
             min(m.date) as first_message,
-            max(m.date) as last_message
+            max(m.date) as last_message,
+            count(DISTINCT rec) as recommends_count,
+            count(DISTINCT other) as recommended_by_count,
+            ch.scraped as is_scraped,
+            ch.scraped_at as scraped_at
         """
         result = await session.run(query, channel_id=str(channel_id))
         record = await result.single()
