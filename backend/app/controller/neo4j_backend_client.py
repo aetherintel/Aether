@@ -48,6 +48,7 @@ async def get_messages_for_channel(channel_id: str, limit: int = 100):
     async with driver.session() as session:
         query = """
         MATCH (ch:Channel {channel_id: $channel_id})-[:HAS_MESSAGE]->(m:Message)<-[:SENT]-(u:User)
+        OPTIONAL MATCH (m)-[:REPLY_TO]->(reply:Message)
         RETURN 
             m.text as text,
             m.date as date,
@@ -58,8 +59,8 @@ async def get_messages_for_channel(channel_id: str, limit: int = 100):
             u.first_name as first_name,
             u.last_name as last_name,
             ch.channel_id as channel_id,
-            ch.username as channel_name
-            ch.username as channel_username
+            ch.username as channel_username,
+            reply.mid as reply_to_id
         ORDER BY m.date DESC
         LIMIT $limit
         """
