@@ -78,7 +78,8 @@ async def get_messages_for_channel(channel_id: str, limit: int = 100):
                 "text": record["text"],
                 "date": record["date"],
                 "media_type": record["media_type"],
-                 "author": {
+                "reply_to_id": record["reply_to_id"],
+                "author": {
                     "id": record["user_id"],
                     "name": author_name
                 },
