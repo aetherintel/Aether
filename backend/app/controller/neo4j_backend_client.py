@@ -14,5 +14,25 @@ driver = AsyncGraphDatabase.driver(
 async def close():
     await driver.close()
 
-
-# TODO: Implement the Functions to get messages and channels from Neo4j
+async def get_channel_list():
+    async with driver.session() as session:
+        query = """
+        MATCH (ch:Channel)
+        OPTIONAL MATCH (ch)-[:HAS_MESSAGE]->(m:Message)
+        RETURN 
+            ch.username as username,
+            ch.title as title,
+            count(m) as message_count,  
+            max(m.date) as last_message_date
+        ORDER BY last_message_date DESC
+        """
+        result = await session.run(query)
+        channels = []
+        async for record in result:
+            channels.append({
+                "username": record["username"],
+                "title": record["title"],
+                "message_count": record["message_count"],
+                "last_message": record["last_message_date"]
+            })
+        return channels
