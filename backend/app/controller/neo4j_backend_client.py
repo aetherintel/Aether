@@ -68,3 +68,29 @@ async def get_messages_for_channel(channel_id: str, limit: int = 100):
                 "channel": record["channel_name"]
             })
         return messages
+
+async def get_channel_by_id(channel_id: str):
+    async with driver.session() as session:
+        query = """
+        MATCH (ch:Channel {channel_id: $channel_id})
+        OPTIONAL MATCH (ch)-[:HAS_MESSAGE]->(m:Message)
+        RETURN 
+            ch.channel_id as channel_id,
+            ch.username as username,
+            ch.title as title,
+            count(m) as message_count,
+            min(m.date) as first_message,
+            max(m.date) as last_message
+        """
+        result = await session.run(query, channel_id=str(channel_id))
+        record = await result.single()
+        if record:
+            return {
+                "channel_id": record["channel_id"],
+                "username": record["username"],
+                "title": record["title"],
+                "message_count": record["message_count"],
+                "first_message": record["first_message"],
+                "last_message": record["last_message"]
+            }
+        return None
