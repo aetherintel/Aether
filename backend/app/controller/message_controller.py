@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Optional, List
 from fastapi import APIRouter, HTTPException, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from telegram_job.neo4j_client import (
     get_channel_list,
     get_messages_for_channel,
@@ -13,10 +13,15 @@ router = APIRouter(prefix="/messages", tags=["messages"])
 class Author(BaseModel):
     id: str
     name: str
+    username: Optional[str]
+    first_name: Optional[str]
+    last_name: Optional[str]
+
 
 class Channel(BaseModel):
     id: str
     username: str
+    title: Optional[str]
 
 class Message(BaseModel):
     message_id: str
@@ -44,15 +49,20 @@ class ChannelListItem(BaseModel):
     username: str
     title: str
     message_count: int
-    last_active: Optional[datetime]
+    last_active: Optional[datetime] = Field(alias="last_message_date")
     recommended_by: int
     is_scraped: bool
     scraped_at: Optional[datetime]
+
+    class Config:
+        allow_population_by_field_name = True
 
 @router.get("/channels", response_model=List[ChannelListItem])
 async def list_channels():
     try:
         channels = await get_channel_list()
+        for channel in channels:
+            channel["last_message_date"] = channel.pop("last_active", None)
         return channels
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Fehler beim Abrufen der Channel-Liste: {str(e)}")
