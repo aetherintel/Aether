@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import Optional, List
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
-from telegram_job.neo4j_client import (
+from services.neo4j_backend_client import (
     get_channel_list,
     get_messages_for_channel,
     get_channel_by_id
@@ -11,17 +11,12 @@ from telegram_job.neo4j_client import (
 router = APIRouter(prefix="/messages", tags=["messages"])
 
 class Author(BaseModel):
-    id: str
+    id: int
     name: str
-    username: Optional[str]
-    first_name: Optional[str]
-    last_name: Optional[str]
-
 
 class Channel(BaseModel):
     id: str
     username: str
-    title: Optional[str]
 
 class Message(BaseModel):
     message_id: str
@@ -35,7 +30,7 @@ class Message(BaseModel):
 class ChannelDetail(BaseModel):
     channel_id: str
     username: str
-    title: str
+    title: Optional[str]
     message_count: int
     first_message: Optional[datetime]
     last_message: Optional[datetime]
@@ -47,7 +42,7 @@ class ChannelDetail(BaseModel):
 class ChannelListItem(BaseModel):
     channel_id: str
     username: str
-    title: str
+    title: Optional[str]
     message_count: int
     last_active: Optional[datetime] = Field(alias="last_message_date")
     recommended_by: int
