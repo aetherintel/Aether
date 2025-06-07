@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 
-from backend.app.controller import message_controller
+from controller import message_controller
 from controller import auth_controller
 from controller import casefile_controller
 from fastapi.middleware.cors import CORSMiddleware
