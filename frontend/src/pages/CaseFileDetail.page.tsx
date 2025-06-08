@@ -1,6 +1,6 @@
-import { useEffect, useState, useRef, useCallback } from 'react';
+import { useEffect, useState, useRef, useCallback, useLayoutEffect } from 'react';
 import { useParams } from 'react-router-dom';
-import { Loader, Text, Title, Grid, Card, Tabs, Table, Checkbox, ScrollArea, Stack } from '@mantine/core';
+import { Loader, Text, Title, Grid, Card, Tabs, Table, Checkbox, ScrollArea, Stack, Input, Button, Box } from '@mantine/core';
 import BreadcrumbsBar from '@/components/BreadcrumbsBar/BreadcrumbsBar';
 import classes from './CaseFileDetail.module.css';
 import {
@@ -8,6 +8,7 @@ import {
   IconDownload,
   IconMessage,
   IconEye,
+  IconSearch,
 } from '@tabler/icons-react';
 
 const apiUrl = import.meta.env.VITE_API_URL;
@@ -23,7 +24,7 @@ export function CaseFileDetail() {
   const [selectedRows, setSelectedRows] = useState<number[]>([]);
   const [scrapers, setScrapers] = useState<any[]>([]);
 
-  const LIMIT = 5;
+  const LIMIT = 10;
   const [messages, setMessages] = useState<any[]>([]);
   const [hasMore, setHasMore] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -31,6 +32,61 @@ export function CaseFileDetail() {
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const [channelLastDates, setChannelLastDates] = useState<{ [channelId: string]: string | null }>({});
+  const [expandedMessages, setExpandedMessages] = useState<Set<string>>(new Set());
+
+  // Custom hook to measure if text needs truncation
+  const useMeasureText = () => {
+    const measureRef = useRef<HTMLDivElement>(null);
+    const [needsTruncation, setNeedsTruncation] = useState(false);
+
+    useLayoutEffect(() => {
+      if (measureRef.current) {
+        const element = measureRef.current;
+        const computedStyle = window.getComputedStyle(element);
+        const lineHeight = parseFloat(computedStyle.lineHeight);
+        const actualHeight = element.scrollHeight;
+        
+        // Calculate number of lines (add small tolerance for rounding)
+        const lineCount = Math.round(actualHeight / lineHeight);
+        setNeedsTruncation(lineCount > 3);
+      }
+    });
+
+    return { measureRef, needsTruncation };
+  };
+
+  // Function to format relative time
+  const formatRelativeTime = (dateString: string) => {
+    const now = new Date();
+    const messageDate = new Date(dateString);
+    const diffInSeconds = Math.floor((now.getTime() - messageDate.getTime()) / 1000);
+    
+    if (diffInSeconds < 60) {
+      return `${diffInSeconds}s ago`;
+    } else if (diffInSeconds < 3600) {
+      const minutes = Math.floor(diffInSeconds / 60);
+      return `${minutes}m ago`;
+    } else if (diffInSeconds < 86400) {
+      const hours = Math.floor(diffInSeconds / 3600);
+      return `${hours}h ago`;
+    } else if (diffInSeconds < 2592000) {
+      const days = Math.floor(diffInSeconds / 86400);
+      return `${days}d ago`;
+    } 
+    return messageDate.toLocaleDateString();
+  };
+
+  const toggleMessageExpansion = (messageId: string) => {
+    setExpandedMessages(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(messageId)) {
+        newSet.delete(messageId);
+      } else {
+        newSet.add(messageId);
+      }
+      return newSet;
+    });
+  };
 
   useEffect(() => {
     const fetchData = async () => {
@@ -171,30 +227,81 @@ export function CaseFileDetail() {
     );
   }
 
-  const messageRows = messages.map((message) => (
-    <Table.Tr
-      key={message.message_id}
-      bg={selectedRows.includes(message.message_id) ? 'var(--mantine-color-blue-light)' : undefined}
-    >
-      <Table.Td>
-        <Checkbox
-          aria-label="Select row"
-          checked={selectedRows.includes(message.message_id)}
-          onChange={(event) =>
-            setSelectedRows(
-              event.currentTarget.checked
-                ? [...selectedRows, message.message_id]
-                : selectedRows.filter((position) => position !== message.message_id)
-            )
-          }
-        />
-      </Table.Td>
-      <Table.Td>{highlightText(message.text, searchQuery)}</Table.Td>
-      <Table.Td>{message.author.name}</Table.Td>
-      <Table.Td>{new Date(message.date).toLocaleDateString()}</Table.Td>
-      <Table.Td>{message.channel.username}</Table.Td>
-    </Table.Tr>
-  ));
+  // Component for individual message content with measurement
+  const MessageContent = ({ message, isExpanded, onToggleExpand }: { 
+    message: any, 
+    isExpanded: boolean, 
+    onToggleExpand: () => void 
+  }) => {
+    const { measureRef, needsTruncation } = useMeasureText();
+
+    return (
+      <div className={classes.messageContent}>
+        <div
+          ref={measureRef}
+          className={`${classes.messageText} ${
+            isExpanded ? classes.messageTextExpanded : classes.messageTextTruncated
+          }`}
+        >
+          {highlightText(message.text, searchQuery)}
+        </div>
+        {needsTruncation && (
+          <Button
+            variant="subtle"
+            size="xs"
+            onClick={onToggleExpand}
+            className={classes.expandButton}
+          >
+            {isExpanded ? 'Show less' : 'Show more'}
+          </Button>
+        )}
+      </div>
+    );
+  };
+
+  const messageRows = messages.map((message) => {
+    const isExpanded = expandedMessages.has(message.message_id);
+
+    return (
+      <Table.Tr
+        key={message.message_id}
+        bg={selectedRows.includes(message.message_id) ? 'var(--mantine-color-blue-light)' : undefined}
+      >
+        <Table.Td className={classes.checkboxColumn}>
+          <Checkbox
+            aria-label="Select row"
+            checked={selectedRows.includes(message.message_id)}
+            onChange={(event) =>
+              setSelectedRows(
+                event.currentTarget.checked
+                  ? [...selectedRows, message.message_id]
+                  : selectedRows.filter((position) => position !== message.message_id)
+              )
+            }
+          />
+        </Table.Td>
+        <Table.Td className={classes.messageCell}>
+          <Box>
+            <div className={classes.authorRow}>
+              <Text size="sm" fw={500} className={classes.authorName}>
+                {message.author.name} <span className={classes.channelName}>
+                  [{message.channel.username}]
+                </span>
+              </Text>
+              <Text size="xs" className={classes.timestamp}>
+                {formatRelativeTime(message.date)}
+              </Text>
+            </div>
+            <MessageContent
+              message={message}
+              isExpanded={isExpanded}
+              onToggleExpand={() => toggleMessageExpansion(message.message_id)}
+            />
+          </Box>
+        </Table.Td>
+      </Table.Tr>
+    );
+  });
 
   const scraperRows = scrapers.map((scraper) => (
     <Table.Tr
@@ -290,18 +397,16 @@ export function CaseFileDetail() {
                 </Tabs.List>
 
                 <Tabs.Panel value="messages" mt="md">
-                  <input
-                    type="text"
-                    value={searchQuery}
-                    placeholder="Search messages"
+                  <Input placeholder="Search messages..." 
+                    value={searchQuery} 
                     onChange={(e) => setSearchQuery(e.target.value)}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') {
                         handleSearchSubmit();
                       }
-                    }}
-                    style={{ marginBottom: 12, padding: '4px 8px', width: '100%' }}
-                  />
+                    }} 
+                    leftSection={<IconSearch size={16} />}
+                    mb="md" />
 
                   <ScrollArea
                     h={400}
@@ -316,11 +421,21 @@ export function CaseFileDetail() {
                     <Table>
                       <Table.Thead>
                         <Table.Tr>
-                          <Table.Th />
-                          <Table.Th>Message</Table.Th>
-                          <Table.Th>Author</Table.Th>
-                          <Table.Th>Date</Table.Th>
-                          <Table.Th>Channel</Table.Th>
+                          <Table.Th className={classes.checkboxColumn}>
+                            <Checkbox
+                              aria-label="Select all messages"
+                              checked={messages.length > 0 && selectedRows.length === messages.length}
+                              indeterminate={selectedRows.length > 0 && selectedRows.length < messages.length}
+                              onChange={(event) => {
+                                if (event.currentTarget.checked) {
+                                  setSelectedRows(messages.map(msg => msg.message_id));
+                                } else {
+                                  setSelectedRows([]);
+                                }
+                              }}
+                            />
+                          </Table.Th>
+                          <Table.Th>Messages</Table.Th>
                         </Table.Tr>
                       </Table.Thead>
                       <Table.Tbody>{messageRows}</Table.Tbody>
