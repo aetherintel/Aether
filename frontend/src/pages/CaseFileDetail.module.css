@@ -22,3 +22,8 @@
     flex-direction: column;
   }
 }
+
+mark {
+  background-color: var(--mantine-color-blue-filled);
+  color: var(--mantine-color-body);
+}

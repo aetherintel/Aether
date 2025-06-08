@@ -75,10 +75,12 @@ async def get_channel_details(channel_id: str):
 @router.get("/channels/{channel_id}/messages", response_model=List[Message])
 async def get_channel_messages(
     channel_id: str,
-    limit: int = Query(default=100, ge=1, le=1000)
+    limit: int = Query(default=100, ge=1, le=1000),
+    before: datetime | None = None,
+    q: str | None = None,
 ):
     try:
-        messages = await get_messages_for_channel(channel_id, limit)
+        messages = await get_messages_for_channel(channel_id, limit=limit, before=before, query=q)
         return messages
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Fehler beim Abrufen der Nachrichten: {str(e)}")

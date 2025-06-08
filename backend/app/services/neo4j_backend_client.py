@@ -1,5 +1,6 @@
 # telegram_job/neo4j_client.py
 import os
+from datetime import datetime
 from neo4j import AsyncGraphDatabase
 from dotenv import load_dotenv
 
@@ -47,10 +48,14 @@ async def get_channel_list():
             })
         return channels
 
-async def get_messages_for_channel(channel_id: str, limit: int = 100):
+async def get_messages_for_channel(channel_id: str, limit: int = 100, before: datetime | None = None, query: str | None = None):
     async with driver.session() as session:
-        query = """
+        cypher = """
         MATCH (ch:Channel {channel_id: $channel_id})-[:HAS_MESSAGE]->(m:Message)<-[:SENT]-(u:User)
+        WHERE (
+            $query IS NULL OR $query = '' OR (m.text IS NOT NULL AND toLower(m.text) CONTAINS toLower($query))
+        )
+        AND ($before IS NULL OR m.date < $before)
         OPTIONAL MATCH (m)-[:REPLY_TO]->(reply:Message)
         RETURN 
             m.text as text,
@@ -67,9 +72,16 @@ async def get_messages_for_channel(channel_id: str, limit: int = 100):
         ORDER BY m.date DESC
         LIMIT $limit
         """
-        result = await session.run(query,
-                                 channel_id=str(channel_id),
-                                 limit=limit)
+
+        params = {
+            "channel_id": str(channel_id),
+            "limit": limit,
+            "query": query,
+            "before": before.isoformat() if before else None
+        }
+
+        result = await session.run(cypher, params)
+
         messages = []
         async for record in result:
             author_name = record["username"] or f"{record['first_name'] or ''} {record['last_name'] or ''}".strip() or "Unknown"
