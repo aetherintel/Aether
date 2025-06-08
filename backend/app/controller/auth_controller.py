@@ -7,9 +7,11 @@ import requests
 from services.keycloak_service import get_current_user, has_role
 from controller.telegram_controller import run_similarity, start_scraper, launch_full_scrape_job, launch_live_scrape_job
 from pydantic import BaseModel
+import docker
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
+docker_client = docker.from_env()
 
 class ExtendedScrapeRequest(BaseModel):
     channel: str
@@ -141,6 +143,22 @@ def register(data: RegisterRequest):
 @router.get("/me")
 def get_user(token: str = Depends(oauth2_scheme)):
     return {"token": token}
+
+@router.get("/telegram/status")
+def telegram_status():
+    containers = docker_client.containers.list(all=True)
+    container_list = []
+    for c in containers:
+        if "telegram-job" in c.image.tags[0]:
+            container_list.append({
+                "id": c.id,
+                "name": c.name,
+                "image": c.image.tags[0] if c.image.tags else None,
+                "status": c.status,
+                "labels": c.labels,
+                "created": c.attrs['Created'],
+            })
+    return container_list
 
 @router.post("/telegram/similar")
 def telegram_similar(req: ChannelInput, user=Depends(oauth2_scheme)):

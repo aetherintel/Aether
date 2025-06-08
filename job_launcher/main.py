@@ -43,7 +43,11 @@ def launch_similarity(req: SimilarRequest, request: Request):
             "TG_API_HASH": os.getenv("TG_API_HASH"),
         },
         volumes={"tg_default": {"bind": "/app/session", "mode": "rw"}},
-        network= "monitor_default"
+        network= "monitor_default",
+        labels={
+            "MODE": "similar",
+            "CHANNELS": req.channel
+        }
     )
     return {"result": container.decode()}
 
@@ -71,6 +75,10 @@ def launch_scraper(req: ScrapeRequest, request: Request):
         detach=True,
         environment=env_vars,
         volumes={"tg_default": {"bind": "/app/session", "mode": "rw"}},
-        network="monitor_default"
+        network="monitor_default",
+        labels={
+            "MODE": req.mode,
+            "CHANNELS": ",".join(req.channels)
+        }
     )
     return {"container_id": container.id}

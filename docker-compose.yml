@@ -38,6 +38,8 @@ services:
       DB_URL: postgresql://${DB_USER}:${DB_PASSWORD}@postgres:5432/monitor
       KEYCLOAK_URL: http://${KEYCLOAK_HOSTNAME}:8080/realms/HotTopics
       SWAGGER_TOKEN_URL: http://localhost:8080/realms/HotTopics/protocol/openid-connect/token
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
     depends_on:
       - postgres
       - keycloak
