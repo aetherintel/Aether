@@ -10,6 +10,7 @@ import {
   IconEye,
   IconSearch,
 } from '@tabler/icons-react';
+import GraphVisualization from '@/components/GraphVisualization/GraphVisualization';
 
 const apiUrl = import.meta.env.VITE_API_URL;
 
@@ -389,7 +390,7 @@ export function CaseFileDetail() {
                     Scraper
                   </Tabs.Tab>
                   <Tabs.Tab value="visuals" leftSection={<IconEye size={12} />}>
-                    Visuals
+                    Graph
                   </Tabs.Tab>
                   <Tabs.Tab value="map" leftSection={<IconMap size={12} />}>
                     Map
@@ -463,7 +464,10 @@ export function CaseFileDetail() {
                 </Tabs.Panel>
 
                 <Tabs.Panel value="visuals" mt="md">
-                  Visuals tab content
+                  <GraphVisualization 
+                    selectedChannelIds={selectedTgChannelIds}
+                    searchQuery={searchQuery}
+                  />
                 </Tabs.Panel>
 
                 <Tabs.Panel value="map" mt="md">
