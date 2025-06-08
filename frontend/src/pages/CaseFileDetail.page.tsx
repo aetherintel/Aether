@@ -1,10 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import { Loader, Text, Title, Grid, Card, Tabs, Table, Checkbox, ScrollArea, Stack } from '@mantine/core';
 import BreadcrumbsBar from '@/components/BreadcrumbsBar/BreadcrumbsBar';
 import classes from './CaseFileDetail.module.css';
 import {
   IconMap,
+  IconDownload,
   IconMessage,
   IconEye,
 } from '@tabler/icons-react';
@@ -15,76 +16,218 @@ export function CaseFileDetail() {
   const { id } = useParams<{ id: string }>();
   const [caseFile, setCaseFile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+
+  const [tgChannels, setTgChannels] = useState<any[]>([]);
+  const [selectedTgChannelIds, setSelectedTgChannelIds] = useState<string[]>([]);
+
   const [selectedRows, setSelectedRows] = useState<number[]>([]);
+  const [scrapers, setScrapers] = useState<any[]>([]);
+
+  const LIMIT = 5;
+  const [messages, setMessages] = useState<any[]>([]);
+  const [hasMore, setHasMore] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  const [channelLastDates, setChannelLastDates] = useState<{ [channelId: string]: string | null }>({});
 
   useEffect(() => {
-    fetch(`${apiUrl ? apiUrl : 'http://localhost:8000/api'}/casefiles/${id}`)
-      .then((res) => res.json())
-      .then((data) => {
-        setCaseFile(data);
+    const fetchData = async () => {
+      try {
+        const base = apiUrl ?? 'http://localhost:8000/api';
+        const resCaseFile = await fetch(`${base}/casefiles/${id}`);
+        const caseFileData = await resCaseFile.json();
+
+        setCaseFile(caseFileData);
+
+        const resTgChannels = await fetch(`${base}/messages/channels`);
+        const tgChannelsData = await resTgChannels.json();
+
+        setTgChannels(tgChannelsData);
+
+        if (selectedTgChannelIds.length === 0) {
+          setSelectedTgChannelIds(tgChannelsData.map((c: any) => c.channel_id));
+        }
+
+        const resScrapers = await fetch(`${base}/auth/telegram/status`);
+        const scaperData = await resScrapers.json();
+        setScrapers(scaperData);
+
+      } catch (error) {
+        console.error('Fetch error:', error);
+      } finally {
         setLoading(false);
-      })
-      .catch(() => setLoading(false));
+      }
+    };
+
+    fetchData();
   }, [id]);
+
+  // Function to deduplicate messages based on message_id
+  const deduplicateMessages = useCallback((messages: any[]) => {
+    const seen = new Set();
+    return messages.filter(msg => {
+      if (seen.has(msg.message_id)) {
+        return false;
+      }
+      seen.add(msg.message_id);
+      return true;
+    });
+  }, []);
+
+  const loadMessages = useCallback(async (reset: boolean = false) => {
+    if (isLoadingMore && !reset) {return;}
+    
+    setIsLoadingMore(true);
+    
+    try {
+      const base = apiUrl ?? 'http://localhost:8000/api';
+      const currentLastDates = reset ? 
+        Object.fromEntries(selectedTgChannelIds.map(id => [id, null])) : 
+        channelLastDates;
+
+      const results = await Promise.all(
+        selectedTgChannelIds.map(async (channelId) => {
+          const before = currentLastDates[channelId];
+          const url = new URL(`${base}/messages/channels/${channelId}/messages`);
+          url.searchParams.set('limit', `${LIMIT}`);
+          if (searchQuery) {
+            url.searchParams.set('q', searchQuery);
+          }
+          if (before) {
+            url.searchParams.set('before', before);
+          }
+
+          const res = await fetch(url.toString());
+          const data = await res.json();
+          return { channelId, messages: data };
+        })
+      );
+
+      const newMessages = results.flatMap(r => r.messages);
+
+      // Update messages with deduplication and proper sorting
+      setMessages(prev => {
+        const combined = reset ? newMessages : [...prev, ...newMessages];
+        const deduplicated = deduplicateMessages(combined);
+        // Sort the entire combined array to maintain proper chronological order
+        return deduplicated.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      });
+
+      // Update last dates for pagination
+      const newDates = { ...currentLastDates };
+      results.forEach(({ channelId, messages }) => {
+        const last = messages[messages.length - 1];
+        if (last) {
+          newDates[channelId] = last.date;
+        }
+      });
+      setChannelLastDates(newDates);
+
+      // Check if there are more messages to load
+      const more = results.some(r => r.messages.length === LIMIT);
+      setHasMore(more);
+
+    } catch (error) {
+      console.error('Error loading messages:', error);
+    } finally {
+      setIsLoadingMore(false);
+    }
+  }, [selectedTgChannelIds, searchQuery, channelLastDates, isLoadingMore, deduplicateMessages]);
+
+  // Reset and load initial messages when channels or search query changes
+  useEffect(() => {
+    if (selectedTgChannelIds.length > 0) {
+      setMessages([]);
+      setHasMore(true);
+      setChannelLastDates(Object.fromEntries(selectedTgChannelIds.map(id => [id, null])));
+      loadMessages(true);
+    }
+  }, [selectedTgChannelIds, searchQuery]);
+
+  const handleSearchSubmit = () => {
+    setMessages([]);
+    setHasMore(true);
+    setChannelLastDates(Object.fromEntries(selectedTgChannelIds.map(id => [id, null])));
+    loadMessages(true);
+  };
 
   if (loading) {
     return <Loader />;
   }
   if (!caseFile) {
     return <Text>Case file not found.</Text>;
-  }  
+  }
 
-  const elements = [
-    { message: "Lorem ipsum dolor sit amet, consetetur sadipscing elitr, sed diam nonumy eirmod tempor invidunt ut labore et dolore magna aliquyam erat, sed diam voluptua. At vero eos et accusam et justo duo dolores et ea rebum. Stet clita kasd gubergren,", author: "Max Mustermann", tgchannel: 'insider_nachrichten', id: 1 },
-    { message: "Lorem ipsum dolor sit amet, consetetur sadipscing elitr, sed diam nonumy eirmod tempor invidunt ut labore et dolore magna aliquyam erat, sed diam voluptua. At vero eos et accusam et justo duo dolores et ea rebum. Stet clita kasd gubergren,", author: "Max Mustermann", tgchannel: 'insider_nachrichten', id: 2 },
-    { message: "Lorem ipsum dolor sit amet, consetetur sadipscing elitr, sed diam nonumy eirmod tempor invidunt ut labore et dolore magna aliquyam erat, sed diam voluptua. At vero eos et accusam et justo duo dolores et ea rebum. Stet clita kasd gubergren,", author: "Max Mustermann", tgchannel: 'insider_nachrichten', id: 3 },
-    { message: "Lorem ipsum dolor sit amet, consetetur sadipscing elitr, sed diam nonumy eirmod tempor invidunt ut labore et dolore magna aliquyam erat, sed diam voluptua. At vero eos et accusam et justo duo dolores et ea rebum. Stet clita kasd gubergren,", author: "Max Mustermann", tgchannel: 'insider_nachrichten', id: 4 },
-    { message: "Lorem ipsum dolor sit amet, consetetur sadipscing elitr, sed diam nonumy eirmod tempor invidunt ut labore et dolore magna aliquyam erat, sed diam voluptua. At vero eos et accusam et justo duo dolores et ea rebum. Stet clita kasd gubergren,", author: "Max Mustermann", tgchannel: 'insider_nachrichten', id: 5 },
-    { message: "Lorem ipsum dolor sit amet, consetetur sadipscing elitr, sed diam nonumy eirmod tempor invidunt ut labore et dolore magna aliquyam erat, sed diam voluptua. At vero eos et accusam et justo duo dolores et ea rebum. Stet clita kasd gubergren,", author: "Max Mustermann", tgchannel: 'insider_nachrichten', id: 6 },
-    { message: "Lorem ipsum dolor sit amet, consetetur sadipscing elitr, sed diam nonumy eirmod tempor invidunt ut labore et dolore magna aliquyam erat, sed diam voluptua. At vero eos et accusam et justo duo dolores et ea rebum. Stet clita kasd gubergren,", author: "Max Mustermann", tgchannel: 'insider_nachrichten', id: 7 },
-    { message: "Lorem ipsum dolor sit amet, consetetur sadipscing elitr, sed diam nonumy eirmod tempor invidunt ut labore et dolore magna aliquyam erat, sed diam voluptua. At vero eos et accusam et justo duo dolores et ea rebum. Stet clita kasd gubergren,", author: "Max Mustermann", tgchannel: 'insider_nachrichten', id: 8 },
-    { message: "Lorem ipsum dolor sit amet, consetetur sadipscing elitr, sed diam nonumy eirmod tempor invidunt ut labore et dolore magna aliquyam erat, sed diam voluptua. At vero eos et accusam et justo duo dolores et ea rebum. Stet clita kasd gubergren,", author: "Max Mustermann", tgchannel: 'insider_nachrichten', id: 9 },
-    { message: "Lorem ipsum dolor sit amet, consetetur sadipscing elitr, sed diam nonumy eirmod tempor invidunt ut labore et dolore magna aliquyam erat, sed diam voluptua. At vero eos et accusam et justo duo dolores et ea rebum. Stet clita kasd gubergren,", author: "Max Mustermann", tgchannel: 'insider_nachrichten', id: 10 },
-  ];
+  function highlightText(text: string, query: string) {
+    if (!query) { return text; }
 
-  const rows = elements.map((element) => (
+    const regex = new RegExp(`(${query})`, 'gi');
+    const parts = text.split(regex);
+
+    return parts.map((part, index) =>
+      regex.test(part) ? <mark key={index}>{part}</mark> : part
+    );
+  }
+
+  const messageRows = messages.map((message) => (
     <Table.Tr
-      key={element.id}
-      bg={selectedRows.includes(element.id) ? 'var(--mantine-color-blue-light)' : undefined}
+      key={message.message_id}
+      bg={selectedRows.includes(message.message_id) ? 'var(--mantine-color-blue-light)' : undefined}
     >
       <Table.Td>
         <Checkbox
           aria-label="Select row"
-          checked={selectedRows.includes(element.id)}
+          checked={selectedRows.includes(message.message_id)}
           onChange={(event) =>
             setSelectedRows(
               event.currentTarget.checked
-                ? [...selectedRows, element.id]
-                : selectedRows.filter((position) => position !== element.id)
+                ? [...selectedRows, message.message_id]
+                : selectedRows.filter((position) => position !== message.message_id)
             )
           }
         />
       </Table.Td>
-      <Table.Td>{element.message}</Table.Td>
-      <Table.Td>{element.author}</Table.Td>
-      <Table.Td>{element.tgchannel}</Table.Td>
+      <Table.Td>{highlightText(message.text, searchQuery)}</Table.Td>
+      <Table.Td>{message.author.name}</Table.Td>
+      <Table.Td>{new Date(message.date).toLocaleDateString()}</Table.Td>
+      <Table.Td>{message.channel.username}</Table.Td>
     </Table.Tr>
   ));
 
-  const topicsCheckboxes = caseFile.topics.map((element: string) => (
-    <Checkbox
-      label={element}
-    />  
+  const scraperRows = scrapers.map((scraper) => (
+    <Table.Tr
+      key={scraper.message_id}
+      bg={selectedRows.includes(scraper.message_id) ? 'var(--mantine-color-blue-light)' : undefined}
+    >
+      <Table.Td>{scraper.status}</Table.Td>
+      <Table.Td>{scraper.labels.MODE}</Table.Td>
+      <Table.Td>{new Date(scraper.created).toISOString()}</Table.Td>
+      <Table.Td>{scraper.labels.CHANNELS}</Table.Td>
+    </Table.Tr>
   ));
-  const termsCheckboxes = caseFile.terms.map((element: string) => (
-    <Checkbox
-      label={element}
-    />  
+
+  const topicsCheckboxes = caseFile.topics.map((element: string, idx: number) => (
+    <Checkbox key={idx} label={element} />
   ));
-  const tgChannelsCheckboxes = caseFile.tgchannels.map((element: string) => (
+  const termsCheckboxes = caseFile.terms.map((element: string, idx: number) => (
+    <Checkbox key={idx} label={element} />
+  ));
+  const tgChannelsCheckboxes = tgChannels.map((channel: any) => (
     <Checkbox
-      label={element}
-    />  
+      key={channel.channel_id}
+      label={channel.username}
+      checked={selectedTgChannelIds.includes(channel.channel_id)}
+      onChange={(event) => {
+        const checked = event.currentTarget.checked;
+        setSelectedTgChannelIds((current) =>
+          checked
+            ? [...current, channel.channel_id]
+            : current.filter((id) => id !== channel.channel_id)
+        );
+      }}
+    />
   ));
 
   return (
@@ -135,6 +278,9 @@ export function CaseFileDetail() {
                   <Tabs.Tab value="messages" leftSection={<IconMessage size={12} />}>
                     Messages
                   </Tabs.Tab>
+                  <Tabs.Tab value="scraper" leftSection={<IconDownload size={12} />}>
+                    Scraper
+                  </Tabs.Tab>
                   <Tabs.Tab value="visuals" leftSection={<IconEye size={12} />}>
                     Visuals
                   </Tabs.Tab>
@@ -144,19 +290,61 @@ export function CaseFileDetail() {
                 </Tabs.List>
 
                 <Tabs.Panel value="messages" mt="md">
-                  <ScrollArea h={400}>
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    placeholder="Search messages"
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        handleSearchSubmit();
+                      }
+                    }}
+                    style={{ marginBottom: 12, padding: '4px 8px', width: '100%' }}
+                  />
+
+                  <ScrollArea
+                    h={400}
+                    viewportRef={scrollRef}
+                    onScrollPositionChange={({ y }) => {
+                      const el = scrollRef.current;
+                      if (el && el.scrollHeight - y - el.clientHeight < 100 && hasMore && !isLoadingMore) {
+                        loadMessages(false);
+                      }
+                    }}
+                  >
                     <Table>
                       <Table.Thead>
                         <Table.Tr>
                           <Table.Th />
                           <Table.Th>Message</Table.Th>
                           <Table.Th>Author</Table.Th>
-                          <Table.Th>Channel/Group</Table.Th>
+                          <Table.Th>Date</Table.Th>
+                          <Table.Th>Channel</Table.Th>
                         </Table.Tr>
                       </Table.Thead>
-                      <Table.Tbody>{rows}</Table.Tbody>
+                      <Table.Tbody>{messageRows}</Table.Tbody>
                     </Table>
+                    {isLoadingMore && (
+                      <div style={{ textAlign: 'center', padding: '10px' }}>
+                        <Loader size="sm" />
+                      </div>
+                    )}
                   </ScrollArea>
+                </Tabs.Panel>
+
+                <Tabs.Panel value="scraper" mt="md">
+                  <Table>
+                    <Table.Thead>
+                      <Table.Tr>
+                        <Table.Th>Status</Table.Th>
+                        <Table.Th>Mode</Table.Th>
+                        <Table.Th>Date</Table.Th>
+                        <Table.Th>Channels</Table.Th>
+                      </Table.Tr>
+                    </Table.Thead>
+                    <Table.Tbody>{scraperRows}</Table.Tbody>
+                  </Table>
                 </Tabs.Panel>
 
                 <Tabs.Panel value="visuals" mt="md">
