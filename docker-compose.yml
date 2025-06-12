@@ -40,6 +40,7 @@ services:
       SWAGGER_TOKEN_URL: http://localhost:8080/realms/HotTopics/protocol/openid-connect/token
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
+      - tg_sessions:/app/sessions
     depends_on:
       - postgres
       - keycloak
@@ -82,7 +83,7 @@ services:
     image: telegram-job:latest
     entrypoint: ["sleep", "infinity"]  # Keeps image warm but does nothing unless called
     volumes:
-      - tg_default:/app/session        # ⬅️ Session volume (Telegram auth)
+      - tg_sessions:/app/sessions      # ⬅️ Session volume (Telegram auth)
     profiles: ["scraper"] 
   job-launcher:
     build: ./job_launcher
@@ -97,11 +98,11 @@ services:
       TG_API_HASH: ${TG_API_HASH}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-      - tg_default:/app/session
+      - tg_sessions:/app/sessions
 volumes:
   pgdata:
-  tg_default:
   neo4j_data:
   neo4j_logs:
   keycloak_data:
+  tg_sessions:
 
