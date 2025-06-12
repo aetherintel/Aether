@@ -152,15 +152,40 @@ def telegram_status():
     containers = docker_client.containers.list(all=True)
     container_list = []
     for c in containers:
-        if "telegram-job" in c.image.tags[0]:
-            container_list.append({
-                "id": c.id,
-                "name": c.name,
-                "image": c.image.tags[0] if c.image.tags else None,
-                "status": c.status,
-                "labels": c.labels,
-                "created": c.attrs['Created'],
-            })
+        try:
+            image_tags = c.image.tags if c.image and c.image.tags else []
+            
+            is_telegram_job = False
+            if image_tags:
+                is_telegram_job = any("telegram-job" in tag for tag in image_tags)
+            
+            if is_telegram_job:
+                container_list.append({
+                    "id": c.id,
+                    "name": c.name,
+                    "image": image_tags[0] if image_tags else None,
+                    "status": c.status,
+                    "labels": c.labels,
+                    "created": c.attrs['Created'],
+                })
+        except (docker.errors.ImageNotFound, docker.errors.APIError) as e:
+            print(f"Warning: Container {c.id} references a missing image: {e}")
+            
+            if (c.labels and "telegram-job" in str(c.labels).lower()) or \
+               (c.name and "telegram" in c.name.lower()):
+                container_list.append({
+                    "id": c.id,
+                    "name": c.name,
+                    "image": "Image not found",
+                    "status": c.status,
+                    "labels": c.labels,
+                    "created": c.attrs['Created'],
+                })
+            continue
+        except Exception as e:
+            print(f"Unexpected error processing container {c.id}: {e}")
+            continue
+    
     return container_list
 
 @router.post("/telegram/similar")

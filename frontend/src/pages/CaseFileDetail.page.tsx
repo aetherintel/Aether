@@ -11,6 +11,7 @@ import {
   IconSearch,
 } from '@tabler/icons-react';
 import GraphVisualization from '@/components/GraphVisualization/GraphVisualization';
+import TelegramScraper from '@/components/TelegramScraper';
 
 const apiUrl = import.meta.env.VITE_API_URL;
 
@@ -23,7 +24,6 @@ export function CaseFileDetail() {
   const [selectedTgChannelIds, setSelectedTgChannelIds] = useState<string[]>([]);
 
   const [selectedRows, setSelectedRows] = useState<number[]>([]);
-  const [scrapers, setScrapers] = useState<any[]>([]);
 
   const LIMIT = 10;
   const [messages, setMessages] = useState<any[]>([]);
@@ -106,11 +106,6 @@ export function CaseFileDetail() {
         if (selectedTgChannelIds.length === 0) {
           setSelectedTgChannelIds(tgChannelsData.map((c: any) => c.channel_id));
         }
-
-        const resScrapers = await fetch(`${base}/auth/telegram/status`);
-        const scaperData = await resScrapers.json();
-        setScrapers(scaperData);
-
       } catch (error) {
         console.error('Fetch error:', error);
       } finally {
@@ -304,18 +299,6 @@ export function CaseFileDetail() {
     );
   });
 
-  const scraperRows = scrapers.map((scraper) => (
-    <Table.Tr
-      key={scraper.message_id}
-      bg={selectedRows.includes(scraper.message_id) ? 'var(--mantine-color-blue-light)' : undefined}
-    >
-      <Table.Td>{scraper.status}</Table.Td>
-      <Table.Td>{scraper.labels.MODE}</Table.Td>
-      <Table.Td>{new Date(scraper.created).toISOString()}</Table.Td>
-      <Table.Td>{scraper.labels.CHANNELS}</Table.Td>
-    </Table.Tr>
-  ));
-
   const topicsCheckboxes = caseFile.topics.map((element: string, idx: number) => (
     <Checkbox key={idx} label={element} />
   ));
@@ -450,17 +433,7 @@ export function CaseFileDetail() {
                 </Tabs.Panel>
 
                 <Tabs.Panel value="scraper" mt="md">
-                  <Table>
-                    <Table.Thead>
-                      <Table.Tr>
-                        <Table.Th>Status</Table.Th>
-                        <Table.Th>Mode</Table.Th>
-                        <Table.Th>Date</Table.Th>
-                        <Table.Th>Channels</Table.Th>
-                      </Table.Tr>
-                    </Table.Thead>
-                    <Table.Tbody>{scraperRows}</Table.Tbody>
-                  </Table>
+                  <TelegramScraper/>
                 </Tabs.Panel>
 
                 <Tabs.Panel value="visuals" mt="md">
