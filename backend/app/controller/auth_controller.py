@@ -15,6 +15,7 @@ docker_client = docker.from_env()
 
 class ExtendedScrapeRequest(BaseModel):
     channel: str
+    tg_session: str
     recursive: bool = True
     neo4j: bool = True
 
@@ -36,9 +37,11 @@ class RegisterRequest(BaseModel):
 
 class ChannelInput(BaseModel):
     channel: str
+    tg_session: str
 
 class ChannelListInput(BaseModel):
     channels: List[str]
+    tg_session: str
 
 def get_admin_token():
     token_url = f"{os.getenv('KEYCLOAK_BASE_URL')}/realms/HotTopics/protocol/openid-connect/token"
@@ -162,21 +165,22 @@ def telegram_status():
 
 @router.post("/telegram/similar")
 def telegram_similar(req: ChannelInput, user=Depends(oauth2_scheme)):
-    result = run_similarity(req.channel)
+    result = run_similarity(req.channel,tg_session=req.tg_session)
     return {"similar": result}
 
 @router.post("/telegram/scrape")
 def telegram_scrape(req: ChannelListInput, user=Depends(oauth2_scheme)):
-    container_id = start_scraper(req.channels)
+    container_id = start_scraper(req.channels,tg_session=req.tg_session)
     return {"message": "Scraper started", "container_id": container_id}
 
 @router.post("/telegram/full")
 def telegram_full_scrape(req: ExtendedScrapeRequest, user=Depends(oauth2_scheme)):
     return launch_full_scrape_job(
         channel=req.channel,
+        tg_session=req.tg_session,
         recursive=req.recursive,
         neo4j=req.neo4j
     )
 @router.post("/telegram/live")
 def telegram_live_scrape(req: ChannelListInput, user=Depends(oauth2_scheme)):
-    return launch_live_scrape_job(channels=req.channels)
+    return launch_live_scrape_job(channels=req.channels,tg_session=req.tg_session)
