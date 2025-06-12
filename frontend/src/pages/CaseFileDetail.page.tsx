@@ -410,7 +410,7 @@ export function CaseFileDetail() {
                     mb="md" />
 
                   <ScrollArea
-                    h={400}
+                    h={475}
                     viewportRef={scrollRef}
                     onScrollPositionChange={({ y }) => {
                       const el = scrollRef.current;
