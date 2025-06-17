@@ -61,6 +61,7 @@ async def get_messages_for_channel(channel_id: str, limit: int = 100, before: da
             m.text as text,
             m.date as date,
             m.media_type as media_type,
+            m.media_path as media_path,
             m.mid as message_id,
             u.user_id as user_id,
             u.username as username,
