@@ -9,6 +9,7 @@ from services.neo4j_backend_client import (
     get_messages_for_channel,
     get_channel_by_id
 )
+from starlette.responses import FileResponse
 
 router = APIRouter(prefix="/messages", tags=["messages"])
 
@@ -56,6 +57,30 @@ class ChannelListItem(BaseModel):
 
     class Config:
         allow_population_by_field_name = True
+
+@router.get("/media/message/{message_id}")
+async def get_media_by_message_id(message_id: str):
+    try:
+        message = await get_messages_by_id(message_id)
+
+        if not message:
+            raise HTTPException(status_code=404, detail=f"Nachricht {message_id} nicht gefunden")
+
+        if not message.media_path:
+            raise HTTPException(status_code=404, detail=f"Keine Medien für diese {message_id} Nachricht")
+
+        file_path = Path(message.media_path)
+
+        if not file_path.exists():
+            raise HTTPException(status_code=404, detail=f"Media-Datei {file_path} nicht gefunden")
+
+        if not file_path.resolve().is_relative_to(MEDIA_ROOT.resolve()):
+            raise HTTPException(status_code=403, detail=f"Media-Datei {file_path} ist nicht im Medienverzeichnis")
+
+        return FileResponse(path = file_path)
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Fehler beim Abrufen der Medien: {str(e)}")
 
 @router.get("/channels", response_model=List[ChannelListItem])
 async def list_channels():
