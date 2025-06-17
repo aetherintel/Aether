@@ -7,10 +7,10 @@ from pydantic import BaseModel, Field
 from services.neo4j_backend_client import (
     get_channel_list,
     get_messages_for_channel,
-    get_channel_by_id
+    get_channel_by_id,
+    get_messages_by_id
 )
 from starlette.responses import FileResponse
-from backend.app.services.neo4j_backend_client import get_messages_by_id
 
 router = APIRouter(prefix="/messages", tags=["messages"])
 

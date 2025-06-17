@@ -45,7 +45,7 @@ async def get_messages_by_id(message_id: str) -> Optional[Message]:
             )
 
             channel = Channel(
-                channel_id=channel_data["channel_id"],
+                id=channel_data["channel_id"],
                 username=channel_data["username"]
             )
 
