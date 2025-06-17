@@ -338,7 +338,7 @@ const TelegramScraper: React.FC = () => {
             <Stack gap="md">
               <Group align="center" gap="xs">
                 <IconActivity size="1.2rem" />
-                <Title order={3}>Active Containers</Title>
+                <Title order={3}>Scrape Containers</Title>
               </Group>
               
               <Stack gap="sm">

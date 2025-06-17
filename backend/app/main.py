@@ -16,6 +16,7 @@ app.include_router(graph_controller.router)
 app.include_router(telegram_auth_controller.router)
 
 origins = [
+    "http://localhost",
     "http://localhost:5173",
     "https://htit-monitor.marvin-carstensen.com",
     "http://localhost:8080",
