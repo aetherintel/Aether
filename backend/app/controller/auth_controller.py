@@ -42,6 +42,7 @@ class ChannelInput(BaseModel):
 class ChannelListInput(BaseModel):
     channels: List[str]
     tg_session: str
+    neo4j: bool = True
 
 def get_admin_token():
     token_url = f"{os.getenv('KEYCLOAK_BASE_URL')}/realms/HotTopics/protocol/openid-connect/token"
@@ -208,4 +209,4 @@ def telegram_full_scrape(req: ExtendedScrapeRequest, user=Depends(oauth2_scheme)
     )
 @router.post("/telegram/live")
 def telegram_live_scrape(req: ChannelListInput, user=Depends(oauth2_scheme)):
-    return launch_live_scrape_job(channels=req.channels,tg_session=req.tg_session)
+    return launch_live_scrape_job(channels=req.channels,tg_session=req.tg_session, neo4j=req.neo4j)

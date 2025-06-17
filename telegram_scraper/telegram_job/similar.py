@@ -1,7 +1,7 @@
 from telethon import functions, types
-from telegram_job.telegram_client import client
+from telegram_client import client
 from telethon.errors.rpcerrorlist import UsernameInvalidError
-from telegram_job.scraper import run_scraper
+from scraper import run_scraper
 
 async def similar_channels(username: str):
     entity = await client.get_input_entity(username)
@@ -28,7 +28,7 @@ async def _search_fallback(query: str, limit: int = 15):
 
 async def similar_channels_flexible(user_input: str, limit: int = 15):
     # 1️⃣ ensure client is connected
-    from .telegram_client import login
+    from telegram_client import login
     await login()
 
     # 2️⃣ try the “official” recommendations API

@@ -100,6 +100,9 @@ NEO4J_PASSWORD=secretpass
 
 JOB_LAUNCHER_URL=http://job-launcher:9001
 JOB_SECRET_TOKEN=supersecure
+# Hier pfad ins repo und /shared/media... Falls nicht vorhanden Bitte ordner anlegen...
+MEDIA_PATH=${PWD}/shared/media
+
 ````
 
 🧱 Dienste im Überblick

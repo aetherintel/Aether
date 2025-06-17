@@ -1,15 +1,35 @@
-import os, json, sys, asyncio
-from telegram_job.similar import similar_channels_flexible as similar_channels
-from telegram_job.scraper import run_scraper, run_live_listener_only
-from telegram_job.neo4j_client import write_recommendations, is_scraped
-from telegram_job.telegram_client import login
+print("[DEBUG] entry.py loaded.")
 
+import os, json, sys, asyncio
+from similar import similar_channels_flexible as similar_channels
+from scraper import run_scraper, run_live_listener_only
+from neo4j_client import write_recommendations, is_scraped
+from telegram_client import login
+
+# MODE
 MODE = os.getenv("MODE", "similar").strip()        # "similar" | "scrape" | "full" | "live"
-CHANNELS     = [c.strip() for c in os.getenv("CHANNELS", "").split(",") if c]
+
+# CHANNELS
+CHANNELS_RAW = os.getenv("CHANNELS", "")
+CHANNELS = [c.strip() for c in CHANNELS_RAW.split(",") if c]
+
+# SESSION_NAME
 SESSION_NAME = os.getenv("SESSION_NAME", "default")
-RECURSIVE    = os.getenv("RECURSIVE", "0") == "1"  # Enable recursion
-NEO4J_WRITE  = os.getenv("NEO4J_WRITE", "0") == "1"
+
+# SESSION_STRING
+SESSION_STRING = os.getenv("SESSION_STRING")
+if not SESSION_STRING:
+    raise ValueError("SESSION_STRING environment variable is required but not set.")
+
+# RECURSIVE
+RECURSIVE = os.getenv("RECURSIVE", "0") == "1"
+
+# NEO4J_WRITE
+NEO4J_WRITE = os.getenv("NEO4J_WRITE", "0") == "1"
+
+# SKIP_HISTORY
 SKIP_HISTORY = os.getenv("SKIP_HISTORY", "0") == "1"
+
 
 async def main():
     if not MODE:
@@ -20,16 +40,12 @@ async def main():
         print("[]")
         return
 
-    print(f"[DEBUG] MODE={MODE!r}")
-    print(f"[DEBUG] CHANNELS={CHANNELS!r}")
 
     if MODE == "similar":
         root = CHANNELS[0]
         if await is_scraped(root):
-            print(f"[SKIP] {root} already has messages. Skipping.")
             return
 
-        print(f"[SIMILAR] Finding channels related to: {root}")
         recs = await similar_channels(root)
         print(json.dumps(recs, ensure_ascii=False))
 
@@ -38,26 +54,20 @@ async def main():
 
         usernames = [c["username"] for c in recs if c.get("username")]
         if usernames:
-            print(f"[SCRAPE] Scraping similar channels: {usernames}")
             await run_scraper(usernames, SESSION_NAME, recursive=RECURSIVE, skip_history=SKIP_HISTORY)
 
     elif MODE == "scrape":
         for ch in CHANNELS:
             if await is_scraped(ch):
-                print(f"[SKIP] {ch} already has messages.")
                 continue
             await run_scraper([ch], SESSION_NAME, recursive=RECURSIVE, skip_history=SKIP_HISTORY)
 
     elif MODE == "full":
         for root in CHANNELS:
             if await is_scraped(root):
-                print(f"[SKIP] {root} already has messages.")
                 continue
-
-            print(f"[SCRAPE] Scraping initial: {root}")
             await run_scraper([root], SESSION_NAME, recursive=RECURSIVE, skip_history=SKIP_HISTORY)
 
-            print(f"[SIMILAR] Finding similar to: {root}")
             recs = await similar_channels(root)
             if NEO4J_WRITE:
                 await write_recommendations(root, recs)
@@ -65,11 +75,16 @@ async def main():
             usernames = [c["username"] for c in recs if c.get("username")]
             if usernames:
                 await run_scraper(usernames, SESSION_NAME, recursive=RECURSIVE, skip_history=SKIP_HISTORY)
-
+    
     elif MODE == "live":
         print("[LIVE] Listening for new messages only...")
-        await run_live_listener_only(CHANNELS)
-
+        try:
+            await run_live_listener_only(CHANNELS)
+        except Exception as e:
+            print("[ERROR] Exception in live listener:", e)
+            import traceback
+            traceback.print_exc()
+        print("[DEBUG] Live listener finished.")
     else:
         print(f"[ERROR] Unknown MODE: {MODE!r}")
         sys.exit("unknown MODE")
