@@ -1,4 +1,6 @@
+import os
 from datetime import datetime
+from pathlib import Path
 from typing import Optional, List
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
@@ -9,6 +11,8 @@ from services.neo4j_backend_client import (
 )
 
 router = APIRouter(prefix="/messages", tags=["messages"])
+
+MEDIA_ROOT = Path(os.getenv("MEDIA_ROOT", "/app/public/media"))
 
 class Author(BaseModel):
     id: int
