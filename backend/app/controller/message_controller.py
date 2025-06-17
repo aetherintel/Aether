@@ -23,6 +23,7 @@ class Message(BaseModel):
     text: str
     date: datetime
     media_type: Optional[str]
+    media_path: Optional[str]
     reply_to_id: Optional[str]
     author: Author
     channel: Channel
