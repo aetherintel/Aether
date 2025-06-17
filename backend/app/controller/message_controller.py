@@ -10,6 +10,7 @@ from services.neo4j_backend_client import (
     get_channel_by_id
 )
 from starlette.responses import FileResponse
+from backend.app.services.neo4j_backend_client import get_messages_by_id
 
 router = APIRouter(prefix="/messages", tags=["messages"])
 
