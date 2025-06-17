@@ -46,3 +46,5 @@ Thumbs.db
 # --- Volumes ---
 volumes/
 postgres_data/
+
+shared/

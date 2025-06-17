@@ -41,6 +41,7 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - tg_sessions:/app/sessions
+      - ${MEDIA_PATH}:/shared/media
     depends_on:
       - postgres
       - keycloak
@@ -56,6 +57,7 @@ services:
     volumes:
       - ./frontend:/app
       - ./frontend/nginx-dev.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./shared/media:/shared/media
     restart: always
     depends_on:
       - backend
@@ -81,10 +83,11 @@ services:
     build:
       context: ./telegram_scraper
     image: telegram-job:latest
-    entrypoint: ["sleep", "infinity"]  # Keeps image warm but does nothing unless called
+    #entrypoint: ["sleep", "infinity"]  # Keeps image warm but does nothing unless called
     volumes:
-      - tg_sessions:/app/sessions      # ⬅️ Session volume (Telegram auth)
-    profiles: ["scraper"] 
+      - tg_sessions:/app/sessions    # ⬅️ Session volume (Telegram auth)
+      - ./shared/media:/shared/media
+    # profiles: ["scraper"] 
   job-launcher:
     build: ./job_launcher
     ports:
@@ -96,6 +99,7 @@ services:
       NEO4J_PASSWORD: ${NEO4J_PASSWORD}
       TG_API_ID: ${TG_API_ID}
       TG_API_HASH: ${TG_API_HASH}
+      MEDIA_PATH: ${MEDIA_PATH}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - tg_sessions:/app/sessions
@@ -105,4 +109,3 @@ volumes:
   neo4j_logs:
   keycloak_data:
   tg_sessions:
-

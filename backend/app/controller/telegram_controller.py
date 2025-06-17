@@ -69,7 +69,7 @@ def launch_full_scrape_job(channel: str, tg_session: str, recursive: bool = True
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to launch scraper job: {str(e)}")
 
-def launch_live_scrape_job(channels: list[str], tg_session: str) -> dict:
+def launch_live_scrape_job(channels: list[str], tg_session: str, neo4j: bool) -> dict:
     """
     Launch a Docker container to run live-only Telegram listener.
     """
@@ -80,6 +80,7 @@ def launch_live_scrape_job(channels: list[str], tg_session: str) -> dict:
             json={
                 "channels": channels,
                 "tg_session": tg_session,
+                "neo4j": neo4j,
                 "mode": "live"
             },
             timeout=10

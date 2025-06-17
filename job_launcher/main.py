@@ -8,6 +8,7 @@ docker_client = docker.from_env()
 
 SECRET = os.getenv("JOB_SECRET_TOKEN", "changeme")
 SESSION_DIR = Path("/app/sessions")
+media_host_path = os.environ["MEDIA_PATH"]
 
 class SimilarRequest(BaseModel):
     channel: str
@@ -48,6 +49,12 @@ def launch_similarity(req: SimilarRequest, request: Request):
             "TG_API_ID": os.getenv("TG_API_ID"),
             "TG_API_HASH": os.getenv("TG_API_HASH"),
         },
+        volumes={
+        media_host_path: {
+            'bind': '/app/public/media',
+            'mode': 'rw',
+        },
+    },
         network= "monitor_default",
         labels={
             "MODE": "similar",
@@ -67,6 +74,7 @@ def launch_scraper(req: ScrapeRequest, request: Request):
         "MODE": req.mode,
         "CHANNELS": ",".join(req.channels),
         "SESSION_STRING": session_string,
+        "SESSION_NAME": req.tg_session, 
         "RECURSIVE": str(int(req.recursive)),
         "NEO4J_WRITE": str(int(req.neo4j)),
         "NEO4J_URI": os.getenv("NEO4J_URI"),
@@ -75,18 +83,37 @@ def launch_scraper(req: ScrapeRequest, request: Request):
         "TG_API_ID": os.getenv("TG_API_ID"),
         "TG_API_HASH": os.getenv("TG_API_HASH"),
     }
-
+    print(f"[DEBUG] Environment variables for container: {env_vars}")
+    print(f"[DEBUG] Running container with image: telegram-job:latest")
+    labels={
+            "MODE": req.mode,
+            "CHANNELS": ",".join(req.channels)
+        }
+    print(f"[DEBUG] Labels for container: {labels}")
     container = docker_client.containers.run(
         image="telegram-job:latest",
         name=f"{req.mode}_{uuid.uuid4().hex[:6]}",
         detach=True,
         environment=env_vars,
+        volumes={
+        media_host_path: {
+            'bind': '/app/public/media',
+            'mode': 'rw',
+        },
+    },
         network="monitor_default",
         labels={
             "MODE": req.mode,
             "CHANNELS": ",".join(req.channels)
         }
     )
+    info = container.attrs
+    print("[DEBUG] Entrypoint:", info['Config']['Entrypoint'])
+    print("[DEBUG] Cmd:", info['Config']['Cmd'])
+    import time
+    time.sleep(2)
+    print("[DEBUG] Live container logs:")
+    print(container.logs(stdout=True, stderr=True).decode())
     return {"container_id": container.id}
 
 def load_string_session(session_name: str) -> tuple:

@@ -2,7 +2,7 @@
 import os
 from neo4j import AsyncGraphDatabase
 from dotenv import load_dotenv
-
+from utils import download_media
 load_dotenv()
 
 driver = AsyncGraphDatabase.driver(
@@ -14,11 +14,10 @@ driver = AsyncGraphDatabase.driver(
 async def close():
     await driver.close()
 
-async def save_message(channel_id, username, message, sender):
+async def save_message(channel_id, username, message, sender,  media_path=None):
     async with driver.session() as session:
-        await session.execute_write(_save_message, channel_id, username, message, sender)
-
-async def _save_message(tx, channel_id, username, message, sender):
+        await session.execute_write(_save_message, channel_id, username, message, sender, media_path)
+async def _save_message(tx, channel_id, username, message, sender,  media_path):
     cypher = """
     MERGE (ch:Channel {channel_id: $cid})
     ON CREATE SET ch.username = $uname
@@ -27,7 +26,7 @@ async def _save_message(tx, channel_id, username, message, sender):
     ON CREATE SET u.first_name=$fname, u.last_name=$lname, u.username=$uusername
 
     MERGE (m:Message {mid: $cid + "-" + $mid})
-    ON CREATE SET m.date=$date, m.text=$text, m.media_type=$mtype
+    ON CREATE SET m.date=$date, m.text=$text, m.media_type=$mtype, m.media_path=$mpath
 
     MERGE (ch)-[:HAS_MESSAGE]->(m)
     MERGE (u)-[:SENT]->(m)
@@ -50,6 +49,7 @@ async def _save_message(tx, channel_id, username, message, sender):
         date=message.date.isoformat(),
         text=message.message,
         mtype=message.media.__class__.__name__ if message.media else None,
+        mpath=media_path,
         reply_to=message.reply_to_msg_id
     )
 
@@ -100,3 +100,22 @@ async def mark_scraped(username: str):
             """,
             username=username
         )
+
+async def message_exists(channel_id, message_id):
+    full_mid = f"{channel_id}-{message_id}"
+    async with driver.session() as session:
+        result = await session.run(
+            """
+            MATCH (m:Message {mid: $mid})
+            RETURN count(m) > 0 AS exists
+            """,
+            mid=full_mid
+        )
+        record = await result.single()
+        return record and record["exists"]
+
+async def save_message_if_new(channel_id, username, message, sender, media_path=None):
+    if await message_exists(channel_id, message.id):
+        print(f"[SKIP] Message {message.id} already exists in Neo4j")
+        return
+    await save_message(channel_id, username, message, sender, media_path)
