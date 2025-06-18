@@ -5,7 +5,7 @@ from http.client import HTTPException
 from typing import Optional
 from neo4j import AsyncGraphDatabase
 from dotenv import load_dotenv
-from backend.app.controller.message_controller import Author, Channel, Message
+from model.message_model import Author, Channel, Message
 
 load_dotenv()
 
