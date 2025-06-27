@@ -61,6 +61,12 @@ mark {
   right: 16px;
 }
 
+.messageImage, .messageVideo {
+  width: 100px;
+  height: auto;
+  margin-top: 10px;
+}
+
 .messageContent {
   margin-top: 4px;
 }

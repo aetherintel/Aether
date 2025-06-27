@@ -147,7 +147,7 @@ async def start_setup(request: SetupRequest):
         
         return {
             "setup_id": setup_id,
-            "message": f"SMS code sent to {request.phone}",
+            "message": f"2FA code sent to {request.phone}",
             "session_name": request.session_name
         }
         
