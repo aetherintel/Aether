@@ -65,6 +65,7 @@ async def main():
     elif MODE == "full":
         for root in CHANNELS:
             if await is_scraped(root):
+                print(f"[SKIP] Channel {root} already scraped, skipping...")
                 continue
             await run_scraper([root], SESSION_NAME, recursive=RECURSIVE, skip_history=SKIP_HISTORY)
 

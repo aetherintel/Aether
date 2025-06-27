@@ -8,6 +8,13 @@ from utils import extract_invite_links, download_media
 # Tracks last message ID seen per channel
 channel_state = {}
 
+# Semaphore to limit concurrent scraping tasks
+MAX_CONCURRENT_SCRAPERS = 5
+scraper_semaphore = asyncio.Semaphore(MAX_CONCURRENT_SCRAPERS)
+
+# Global queue for discovered invite links
+invite_queue = asyncio.Queue()
+
 async def try_join_invite_link(invite_link: str) -> str | None:
     try:
         slug = invite_link.split('/')[-1]
@@ -54,16 +61,43 @@ async def start_short_polling(channels, poll_interval=60):
     tasks = [asyncio.create_task(short_poll_channel(ch, poll_interval)) for ch in channels]
     await asyncio.gather(*tasks)
 
-async def _historic_backfill(channel_entity, channel_id, username) -> list[str]:
-    messages = []
+# NEW: Stream messages and extract links in parallel
+async def _streaming_backfill(channel_entity, channel_id, username, recursive: bool, visited: set):
+    """Process messages as a stream, extracting links immediately"""
+    message_count = 0
+    processed_links = set()
+    
     async for m in client.iter_messages(channel_entity, reverse=True):
         if not hasattr(m, 'message') or not m.message:
             continue
-        sender = await m.get_sender()
-        media_path = await download_media(username, m, client)
-        await save_message_if_new(channel_id, username, m, sender, media_path)
-        messages.append(m.message)
-    return messages
+            
+        message_count += 1
+        
+        # Extract invite links IMMEDIATELY from each message
+        if recursive and m.message:
+            links = extract_invite_links([m.message])
+            for link in links:
+                if link not in processed_links:
+                    processed_links.add(link)
+                    # Add to global queue for immediate processing
+                    await invite_queue.put((link, visited))
+                    print(f"[STREAM] Found invite link in message {message_count}: {link}")
+        
+        # Start async tasks for time-consuming operations
+        async def process_message(msg):
+            sender = await msg.get_sender()
+            media_path = await download_media(username, msg, client)
+            await save_message_if_new(msg.chat_id, username, msg, sender, media_path)
+        
+        # Fire and forget - don't wait for media download
+        asyncio.create_task(process_message(m))
+        
+        # Yield control periodically to allow other tasks to run
+        if message_count % 10 == 0:
+            await asyncio.sleep(0)  # Let other coroutines run
+    
+    print(f"[STREAM] Processed {message_count} messages from {username}")
+    return message_count > 0
 
 async def _live_listener(channels):
     print(f"[LIVE] Raw channels passed: {channels}")
@@ -99,47 +133,124 @@ async def _live_listener(channels):
     await start_short_polling(channels)
     await client.run_until_disconnected()
 
+# NEW: Worker that processes invite links
+async def invite_link_worker():
+    """Continuously process invite links from the queue"""
+    while True:
+        try:
+            link, visited = await invite_queue.get()
+            
+            joined_username = await try_join_invite_link(link)
+            if joined_username and joined_username not in visited:
+                # Add to main channel queue
+                await channel_queue.put(joined_username)
+                print(f"[INVITE-WORKER] Successfully joined and queued: {joined_username}")
+            
+            invite_queue.task_done()
+        except asyncio.CancelledError:
+            break
+        except Exception as e:
+            print(f"[ERROR] Invite worker exception: {e}")
+
+# Global channel queue
+channel_queue = asyncio.Queue()
+
+async def channel_worker(visited: set, recursive: bool, skip_history: bool, live_channels: list):
+    """Worker that processes channels from the queue asynchronously"""
+    while True:
+        try:
+            ch = await channel_queue.get()
+            
+            if ch in visited:
+                channel_queue.task_done()
+                continue
+                
+            async with scraper_semaphore:  # Limit concurrent scrapers
+                visited.add(ch)
+                
+                try:
+                    entity = await client.get_entity(ch)
+                    username = entity.username or ch
+                    channel_id = entity.id
+                    
+                    print(f"[WORKER] Processing {ch}")
+                    
+                    if await is_scraped(username):
+                        print(f"[SKIP] Already scraped: {ch}")
+                        live_channels.append(ch)
+                    else:
+                        if not skip_history:
+                            # Use streaming backfill instead of waiting for all messages
+                            had_messages = await _streaming_backfill(
+                                entity, channel_id, username, recursive, visited
+                            )
+                            
+                            if had_messages:
+                                await mark_scraped(username)
+                                live_channels.append(ch)
+                        else:
+                            await mark_scraped(username)
+                            live_channels.append(ch)
+                
+                except Exception as e:
+                    print(f"[ERROR] Worker failed for {ch}: {e}")
+                
+                finally:
+                    channel_queue.task_done()
+                    
+        except asyncio.CancelledError:
+            break
+        except Exception as e:
+            print(f"[ERROR] Worker exception: {e}")
+
 async def run_scraper(channels, _session_name, recursive=False, skip_history=False):
     await login()
     print("[DEBUG] Logged in")
+    
     visited = set()
-    queue = list(channels)
-
+    live_channels = []  # Channels ready for live listening
+    
+    # Add initial channels to queue
+    for ch in channels:
+        await channel_queue.put(ch)
+    
     async with client:
-        while queue:
-            ch = queue.pop(0)
-            if ch in visited:
-                continue
-            visited.add(ch)
-
-            entity = await client.get_entity(ch)
-            username = entity.username or ch
-            channel_id = entity.id
-
-            print(f"[DEBUG] Entity type: {entity.__class__.__name__}")
-            print(f"[SCRAPE] {ch}")
-
-            if await is_scraped(username):
-                print(f"[SKIP] Already scraped: {ch}")
-                print("[LIVE] Starting real-time message tracking...")
-                await _live_listener([ch])
-            else:
-                messages = []
-                if not skip_history:
-                    messages = await _historic_backfill(entity, channel_id, username)
-
-                if messages:
-                    await mark_scraped(username)
-
-                if recursive and messages:
-                    links = extract_invite_links(messages)
-                    for link in links:
-                        joined_username = await try_join_invite_link(link)
-                        if joined_username and joined_username not in visited:
-                            queue.append(joined_username)
-                            print(f"[RECURSIVE] Joined {joined_username} from {link}")
-                print("[LIVE] Starting real-time message tracking...")
-                await _live_listener([ch])
+        # Start workers
+        workers = []
+        
+        # Channel processing workers
+        for i in range(MAX_CONCURRENT_SCRAPERS):
+            worker = asyncio.create_task(
+                channel_worker(visited, recursive, skip_history, live_channels)
+            )
+            workers.append(worker)
+        
+        # Invite link processing workers (if recursive)
+        if recursive:
+            for i in range(3):  # 3 workers for invite links
+                worker = asyncio.create_task(invite_link_worker())
+                workers.append(worker)
+        
+        # Wait for initial channels to be processed
+        # But don't wait forever - check periodically for new channels
+        while not channel_queue.empty() or not invite_queue.empty():
+            await asyncio.sleep(5)  # Check every 5 seconds
+            print(f"[STATUS] Channels in queue: {channel_queue.qsize()}, Invites in queue: {invite_queue.qsize()}")
+        
+        # Give a bit more time for final processing
+        await asyncio.sleep(10)
+        
+        # Cancel workers
+        for worker in workers:
+            worker.cancel()
+        
+        # Wait for workers to finish
+        await asyncio.gather(*workers, return_exceptions=True)
+        
+        # Start live listening for all processed channels
+        if live_channels:
+            print(f"[LIVE] Starting real-time tracking for {len(live_channels)} channels")
+            await _live_listener(live_channels)
 
 async def run_live_listener_only(channels):
     print("[DEBUG] Running live listener only")

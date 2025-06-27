@@ -30,6 +30,7 @@ async def _save_message(tx, channel_id, username, message, sender,  media_path):
 
     MERGE (ch)-[:HAS_MESSAGE]->(m)
     MERGE (u)-[:SENT]->(m)
+    MERGE (u)-[:PART_OF]->(ch)
 
     FOREACH (_ IN CASE WHEN $reply_to IS NOT NULL THEN [1] ELSE [] END |
         MERGE (rm:Message {mid: $cid + "-" + $reply_to})
