@@ -223,6 +223,11 @@ export function CaseFileDetail() {
     );
   }
 
+  const isVideoFile = (path: string): boolean => {
+    const videoExtensions: string[] = ['.mp4', '.webm', '.ogg', '.avi', '.mov', '.wmv', '.flv', '.mkv'];
+    return videoExtensions.some((ext: string) => path.toLowerCase().endsWith(ext));
+  };
+
   // Component for individual message content with measurement
   const MessageContent = ({ message, isExpanded, onToggleExpand }: { 
     message: any, 
@@ -293,6 +298,24 @@ export function CaseFileDetail() {
               isExpanded={isExpanded}
               onToggleExpand={() => toggleMessageExpansion(message.message_id)}
             />
+            {message.media_path && (
+              isVideoFile(message.media_path) ? (
+                // eslint-disable-next-line jsx-a11y/media-has-caption
+                <video
+                  src={message.media_path} 
+                  className={classes.messageVideo}
+                  controls
+                >
+                  Your browser does not support the video tag.
+                </video>
+              ) : (
+                <img 
+                  src={message.media_path} 
+                  alt={message.media_path} 
+                  className={classes.messageImage} 
+                />
+              )
+            )}
           </Box>
         </Table.Td>
       </Table.Tr>

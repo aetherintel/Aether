@@ -1,8 +1,11 @@
 # telegram_job/neo4j_client.py
 import os
 from datetime import datetime
+from http.client import HTTPException
+from typing import Optional
 from neo4j import AsyncGraphDatabase
 from dotenv import load_dotenv
+from model.message_model import Author, Channel, Message
 
 load_dotenv()
 
@@ -14,6 +17,56 @@ driver = AsyncGraphDatabase.driver(
 
 async def close():
     await driver.close()
+
+async def get_messages_by_id(message_id: str) -> Optional[Message]:
+    async with driver.session() as session:
+        query = """
+        MATCH (m:Message {message_id: $message_id})
+        OPTIONAL MATCH (m)-[:SENT_BY]->(a:Author)
+        OPTIONAL MATCH (m)-[:POSTED_IN]->(c:Channel)
+        RETURN m, a, c
+        """
+
+        try:
+            result = await session.run(query, message_id=message_id)
+            record = await result.single()
+
+            if not record:
+                return None
+
+            message_data = record["m"]
+            author_data = record["a"]
+            channel_data = record["c"]
+
+            # Neo4j-Nodes to Modell
+            author = Author(
+                id=author_data["author_id"],
+                name=author_data["name"]
+            )
+
+            channel = Channel(
+                id=channel_data["channel_id"],
+                username=channel_data["username"]
+            )
+
+            # Message-Object
+            return Message(
+                message_id=message_data["message_id"],
+                text=message_data["text"],
+                date=message_data["date"],
+                media_type=message_data.get("media_type"),
+                media_path=message_data.get("media_path"),
+                reply_to_id=message_data.get("reply_to_id"),
+                author=author,
+                channel=channel
+            )
+
+        except Exception as e:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Datenbankfehler: {str(e)}"
+            )
+
 
 async def get_channel_list():
     async with driver.session() as session:
@@ -61,6 +114,7 @@ async def get_messages_for_channel(channel_id: str, limit: int = 100, before: da
             m.text as text,
             m.date as date,
             m.media_type as media_type,
+            m.media_path as media_path,
             m.mid as message_id,
             u.user_id as user_id,
             u.username as username,
@@ -90,6 +144,7 @@ async def get_messages_for_channel(channel_id: str, limit: int = 100, before: da
                 "text": record["text"],
                 "date": record["date"],
                 "media_type": record["media_type"],
+                "media_path": record["media_path"],
                 "reply_to_id": record["reply_to_id"],
                 "author": {
                     "id": record["user_id"],
