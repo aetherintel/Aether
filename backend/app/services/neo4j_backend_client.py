@@ -193,3 +193,39 @@ async def get_channel_by_id(channel_id: str):
                 "scraped_at": record["scraped_at"]
             }
         return None
+
+async def get_user_channels(user_id: int):
+    """
+    Get channels that the user is part of
+    """
+    async with driver.session() as session:
+        query = """
+        MATCH (u:User {user_id: $user_id})-[:PART_OF]->(ch:Channel)
+        OPTIONAL MATCH (ch)-[:HAS_MESSAGE]->(m:Message)
+        WITH ch, count(m) as msg_count, max(m.date) as latest
+        OPTIONAL MATCH (other)-[:RECOMMENDS]->(ch)
+        RETURN 
+            ch.channel_id as channel_id,
+            ch.username as username,
+            ch.title as title,
+            msg_count as message_count,
+            latest as last_message_date,
+            count(other) as recommended_by,
+            ch.scraped as is_scraped,
+            ch.scraped_at as scraped_at
+        ORDER BY last_message_date DESC
+        """
+        result = await session.run(query, user_id=user_id)
+        channels = []
+        async for record in result:
+            channels.append({
+                "channel_id": record["channel_id"],
+                "username": record["username"],
+                "title": record["title"],
+                "message_count": record["message_count"],
+                "last_active": record["last_message_date"],
+                "recommended_by": record["recommended_by"],
+                "is_scraped": record["is_scraped"],
+                "scraped_at": record["scraped_at"]
+            })
+        return channels
