@@ -21,10 +21,10 @@ async def close():
 async def get_messages_by_id(message_id: str) -> Optional[Message]:
     async with driver.session() as session:
         query = """
-        MATCH (m:Message {message_id: $message_id})
-        OPTIONAL MATCH (m)-[:SENT_BY]->(a:Author)
-        OPTIONAL MATCH (m)-[:POSTED_IN]->(c:Channel)
-        RETURN m, a, c
+        MATCH (m:Message {mid: $message_id})
+        OPTIONAL MATCH (u:User)-[:SENT]->(m)
+        OPTIONAL MATCH (ch:Channel)-[:HAS_MESSAGE]->(m)
+        RETURN m, u as a, ch as c
         """
 
         try:
@@ -40,8 +40,8 @@ async def get_messages_by_id(message_id: str) -> Optional[Message]:
 
             # Neo4j-Nodes to Modell
             author = Author(
-                id=author_data["author_id"],
-                name=author_data["name"]
+                id=author_data["user_id"],
+                name=author_data.get("username") or author_data.get("first_name") or author_data.get("last_name") or "Unknown"
             )
 
             channel = Channel(
@@ -51,12 +51,12 @@ async def get_messages_by_id(message_id: str) -> Optional[Message]:
 
             # Message-Object
             return Message(
-                message_id=message_data["message_id"],
+                message_id=message_data["mid"],
                 text=message_data["text"],
                 date=message_data["date"],
                 media_type=message_data.get("media_type"),
                 media_path=message_data.get("media_path"),
-                reply_to_id=message_data.get("reply_to_id"),
+                reply_to_id=message_data.get("reply_to"),
                 author=author,
                 channel=channel
             )
