@@ -104,7 +104,8 @@ async def get_channel_list():
 async def get_messages_for_channel(channel_id: str, limit: int = 100, before: datetime | None = None, query: str | None = None):
     async with driver.session() as session:
         cypher = """
-        MATCH (ch:Channel {channel_id: $channel_id})-[:HAS_MESSAGE]->(m:Message)<-[:SENT]-(u:User)
+        MATCH (ch:Channel {channel_id: $channel_id})-[:HAS_MESSAGE]->(m:Message)
+        MATCH (u:User)-[:SENT]->(m)
         WHERE (
             $query IS NULL OR $query = '' OR (m.text IS NOT NULL AND toLower(m.text) CONTAINS toLower($query))
         )
