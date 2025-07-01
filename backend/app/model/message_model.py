@@ -1,6 +1,7 @@
 from datetime import datetime
 from typing import Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, root_validator
+
 
 class Author(BaseModel):
     id: int
@@ -19,6 +20,12 @@ class Message(BaseModel):
     reply_to_id: Optional[str]
     author: Author
     channel: Channel
+
+    @root_validator(pre=True)
+    def check_message_id(values):
+        if 'mid' in values and 'message_id' not in values:
+            values['message_id'] = values['mid']
+        return values
 
 class ChannelDetail(BaseModel):
     channel_id: str
