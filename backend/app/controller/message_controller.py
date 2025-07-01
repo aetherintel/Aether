@@ -8,7 +8,8 @@ from services.neo4j_backend_client import (
     get_channel_list,
     get_messages_for_channel,
     get_channel_by_id,
-    get_messages_by_id
+    get_messages_by_id,
+    get_user_channels,
 )
 from starlette.responses import FileResponse
 from model.message_model import (
@@ -77,3 +78,16 @@ async def get_channel_messages(
         return messages
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Fehler beim Abrufen der Nachrichten: {str(e)}")
+
+@router.get("/users/{user_id}/channels", response_model=List[ChannelListItem])
+async def get_channels_for_user(user_id: int):
+    """
+    Get channels that the user is part of
+    """
+    try:
+        channels = await get_user_channels(user_id)
+        for channel in channels:
+            channel["last_message_date"] = channel.pop("last_active", None)
+        return channels
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Fehler beim Abrufen der Kanäle für Benutzer {user_id}: {str(e)}")
