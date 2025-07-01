@@ -229,3 +229,63 @@ async def get_user_channels(user_id: int):
                 "scraped_at": record["scraped_at"]
             })
         return channels
+
+async def get_user_messages(user_id: int, limit: int = 100, before: datetime | None = None, query: str | None = None):
+    """
+    Get messages sent by a user from every channel they are part of
+    """
+    async with driver.session() as session:
+        cypher = """
+        MATCH (u:User {user_id: $user_id})-[:SENT]->(m:Message)
+        MATCH (ch:Channel)-[:HAS_MESSAGE]->(m)
+        WHERE (
+            $query IS NULL OR $query = '' OR (m.text IS NOT NULL AND toLower(m.text) CONTAINS toLower($query))
+        )
+        AND ($before IS NULL OR m.date < $before)
+        OPTIONAL MATCH (m)-[:REPLY_TO]->(reply:Message)
+        RETURN 
+            m.text as text,
+            m.date as date,
+            m.media_type as media_type,
+            m.media_path as media_path,
+            m.mid as message_id,
+            u.user_id as user_id,
+            u.username as username,
+            u.first_name as first_name,
+            u.last_name as last_name,
+            ch.channel_id as channel_id,
+            ch.username as channel_username,
+            reply.mid as reply_to_id
+        ORDER BY m.date DESC
+        LIMIT $limit
+        """
+
+        params = {
+            "user_id": user_id,
+            "limit": limit,
+            "query": query,
+            "before": before.isoformat() if before else None
+        }
+
+        result = await session.run(cypher, params)
+
+        messages = []
+        async for record in result:
+            author_name = record["username"] or f"{record['first_name'] or ''} {record['last_name'] or ''}".strip() or "Unknown"
+            messages.append({
+                "message_id": record["message_id"],
+                "text": record["text"],
+                "date": record["date"],
+                "media_type": record["media_type"],
+                "media_path": record["media_path"],
+                "reply_to_id": record["reply_to_id"],
+                "author": {
+                    "id": record["user_id"],
+                    "name": author_name
+                },
+                "channel": {
+                    "id": record["channel_id"],
+                    "username": record["channel_username"]
+                }
+            })
+        return messages
