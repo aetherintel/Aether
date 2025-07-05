@@ -6,12 +6,12 @@
 1. **Clone repository:**
    ##### SSH
    ```sh
-   git clone git@github.com:hsfl-htit/monitor.git
+   git clone git@github.com:hsfl-htit/Aether.git
    ```
    
 2. **Navigate to directory:**
    ```sh
-   cd monitor
+   cd Aether
    ```
       
 3. **Build and start the application:**
