@@ -35,13 +35,13 @@ services:
       - ./keycloak/exports:/opt/keycloak/data/export
       
   backend:
-    image: ${DOCKER_USERNAME}/monitor-backend:latest
+    image: ${DOCKER_USERNAME}/aether-backend:latest
     container_name: backend
     environment:
       DB_USER: ${DB_USER}
       DB_PASSWORD: ${DB_PASSWORD}
-      DB_URL: postgresql://${DB_USER}:${DB_PASSWORD}@postgres:5432/monitor
-      SWAGGER_TOKEN_URL: https://htit-monitor.marvin-carstensen.com/keycloak/realms/HotTopics/protocol/openid-connect/token
+      DB_URL: postgresql://${DB_USER}:${DB_PASSWORD}@postgres:5432/aether
+      SWAGGER_TOKEN_URL: https://htit-.marvin-carstensen.com/keycloak/realms/HotTopics/protocol/openid-connect/token
       KEYCLOAK_BASE_URL: https://htit-monitor.marvin-carstensen.com/keycloak
       KEYCLOAK_URL: https://htit-monitor.marvin-carstensen.com/keycloak/realms/HotTopics
       KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN}
@@ -74,7 +74,7 @@ services:
       - keycloak
       
   frontend:
-    image: ${DOCKER_USERNAME}/monitor-frontend:latest
+    image: ${DOCKER_USERNAME}/aether-frontend:latest
     container_name: frontend
     ports:
       - "80:80"
@@ -117,14 +117,14 @@ services:
       retries: 10
     
   telegram-job:
-    image: ${DOCKER_USERNAME}/monitor-telegram_scraper:latest
+    image: ${DOCKER_USERNAME}/aether-telegram_scraper:latest
     container_name: telegram_scraper
     entrypoint: ["sleep", "infinity"]  # Keeps image warm but does nothing unless called
     volumes:
       - tg_default:/app/session        # ⬅️ Session volume (Telegram auth)
     profiles: ["scraper"] 
   job-launcher:
-    image: ${DOCKER_USERNAME}/monitor-job_launcher:latest
+    image: ${DOCKER_USERNAME}/aether-job_launcher:latest
     container_name: job_launcher
     ports:
       - "9001:9001"

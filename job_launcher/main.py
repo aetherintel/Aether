@@ -63,7 +63,7 @@ def launch_similarity(req: SimilarRequest, request: Request):
                 'mode': 'rw',
             },
         },
-        network="monitor_default",
+        network="aether_default",
         labels={
             "MODE": "similar",
             "CHANNELS": req.channel,
@@ -130,7 +130,7 @@ def launch_scraper(req: ScrapeRequest, request: Request):
                 'mode': 'rw',
             },
         },
-        network="monitor_default",
+        network="aether_default",
         labels=labels
     )
     

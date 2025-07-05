@@ -35,7 +35,7 @@ services:
     env_file:
       - .env.dev
     environment:
-      DB_URL: postgresql://${DB_USER}:${DB_PASSWORD}@postgres:5432/monitor
+      DB_URL: postgresql://${DB_USER}:${DB_PASSWORD}@postgres:5432/aether
       KEYCLOAK_URL: http://${KEYCLOAK_HOSTNAME}:8080/realms/HotTopics
       SWAGGER_TOKEN_URL: http://localhost:8080/realms/HotTopics/protocol/openid-connect/token
     volumes:
