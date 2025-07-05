@@ -1,4 +1,4 @@
-import { IconLink, IconShare, IconTrash, IconUser } from '@tabler/icons-react';
+import { IconEdit, IconTrash, IconUser } from '@tabler/icons-react';
 import { Link } from 'react-router-dom';
 import { LineChart } from '@mantine/charts';
 import { ActionIcon, Box, Divider, Flex, Group, Menu, rem, Text } from '@mantine/core';
@@ -89,24 +89,16 @@ export default function CaseCard({ caseFile, onDelete }: CaseCardProps) {
           <Menu.Dropdown>
             <Menu.Item
               leftSection={
-                <IconLink
+                <IconEdit
                   style={{
                     width: rem(14),
                     height: rem(14),
-                    transform: 'rotate(-40deg)',
                   }}
                 />
               }
               fz={12}
             >
-              Copy link
-            </Menu.Item>
-
-            <Menu.Item
-              leftSection={<IconShare style={{ width: rem(14), height: rem(14) }} />}
-              fz={12}
-            >
-              Share case
+              Edit case
             </Menu.Item>
             <Menu.Item
               fz={12}

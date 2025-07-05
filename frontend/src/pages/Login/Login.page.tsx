@@ -16,8 +16,13 @@ import { notifications } from '@mantine/notifications';
 import { keycloakLogin, type LoginCredentials } from '../../context/auth';
 import { useAuthStore } from '../../store/client/authStore';
 import classes from './Login.module.css';
+import { useEffect } from 'react';
 
 export function Login() {
+  useEffect(() => {
+    document.title = 'Login - Æther';
+  }, []);
+
   const { login } = useAuthStore();
   const navigate = useNavigate();
 
@@ -58,7 +63,7 @@ export function Login() {
   return (
     <Container size={420} my={40}>
       <Title ta="center" className={classes.title}>
-        HTIT-Monitor
+        Æther
       </Title>
 
       <Text className={classes.subtitle}>

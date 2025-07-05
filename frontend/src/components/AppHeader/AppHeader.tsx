@@ -1,4 +1,4 @@
-import { IconMessageCircle, IconSearch, IconSettings, IconTrash } from '@tabler/icons-react';
+import { IconMessageCircle, IconSearch, IconSettings, IconTrash, IconUser } from '@tabler/icons-react';
 import { SearchNormal1 } from 'iconsax-react';
 import { Link } from 'react-router-dom';
 import { Avatar, Burger, Flex, Group, Input, Menu, rem, Text } from '@mantine/core';
@@ -43,11 +43,13 @@ export default function AppHeader({ opened, toggle }: Props) {
 
         <Menu shadow="md" width={200}>
           <Menu.Target>
-            <Avatar src="https://ui.shadcn.com/avatars/02.png" radius="xl" />
+            <Avatar radius="xl">
+              <IconUser color="black" />
+            </Avatar>
           </Menu.Target>
 
           <Menu.Dropdown>
-            <Menu.Label>Monitor</Menu.Label>
+            <Menu.Label>Æther</Menu.Label>
             <Menu.Item
               leftSection={<IconSettings style={{ width: rem(14), height: rem(14) }} />}
               component={Link}
