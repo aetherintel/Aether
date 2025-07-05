@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, TypedDict
 from fastapi import APIRouter, Depends, HTTPException, Form
 from fastapi.security import OAuth2PasswordRequestForm
 from fastapi.security import OAuth2PasswordBearer
@@ -8,6 +8,7 @@ from services.keycloak_service import get_current_user, has_role
 from controller.telegram_controller import run_similarity, start_scraper, launch_full_scrape_job, launch_live_scrape_job
 from pydantic import BaseModel
 import docker
+from services.auth_ctx import user_ctx, is_admin, UserCtx
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
@@ -55,6 +56,19 @@ def get_admin_token():
     if response.status_code != 200:
         raise HTTPException(status_code=500, detail="Admin login failed")
     return response.json()["access_token"]
+
+class UserCtx(TypedDict):
+    id: str           # Keycloak "sub"
+    roles: list[str]
+
+def user_ctx(token_data: dict = Depends(get_current_user)) -> UserCtx:
+    return {
+        "id": token_data["sub"],
+        "roles": token_data.get("realm_access", {}).get("roles", []),
+    }
+
+def is_admin(ctx: UserCtx) -> bool:
+    return "admin" in ctx["roles"]
 
 @router.get("/public")
 def public_route():
@@ -190,23 +204,31 @@ def telegram_status():
     return container_list
 
 @router.post("/telegram/similar")
-def telegram_similar(req: ChannelInput, user=Depends(oauth2_scheme)):
-    result = run_similarity(req.channel,tg_session=req.tg_session)
+def telegram_similar(req: ChannelInput, user: UserCtx = Depends(user_ctx)):
+    result = run_similarity(req.channel,tg_session=req.tg_session, owner_id=user["id"])  # ← NEW
     return {"similar": result}
 
 @router.post("/telegram/scrape")
-def telegram_scrape(req: ChannelListInput, user=Depends(oauth2_scheme)):
-    container_id = start_scraper(req.channels,tg_session=req.tg_session)
+def telegram_scrape(
+    req: ChannelListInput,
+    user: UserCtx = Depends(user_ctx)             # ← decode token once
+):
+    container_id = start_scraper(
+        channels=req.channels,
+        tg_session=req.tg_session,
+        owner_id=user["id"]                       # ← NEW
+    )
     return {"message": "Scraper started", "container_id": container_id}
 
 @router.post("/telegram/full")
-def telegram_full_scrape(req: ExtendedScrapeRequest, user=Depends(oauth2_scheme)):
+def telegram_full_scrape(req: ExtendedScrapeRequest, user: UserCtx = Depends(user_ctx)):
     return launch_full_scrape_job(
         channel=req.channel,
         tg_session=req.tg_session,
         recursive=req.recursive,
-        neo4j=req.neo4j
+        neo4j=req.neo4j,
+        owner_id=user["id"]  # ← NEW
     )
 @router.post("/telegram/live")
-def telegram_live_scrape(req: ChannelListInput, user=Depends(oauth2_scheme)):
-    return launch_live_scrape_job(channels=req.channels,tg_session=req.tg_session, neo4j=req.neo4j)
+def telegram_live_scrape(req: ChannelListInput, user: UserCtx = Depends(user_ctx)):
+    return launch_live_scrape_job(channels=req.channels,tg_session=req.tg_session, neo4j=req.neo4j, owner_id=user["id"])

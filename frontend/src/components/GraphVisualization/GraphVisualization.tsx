@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Card, Button, Select, Stack, Group, Text, Loader } from '@mantine/core';
+import { authFetch } from '@/utils/authFetch';
 
 interface GraphVisualizationProps {
   selectedChannelIds: string[];
@@ -154,7 +155,7 @@ const GraphVisualization: React.FC<GraphVisualizationProps> = ({
     
     try {
       // Fetch data from our backend endpoint
-      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000/api'}/graph/visualization`, {
+      const response = await authFetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000/api'}/graph/visualization`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

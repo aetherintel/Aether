@@ -14,6 +14,7 @@ driver = AsyncGraphDatabase.driver(
         os.getenv("NEO4J_PASSWORD"))
 )
 
+
 class CypherQuery(BaseModel):
     query: str
     parameters: Optional[Dict[str, Any]] = {}

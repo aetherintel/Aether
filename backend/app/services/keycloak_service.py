@@ -31,10 +31,8 @@ def decode_token(token: str):
             options={"verify_aud": False}
         )
         aud_claim = payload.get("aud", [])
-        print(f"Audience claim: {aud_claim}")
         if isinstance(aud_claim, str):
             aud_claim = [aud_claim]
-        print(settings.KEYCLOAK_CLIENT_ID)
         if settings.KEYCLOAK_CLIENT_ID not in aud_claim:
             raise HTTPException(status_code=403, detail="Invalid token: audience mismatch")
         return payload
