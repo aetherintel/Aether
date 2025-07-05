@@ -1,10 +1,8 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Text, Button, Group, NumberInput, Slider, Stack, Stepper, TextInput } from '@mantine/core';
+import { Text, Button, Group, Slider, Stack, Stepper, TextInput, Textarea } from '@mantine/core';
 import { useForm } from '@mantine/form';
 import { notifications } from '@mantine/notifications';
-import { TermMultiSelect } from '../TermMultiSelect';
-import { TopicMultiSelect } from '../TopicMultiSelect';
 import { TgChannelMultiSelect } from '../TgChannelMultiSelect';
 import { authFetch } from '@/utils/authFetch';
 
@@ -86,7 +84,7 @@ export function CreateCaseFileForm() {
   return (
     // eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions
     <form onSubmit={form.onSubmit(handleSubmit)} onKeyDown={(e) => {
-        if (e.key === 'Enter') {
+        if (e.key === 'Enter' && (e.target as any).tagName !== 'TEXTAREA') {
           e.preventDefault();
         }
       }}>
@@ -95,7 +93,12 @@ export function CreateCaseFileForm() {
           <Stack>
             <TextInput label="Name of the case" {...form.getInputProps('title')} required />
             <TextInput label="Category of the case" {...form.getInputProps('category')} required />
-            <NumberInput label="Post count" {...form.getInputProps('postCount')} required />
+            <Textarea
+              placeholder="Description of the case"
+              label="Description of the case"
+              autosize
+              minRows={3}
+            />
           </Stack>
         </Stepper.Step>
         <Stepper.Step label="Telegram Channels" description="Which telegram channels?">
@@ -104,24 +107,6 @@ export function CreateCaseFileForm() {
             <TgChannelMultiSelect
               value={form.values.tgchannels}
               onChange={(val) => form.setFieldValue('tgchannels', val)}
-            />
-          </Stack>
-        </Stepper.Step>
-        <Stepper.Step label="Terms" description="Which terms?">
-          <Stack>
-            <Text mt="md">Which terms are used to refer to this case?</Text>
-            <TermMultiSelect
-              value={form.values.terms}
-              onChange={(val) => form.setFieldValue('terms', val)}
-            />
-          </Stack>
-        </Stepper.Step>
-        <Stepper.Step label="Interests" description="Which topics?">
-          <Stack>
-            <Text mt="md">Which topics related to this incident are you interested in?</Text>
-            <TopicMultiSelect
-              value={form.values.topics}
-              onChange={(val) => form.setFieldValue('topics', val)}
             />
           </Stack>
         </Stepper.Step>
@@ -151,7 +136,7 @@ export function CreateCaseFileForm() {
           </Button>
         )}
 
-        {active < 4 && (
+        {active <= 1 && (
           <Button
             onClick={() => {
               const isValid = form.validate().hasErrors === false;
@@ -162,7 +147,7 @@ export function CreateCaseFileForm() {
           </Button>
         )}
 
-        {active === 4 && (
+        {active === 2 && (
           <Button
             type="submit"
             loading={loading}

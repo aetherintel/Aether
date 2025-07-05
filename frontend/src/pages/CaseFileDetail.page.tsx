@@ -4,7 +4,6 @@ import { Loader, Text, Title, Grid, Card, Tabs, Table, Checkbox, ScrollArea, Sta
 import BreadcrumbsBar from '@/components/BreadcrumbsBar/BreadcrumbsBar';
 import classes from './CaseFileDetail.module.css';
 import {
-  IconMap,
   IconDownload,
   IconMessage,
   IconEye,
@@ -128,7 +127,7 @@ export function CaseFileDetail() {
                 // Create placeholder entries for unscraped channels
                 const placeholderChannels = channelsToFetch.map((username: string) => ({
                   channel_id: `pending_${username}`,
-                  username: username,
+                  username,
                   title: `${username} (pending scrape)`,
                   message_count: 0,
                   last_message_date: null,
@@ -160,7 +159,7 @@ export function CaseFileDetail() {
             if (tgChannelsData.length === 0) {
               const placeholderChannels = initialChannels.map((username: string) => ({
                 channel_id: `pending_${username}`,
-                username: username,
+                username,
                 title: `${username} (pending scrape)`,
                 message_count: 0,
                 last_message_date: null,
@@ -179,7 +178,8 @@ export function CaseFileDetail() {
           setTgChannels([]);
           setSelectedTgChannelIds([]);
         }
-        
+
+        document.title = `${caseFileData.title} - Æther`; 
       } catch (error) {
         console.error('Error fetching case data:', error);
         // Handle error appropriately
@@ -313,7 +313,7 @@ export function CaseFileDetail() {
   };
 
   const updateCaseWithDiscoveredChannels = async () => {
-    if (!caseFile?.tgchannels?.length) return;
+    if (!caseFile?.tgchannels?.length) {return;}
   
     try {
       const base = apiUrl ?? 'http://localhost:8000/api';
@@ -450,12 +450,6 @@ export function CaseFileDetail() {
     );
   });
 
-  const topicsCheckboxes = caseFile.topics.map((element: string, idx: number) => (
-    <Checkbox key={idx} label={element} />
-  ));
-  const termsCheckboxes = caseFile.terms.map((element: string, idx: number) => (
-    <Checkbox key={idx} label={element} />
-  ));
   const tgChannelsCheckboxes = tgChannels.map((channel: any) => (
     <Checkbox
       key={channel.channel_id}
@@ -484,26 +478,6 @@ export function CaseFileDetail() {
               <Card withBorder p="xl" radius="md" className={classes.card}>
                 <div className={classes.inner}>
                   <Stack>
-                    <Text>Topics:</Text>
-                    {topicsCheckboxes}
-                  </Stack>
-                </div>
-              </Card>
-            </Grid.Col>
-            <Grid.Col>
-              <Card withBorder p="xl" radius="md" className={classes.card}>
-                <div className={classes.inner}>
-                  <Stack>
-                    <Text>Terms:</Text>
-                    {termsCheckboxes}
-                  </Stack>
-                </div>
-              </Card>
-            </Grid.Col>
-            <Grid.Col>
-              <Card withBorder p="xl" radius="md" className={classes.card}>
-                <div className={classes.inner}>
-                  <Stack>
                     <Text>Telegram Channels:</Text>
                     {tgChannelsCheckboxes}
                   </Stack>
@@ -525,9 +499,6 @@ export function CaseFileDetail() {
                   </Tabs.Tab>
                   <Tabs.Tab value="visuals" leftSection={<IconEye size={12} />}>
                     Graph
-                  </Tabs.Tab>
-                  <Tabs.Tab value="map" leftSection={<IconMap size={12} />}>
-                    Map
                   </Tabs.Tab>
                 </Tabs.List>
 
@@ -599,7 +570,7 @@ export function CaseFileDetail() {
                         </Button>
                       </Stack>
                     </Card>
-                    <TelegramScraper case_id={parseInt(id!)} />
+                    <TelegramScraper case_id={parseInt(id!, 10)} />
                   </Stack>
                 </Tabs.Panel>
 
@@ -608,10 +579,6 @@ export function CaseFileDetail() {
                     selectedChannelIds={selectedTgChannelIds}
                     searchQuery={searchQuery}
                   />
-                </Tabs.Panel>
-
-                <Tabs.Panel value="map" mt="md">
-                  Map tab content
                 </Tabs.Panel>
               </Tabs>
             </div>

@@ -13,8 +13,13 @@ import { useForm } from '@mantine/form';
 import { notifications } from '@mantine/notifications';
 import { keycloakRegister } from '../../context/auth';
 import classes from './Register.module.css';
+import { useEffect } from 'react';
 
 export function Register() {
+  useEffect(() => {
+    document.title = 'Register - Æther';
+  }, []);
+
   const navigate = useNavigate();
 
   const form = useForm({
@@ -58,7 +63,7 @@ export function Register() {
   return (
     <Container size={420} my={40}>
       <Title ta="center" className={classes.title}>
-        HTIT-Monitor
+        Æther
       </Title>
 
       <Text className={classes.subtitle}>

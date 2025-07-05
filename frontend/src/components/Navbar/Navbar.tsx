@@ -67,8 +67,8 @@ export function Navbar({ isNavbarOpen }: NavbarProps) {
       <Center>
         <Box w={40} h={40} bg="white" style={{ borderRadius: '50%' }}>
           <Center h="100%">
-            <Text size="xs" c="blue">
-              HTIT
+            <Text size="xl" fw={700} c="blue">
+              Æ
             </Text>
           </Center>
         </Box>
