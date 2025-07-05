@@ -1,3 +1,4 @@
+import { authFetch } from '@/utils/authFetch';
 import type {
   ListSessionsResponse,
   StartSetupResponse,
@@ -38,7 +39,7 @@ export class SessionSetupService {
    * Fetch all available sessions
    */
   static async listSessions(): Promise<ListSessionsResponse> {
-    const response = await fetch(`${API_BASE}/sessions`);
+    const response = await authFetch(`${API_BASE}/sessions`);
     return this.handleResponse<ListSessionsResponse>(response);
   }
 
@@ -49,7 +50,7 @@ export class SessionSetupService {
     phone: string, 
     sessionName: string = 'default'
   ): Promise<StartSetupResponse> {
-    const response = await fetch(`${API_BASE}/setup/start`, {
+    const response = await authFetch(`${API_BASE}/setup/start`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ 
@@ -68,7 +69,7 @@ export class SessionSetupService {
     setupId: string, 
     code: string
   ): Promise<VerifyCodeResponse> {
-    const response = await fetch(`${API_BASE}/setup/verify-code`, {
+    const response = await authFetch(`${API_BASE}/setup/verify-code`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ 
@@ -87,7 +88,7 @@ export class SessionSetupService {
     setupId: string, 
     password: string
   ): Promise<VerifyPasswordResponse> {
-    const response = await fetch(`${API_BASE}/setup/verify-password`, {
+    const response = await authFetch(`${API_BASE}/setup/verify-password`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ 
@@ -103,7 +104,7 @@ export class SessionSetupService {
    * Delete an existing session
    */
   static async deleteSession(sessionName: string): Promise<DeleteSessionResponse> {
-    const response = await fetch(`${API_BASE}/sessions/${encodeURIComponent(sessionName)}`, {
+    const response = await authFetch(`${API_BASE}/sessions/${encodeURIComponent(sessionName)}`, {
       method: 'DELETE'
     });
     
@@ -114,7 +115,7 @@ export class SessionSetupService {
    * Cancel an ongoing setup process
    */
   static async cancelSetup(setupId: string): Promise<CancelSetupResponse> {
-    const response = await fetch(`${API_BASE}/setup/cancel/${encodeURIComponent(setupId)}`, {
+    const response = await authFetch(`${API_BASE}/setup/cancel/${encodeURIComponent(setupId)}`, {
       method: 'POST'
     });
     

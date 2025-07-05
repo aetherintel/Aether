@@ -1,11 +1,15 @@
 # telegram_job/neo4j_client.py
+from contextlib import asynccontextmanager
 import os
 from datetime import datetime
 from http.client import HTTPException
-from typing import Optional
+from typing import AsyncIterator, List, Optional
 from neo4j import AsyncGraphDatabase
 from dotenv import load_dotenv
 from model.message_model import Author, Channel, Message
+from datetime import datetime
+from neo4j.time import DateTime as Neo4jDateTime
+
 
 load_dotenv()
 
@@ -15,115 +19,215 @@ driver = AsyncGraphDatabase.driver(
         os.getenv("NEO4J_PASSWORD"))
 )
 
-async def close():
-    await driver.close()
+def convert_neo4j_datetime(value):
+    """Convert Neo4j DateTime to Python datetime"""
+    if isinstance(value, Neo4jDateTime):
+        return value.to_native()
+    return value
 
-async def get_messages_by_id(message_id: str) -> Optional[Message]:
-    async with driver.session() as session:
-        query = """
-        MATCH (m:Message {mid: $message_id})
-        OPTIONAL MATCH (u:User)-[:SENT]->(m)
-        OPTIONAL MATCH (ch:Channel)-[:HAS_MESSAGE]->(m)
-        RETURN m, u as a, ch as c
-        """
-
-        try:
-            result = await session.run(query, message_id=message_id)
-            record = await result.single()
-
-            if not record:
-                return None
-
-            message_data = record["m"]
-            author_data = record["a"]
-            channel_data = record["c"]
-
-            # Neo4j-Nodes to Modell
-            author = Author(
-                id=author_data["user_id"],
-                name=author_data.get("username") or author_data.get("first_name") or author_data.get("last_name") or "Unknown"
-            )
-
-            channel = Channel(
-                id=channel_data["channel_id"],
-                username=channel_data["username"]
-            )
-
-            # Message-Object
-            return Message(
-                message_id=message_data["mid"],
-                text=message_data["text"],
-                date=message_data["date"],
-                media_type=message_data.get("media_type"),
-                media_path=message_data.get("media_path"),
-                reply_to_id=message_data.get("reply_to"),
-                author=author,
-                channel=channel
-            )
-
-        except Exception as e:
-            raise HTTPException(
-                status_code=500,
-                detail=f"Datenbankfehler: {str(e)}"
-            )
-
-
-async def get_channel_list():
-    async with driver.session() as session:
-        query = """
+async def get_unified_timeline_messages(
+    owner_id: str | None,
+    selected_channels: list[str] = None,
+    limit: int = 1000,
+    before: datetime | None = None,
+    query: str | None = None,
+):
+    """Get messages from selected channels, sorted globally by date (newest first)"""
+    async with get_session(owner_id) as session:
+        
+        # Build channel filter - if no channels specified, get all user's channels
+        if selected_channels:
+            channel_filter = "AND ch.channel_id IN $channel_ids"
+        else:
+            channel_filter = ""
+        
+        cypher = f"""
         MATCH (ch:Channel)
-        OPTIONAL MATCH (ch)-[:HAS_MESSAGE]->(m:Message)
-        WITH ch, count(m) as msg_count, max(m.date) as latest
-        OPTIONAL MATCH (other)-[:RECOMMENDS]->(ch)
-        RETURN 
-            ch.channel_id as channel_id,
-            ch.username as username,
-            ch.title as title,
-            msg_count as message_count,
-            latest as last_message_date,
-            count(other) as recommended_by,
-            ch.scraped as is_scraped,
-            ch.scraped_at as scraped_at
-        ORDER BY last_message_date DESC
-        """
-        result = await session.run(query)
-        channels = []
-        async for record in result:
-            channels.append({
-                "channel_id": record["channel_id"],
-                "username": record["username"],
-                "title": record["title"],
-                "message_count": record["message_count"],
-                "last_active": record["last_message_date"],
-                "recommended_by": record["recommended_by"],
-                "is_scraped": record["is_scraped"],
-                "scraped_at": record["scraped_at"]
-            })
-        return channels
-
-async def get_messages_for_channel(channel_id: str, limit: int = 100, before: datetime | None = None, query: str | None = None):
-    async with driver.session() as session:
-        cypher = """
-        MATCH (ch:Channel {channel_id: $channel_id})-[:HAS_MESSAGE]->(m:Message)
+        WHERE ($ownerId IS NULL OR ch.owner_id = $ownerId)
+        {channel_filter}
+        
+        MATCH (ch)-[:HAS_MESSAGE]->(m:Message)
+        WHERE ($ownerId IS NULL OR m.owner_id = $ownerId)
+          AND m.date IS NOT NULL
+          AND m.text IS NOT NULL
         MATCH (u:User)-[:SENT]->(m)
-        WHERE (
-            $query IS NULL OR $query = '' OR (m.text IS NOT NULL AND toLower(m.text) CONTAINS toLower($query))
+        WHERE ($ownerId IS NULL OR u.owner_id = $ownerId)
+        AND (
+            $query IS NULL OR $query = '' OR
+            toLower(m.text) CONTAINS toLower($query)
         )
         AND ($before IS NULL OR m.date < $before)
         OPTIONAL MATCH (m)-[:REPLY_TO]->(reply:Message)
-        RETURN 
-            m.text as text,
-            m.date as date,
-            m.media_type as media_type,
-            m.media_path as media_path,
-            m.mid as message_id,
-            u.user_id as user_id,
-            u.username as username,
-            u.first_name as first_name,
-            u.last_name as last_name,
-            ch.channel_id as channel_id,
-            ch.username as channel_username,
-            reply.mid as reply_to_id
+        
+        RETURN m.text        AS text,
+               m.date        AS date,
+               m.media_type  AS media_type,
+               m.media_path  AS media_path,
+               m.mid         AS message_id,
+               u.user_id     AS user_id,
+               coalesce(u.username, '')    AS username,
+               coalesce(u.first_name, '')  AS first_name,
+               coalesce(u.last_name, '')   AS last_name,
+               ch.channel_id AS channel_id,
+               ch.username   AS channel_username,
+               ch.title      AS channel_title,
+               reply.mid     AS reply_to_id
+        ORDER BY m.date DESC
+        LIMIT $limit
+        """
+
+        params = {
+            "limit": limit,
+            "query": query,
+            "before": before,
+            "ownerId": owner_id,
+        }
+        
+        # Add channel_ids parameter only if channels are specified
+        if selected_channels:
+            params["channel_ids"] = selected_channels
+
+        result = await session.run(cypher, params)
+        messages = []
+        async for r in result:
+            date_value = convert_neo4j_datetime(r["date"])
+            
+            if not date_value or not r["text"]:
+                continue
+                
+            first_name = r["first_name"] or ""
+            last_name = r["last_name"] or ""
+            username = r["username"] or ""
+            
+            if username:
+                author_name = username
+            elif first_name or last_name:
+                author_name = f"{first_name} {last_name}".strip()
+            else:
+                author_name = "Unknown"
+                
+            messages.append({
+                "message_id": r["message_id"],
+                "text": r["text"],
+                "date": date_value,
+                "media_type": r["media_type"],
+                "media_path": r["media_path"],
+                "reply_to_id": r["reply_to_id"],
+                "author": {"id": r["user_id"], "name": author_name},
+                "channel": {
+                    "id": r["channel_id"], 
+                    "username": r["channel_username"],
+                    "title": r["channel_title"]  # Extra context for timeline
+                },
+            })
+        return messages
+
+@asynccontextmanager
+async def get_session(owner_id: str | None) -> AsyncIterator:
+    """
+    If owner_id is None (admin), returns the bare driver session.
+    Otherwise wraps it so every .run(...) automatically receives $ownerId.
+    """
+    async with driver.session() as s:
+        if owner_id is None:
+            yield s
+        else:
+            yield _FilteredSession(s, owner_id)
+
+class _FilteredSession:
+    def __init__(self, sess, owner):  # no typing on purpose
+        self.sess, self.owner = sess, owner
+
+    async def run(self, cypher: str, parameters: dict | None = None, **kw):
+        p = parameters.copy() if parameters else {}
+        p.setdefault("ownerId", self.owner)
+        return await self.sess.run(cypher, p, **kw)
+
+    # expose execute_write / execute_read for backwards compat
+    def __getattr__(self, name):
+        return getattr(self.sess, name)
+
+async def close():
+    await driver.close()
+
+# ----------------------------------------------------------------------
+# Read helpers – every one now receives *owner_id*  (None ⇒ admin)
+# ----------------------------------------------------------------------
+
+async def get_messages_by_id(message_id: str, owner_id: str | None) -> Optional[Message]:
+    async with get_session(owner_id) as session:
+        query = """
+        MATCH (m:Message {mid:$message_id})
+        WHERE $ownerId IS NULL OR m.owner_id = $ownerId
+        OPTIONAL MATCH (u:User  )-[:SENT]->(m)
+        OPTIONAL MATCH (ch:Channel)-[:HAS_MESSAGE]->(m)
+        RETURN m, u AS a, ch AS c
+        """
+
+        try:
+            rec = await (await session.run(
+                query, {"message_id": message_id, "ownerId": owner_id})
+            ).single()
+
+            if not rec:
+                return None
+
+            m, a, c = rec["m"], rec["a"], rec["c"]
+            author = Author(
+                id=a["user_id"],
+                name=a.get("username") or a.get("first_name") or a.get("last_name") or "Unknown",
+            )
+            channel = Channel(id=c["channel_id"], username=c["username"])
+            return Message(
+                message_id=m["mid"],
+                text=m["text"],
+                date=m["date"],
+                media_type=m.get("media_type"),
+                media_path=m.get("media_path"),
+                reply_to_id=m.get("reply_to"),
+                author=author,
+                channel=channel,
+            )
+
+        except Exception as e:
+            raise HTTPException(500, f"Datenbankfehler: {e}")
+
+
+async def get_messages_for_channel(
+    channel_id: str,
+    owner_id: str | None,
+    limit: int = 1000,
+    before: datetime | None = None,
+    query: str | None = None,
+):
+    async with get_session(owner_id) as session:
+        cypher = """
+        MATCH (ch:Channel {channel_id:$channel_id})
+        WHERE $ownerId IS NULL OR ch.owner_id = $ownerId
+        MATCH (ch)-[:HAS_MESSAGE]->(m:Message)
+        WHERE ($ownerId IS NULL OR m.owner_id = $ownerId)
+          AND m.date IS NOT NULL
+          AND m.text IS NOT NULL
+        MATCH (u:User)-[:SENT]->(m)
+        WHERE ($ownerId IS NULL OR u.owner_id = $ownerId)
+        AND (
+            $query IS NULL OR $query = '' OR
+            toLower(m.text) CONTAINS toLower($query)
+        )
+        AND ($before IS NULL OR m.date < $before)
+        OPTIONAL MATCH (m)-[:REPLY_TO]->(reply:Message)
+        RETURN m.text        AS text,
+               m.date        AS date,
+               m.media_type  AS media_type,
+               m.media_path  AS media_path,
+               m.mid         AS message_id,
+               u.user_id     AS user_id,
+               coalesce(u.username, '')    AS username,
+               coalesce(u.first_name, '')  AS first_name,
+               coalesce(u.last_name, '')   AS last_name,
+               ch.channel_id AS channel_id,
+               ch.username   AS channel_username,
+               reply.mid     AS reply_to_id
         ORDER BY m.date DESC
         LIMIT $limit
         """
@@ -132,130 +236,205 @@ async def get_messages_for_channel(channel_id: str, limit: int = 100, before: da
             "channel_id": str(channel_id),
             "limit": limit,
             "query": query,
-            "before": before.isoformat() if before else None
+            "before": before,
+            "ownerId": owner_id,
         }
 
         result = await session.run(cypher, params)
-
         messages = []
-        async for record in result:
-            author_name = record["username"] or f"{record['first_name'] or ''} {record['last_name'] or ''}".strip() or "Unknown"
+        async for r in result:
+            # Convert datetime safely
+            date_value = convert_neo4j_datetime(r["date"])
+            
+            # Skip messages with invalid dates or empty text
+            if not date_value or not r["text"]:
+                continue
+                
+            # Build author name safely
+            first_name = r["first_name"] or ""
+            last_name = r["last_name"] or ""
+            username = r["username"] or ""
+            
+            if username:
+                author_name = username
+            elif first_name or last_name:
+                author_name = f"{first_name} {last_name}".strip()
+            else:
+                author_name = "Unknown"
+                
             messages.append({
-                "message_id": record["message_id"],
-                "text": record["text"],
-                "date": record["date"],
-                "media_type": record["media_type"],
-                "media_path": record["media_path"],
-                "reply_to_id": record["reply_to_id"],
-                "author": {
-                    "id": record["user_id"],
-                    "name": author_name
-                },
-                "channel": {
-                    "id": record["channel_id"],
-                    "username": record["channel_username"]
-                }
+                "message_id": r["message_id"],
+                "text": r["text"],
+                "date": date_value,
+                "media_type": r["media_type"],
+                "media_path": r["media_path"],
+                "reply_to_id": r["reply_to_id"],
+                "author": {"id": r["user_id"], "name": author_name},
+                "channel": {"id": r["channel_id"], "username": r["channel_username"]},
             })
         return messages
 
-async def get_channel_by_id(channel_id: str):
-    async with driver.session() as session:
+async def get_channel_list(owner_id: str | None):
+    async with get_session(owner_id) as session:
         query = """
-        MATCH (ch:Channel {channel_id: $channel_id})
+        MATCH (ch:Channel)
+        WHERE $ownerId IS NULL OR ch.owner_id = $ownerId
         OPTIONAL MATCH (ch)-[:HAS_MESSAGE]->(m:Message)
-        OPTIONAL MATCH (ch)-[:RECOMMENDS]->(rec:Channel)
+        WHERE ($ownerId IS NULL OR m.owner_id = $ownerId)
+          AND m.date IS NOT NULL
+          AND m.text IS NOT NULL
+        WITH ch, count(m) AS msg_count, max(m.date) AS latest
+        WHERE msg_count > 0
         OPTIONAL MATCH (other:Channel)-[:RECOMMENDS]->(ch)
-        RETURN 
-            ch.channel_id as channel_id,
-            ch.username as username,
-            ch.title as title,
-            count(DISTINCT m) as message_count,
-            min(m.date) as first_message,
-            max(m.date) as last_message,
-            count(DISTINCT rec) as recommends_count,
-            count(DISTINCT other) as recommended_by_count,
-            ch.scraped as is_scraped,
-            ch.scraped_at as scraped_at
-        """
-        result = await session.run(query, channel_id=str(channel_id))
-        record = await result.single()
-        if record:
-            return {
-                "channel_id": record["channel_id"],
-                "username": record["username"],
-                "title": record["title"],
-                "message_count": record["message_count"],
-                "first_message": record["first_message"],
-                "last_message": record["last_message"],
-                "recommends_count": record["recommends_count"],
-                "recommended_by_count": record["recommended_by_count"],
-                "is_scraped": record["is_scraped"],
-                "scraped_at": record["scraped_at"]
-            }
-        return None
-
-async def get_user_channels(user_id: int):
-    """
-    Get channels that the user is part of
-    """
-    async with driver.session() as session:
-        query = """
-        MATCH (u:User {user_id: $user_id})-[:PART_OF]->(ch:Channel)
-        OPTIONAL MATCH (ch)-[:HAS_MESSAGE]->(m:Message)
-        WITH ch, count(m) as msg_count, max(m.date) as latest
-        OPTIONAL MATCH (other)-[:RECOMMENDS]->(ch)
-        RETURN 
-            ch.channel_id as channel_id,
-            ch.username as username,
-            ch.title as title,
-            msg_count as message_count,
-            latest as last_message_date,
-            count(other) as recommended_by,
-            ch.scraped as is_scraped,
-            ch.scraped_at as scraped_at
+        WHERE $ownerId IS NULL OR other.owner_id = $ownerId
+        RETURN
+            ch.channel_id        AS channel_id,
+            coalesce(ch.username, '') AS username,
+            ch.title             AS title,
+            msg_count            AS message_count,
+            latest               AS last_message_date,
+            count(other)         AS recommended_by,
+            ch.scraped           AS is_scraped,
+            ch.scraped_at        AS scraped_at
         ORDER BY last_message_date DESC
         """
-        result = await session.run(query, user_id=user_id)
+        result = await session.run(query)
         channels = []
-        async for record in result:
+        async for r in result:
+            last_active = convert_neo4j_datetime(r["last_message_date"])
+            scraped_at = convert_neo4j_datetime(r["scraped_at"])
+            
+            # Skip channels with invalid dates
+            if not last_active:
+                continue
+                
             channels.append({
-                "channel_id": record["channel_id"],
-                "username": record["username"],
-                "title": record["title"],
-                "message_count": record["message_count"],
-                "last_active": record["last_message_date"],
-                "recommended_by": record["recommended_by"],
-                "is_scraped": record["is_scraped"],
-                "scraped_at": record["scraped_at"]
+                "channel_id": str(r["channel_id"]),
+                "username": r["username"],
+                "title": r["title"],
+                "message_count": r["message_count"],
+                "last_active": last_active,
+                "recommended_by": r["recommended_by"],
+                "is_scraped": r["is_scraped"],
+                "scraped_at": scraped_at,
             })
         return channels
 
-async def get_user_messages(user_id: int, limit: int = 100, before: datetime | None = None, query: str | None = None):
-    """
-    Get messages sent by a user from every channel they are part of
-    """
-    async with driver.session() as session:
+async def get_channel_by_id(channel_id: str, owner_id: str | None):
+    async with get_session(owner_id) as session:
+        query = """
+        MATCH (ch:Channel {channel_id:$channel_id})
+        WHERE $ownerId IS NULL OR ch.owner_id = $ownerId
+
+        OPTIONAL MATCH (ch)-[:HAS_MESSAGE]->(m:Message)
+        WHERE ($ownerId IS NULL OR m.owner_id = $ownerId)
+          AND m.date IS NOT NULL
+
+        OPTIONAL MATCH (ch)-[:RECOMMENDS]->(rec:Channel)
+        WHERE $ownerId IS NULL OR rec.owner_id = $ownerId
+
+        OPTIONAL MATCH (other:Channel)
+              WHERE ($ownerId IS NULL OR other.owner_id = $ownerId)
+              AND   (other)-[:RECOMMENDS]->(ch)
+
+        RETURN
+            ch.channel_id             AS channel_id,
+            coalesce(ch.username, '') AS username,
+            ch.title                  AS title,
+            count(DISTINCT m)         AS message_count,
+            min(m.date)               AS first_message,
+            max(m.date)               AS last_message,
+            count(DISTINCT rec)       AS recommends_count,
+            count(DISTINCT other)     AS recommended_by_count,
+            ch.scraped                AS is_scraped,
+            ch.scraped_at             AS scraped_at
+        """
+        rec = await (await session.run(
+            query,
+            {"channel_id": str(channel_id), "ownerId": owner_id},
+        )).single()
+
+        if not rec:
+            return None
+
+        return {
+            "channel_id": rec["channel_id"],
+            "username": rec["username"],
+            "title": rec["title"],
+            "message_count": rec["message_count"],
+            "first_message": convert_neo4j_datetime(rec["first_message"]),
+            "last_message": convert_neo4j_datetime(rec["last_message"]),
+            "recommends_count": rec["recommends_count"],
+            "recommended_by_count": rec["recommended_by_count"],
+            "is_scraped": rec["is_scraped"],
+            "scraped_at": convert_neo4j_datetime(rec["scraped_at"]),
+        }
+async def get_user_channels(user_id: int, owner_id: str | None):
+    async with get_session(owner_id) as session:
+        result = await session.run(
+            """
+            MATCH (u:User {user_id:$user_id, owner_id:$ownerId})-[:PART_OF]->(ch:Channel)
+            OPTIONAL MATCH (ch)-[:HAS_MESSAGE]->(m:Message)
+            WITH ch, count(m) AS msg_count, max(m.date) AS latest
+            OPTIONAL MATCH (other:Channel {owner_id:$ownerId})-[:RECOMMENDS]->(ch)
+            RETURN ch.channel_id  AS channel_id,
+                   ch.username    AS username,
+                   ch.title       AS title,
+                   msg_count      AS message_count,
+                   latest         AS last_message_date,
+                   count(other)   AS recommended_by,
+                   ch.scraped     AS is_scraped,
+                   coalesce(ch.scraped_at, null) AS scraped_at
+            ORDER BY last_message_date DESC
+            """,
+            {"user_id": user_id, "ownerId": owner_id},
+        )
+        channels = []
+        async for r in result:
+            channels.append(
+                {
+                    "channel_id": r["channel_id"],
+                    "username": r["username"],
+                    "title": r["title"],
+                    "message_count": r["message_count"],
+                    "last_active": r["last_message_date"],
+                    "recommended_by": r["recommended_by"],
+                    "is_scraped": r["is_scraped"],
+                    "scraped_at": r["scraped_at"],
+                }
+            )
+        return channels
+
+
+async def get_user_messages(
+    user_id: int,
+    owner_id: str | None,
+    limit: int = 100,
+    before: datetime | None = None,
+    query: str | None = None,
+):
+    async with get_session(owner_id) as session:
         cypher = """
-        MATCH (u:User {user_id: $user_id})-[:SENT]->(m:Message)
+        MATCH (u:User {user_id:$user_id, owner_id:$ownerId})-[:SENT]->(m:Message)
         MATCH (ch:Channel)-[:HAS_MESSAGE]->(m)
         WHERE (
-            $query IS NULL OR $query = '' OR (m.text IS NOT NULL AND toLower(m.text) CONTAINS toLower($query))
+            $query IS NULL OR $query = '' OR
+            (m.text IS NOT NULL AND toLower(m.text) CONTAINS toLower($query))
         )
         AND ($before IS NULL OR m.date < $before)
         OPTIONAL MATCH (m)-[:REPLY_TO]->(reply:Message)
-        RETURN 
-            m.text as text,
-            m.date as date,
-            m.media_type as media_type,
-            m.media_path as media_path,
-            m.mid as message_id,
-            u.user_id as user_id,
-            u.username as username,
-            u.first_name as first_name,
-            u.last_name as last_name,
-            ch.channel_id as channel_id,
-            ch.username as channel_username,
-            reply.mid as reply_to_id
+        RETURN m.text        AS text,
+               m.date        AS date,
+               m.media_type  AS media_type,
+               m.media_path  AS media_path,
+               m.mid         AS message_id,
+               u.user_id     AS user_id,
+               u.username    AS username,
+               u.first_name  AS first_name,
+               u.last_name   AS last_name,
+               ch.channel_id AS channel_id,
+               ch.username   AS channel_username,
+               reply.mid     AS reply_to_id
         ORDER BY m.date DESC
         LIMIT $limit
         """
@@ -264,28 +443,77 @@ async def get_user_messages(user_id: int, limit: int = 100, before: datetime | N
             "user_id": user_id,
             "limit": limit,
             "query": query,
-            "before": before.isoformat() if before else None
+            "before": before.isoformat() if before else None,
+            "ownerId": owner_id,
         }
 
         result = await session.run(cypher, params)
-
         messages = []
-        async for record in result:
-            author_name = record["username"] or f"{record['first_name'] or ''} {record['last_name'] or ''}".strip() or "Unknown"
-            messages.append({
-                "message_id": record["message_id"],
-                "text": record["text"],
-                "date": record["date"],
-                "media_type": record["media_type"],
-                "media_path": record["media_path"],
-                "reply_to_id": record["reply_to_id"],
-                "author": {
-                    "id": record["user_id"],
-                    "name": author_name
-                },
-                "channel": {
-                    "id": record["channel_id"],
-                    "username": record["channel_username"]
+        async for r in result:
+            author_name = (
+                r["username"]
+                or f"{r['first_name'] or ''} {r['last_name'] or ''}".strip()
+                or "Unknown"
+            )
+            messages.append(
+                {
+                    "message_id": r["message_id"],
+                    "text": r["text"],
+                    "date": r["date"],
+                    "media_type": r["media_type"],
+                    "media_path": r["media_path"],
+                    "reply_to_id": r["reply_to_id"],
+                    "author": {"id": r["user_id"], "name": author_name},
+                    "channel": {"id": r["channel_id"], "username": r["channel_username"]},
                 }
-            })
+            )
         return messages
+    
+async def get_case_channels_with_recommendations(channel_usernames: List[str], owner_id: str = None) -> List[str]:
+    """
+    Get channels and their recommendations from Neo4j
+    Now with case-insensitive matching!
+    """
+    try:
+        async with get_session(owner_id) as session:
+            # Convert input usernames to lowercase for matching
+            lowercase_usernames = [u.lower() for u in channel_usernames]
+            
+            query = """
+            // Find channels with case-insensitive matching
+            MATCH (ch:Channel)
+            WHERE toLower(ch.username) IN $usernames
+              AND ($ownerId IS NULL OR ch.owner_id = $ownerId)
+            
+            // Get recommended channels
+            OPTIONAL MATCH (ch)-[:RECOMMENDS]->(rec:Channel)
+            WHERE $ownerId IS NULL OR rec.owner_id = $ownerId
+            
+            // Collect all channels
+            WITH COLLECT(DISTINCT ch) + COLLECT(DISTINCT rec) AS allChannels
+            UNWIND allChannels AS channel
+            
+            // Filter out null usernames and return
+            WITH channel
+            WHERE channel.username IS NOT NULL
+            RETURN DISTINCT channel.username AS username
+            """
+            
+            result = await session.run(
+                query,
+                usernames=lowercase_usernames,
+                ownerId=owner_id
+            )
+            
+            # Collect all channel usernames
+            expanded_channels = []
+            async for record in result:
+                if record["username"]:
+                    expanded_channels.append(record["username"])
+            
+            print(f"[NEO4J] Found {len(expanded_channels)} channels (including recommendations) for input: {channel_usernames}")
+            return expanded_channels
+            
+    except Exception as e:
+        print(f"[WARN] Error expanding channels: {str(e)}. Returning original list.")
+        return channel_usernames

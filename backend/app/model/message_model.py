@@ -13,8 +13,8 @@ class Channel(BaseModel):
 
 class Message(BaseModel):
     message_id: str
-    text: str
-    date: datetime
+    text: Optional[str] = None
+    date: Optional[datetime] = None
     media_type: Optional[str]
     media_path: Optional[str]
     reply_to_id: Optional[str]
@@ -41,7 +41,7 @@ class ChannelDetail(BaseModel):
 
 class ChannelListItem(BaseModel):
     channel_id: str
-    username: str
+    username: Optional[str] = None
     title: Optional[str]
     message_count: int
     last_active: Optional[datetime] = Field(alias="last_message_date")

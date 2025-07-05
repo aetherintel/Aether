@@ -12,6 +12,7 @@ import {
 } from '@tabler/icons-react';
 import GraphVisualization from '@/components/GraphVisualization/GraphVisualization';
 import TelegramScraper from '@/components/TelegramScraper';
+import { authFetch } from '@/utils/authFetch';
 
 const apiUrl = import.meta.env.VITE_API_URL;
 
@@ -91,30 +92,105 @@ export function CaseFileDetail() {
 
   useEffect(() => {
     const fetchData = async () => {
+      setLoading(true);  // Start loading
       try {
         const base = apiUrl ?? 'http://localhost:8000/api';
-        const resCaseFile = await fetch(`${base}/casefiles/${id}`);
+        const resCaseFile = await authFetch(`${base}/casefiles/${id}`);
         const caseFileData = await resCaseFile.json();
-
         setCaseFile(caseFileData);
-
-        const resTgChannels = await fetch(`${base}/messages/channels`);
-        const tgChannelsData = await resTgChannels.json();
-
-        setTgChannels(tgChannelsData);
-
-        if (selectedTgChannelIds.length === 0) {
-          setSelectedTgChannelIds(tgChannelsData.map((c: any) => c.channel_id));
+  
+        // ✅ STEP 1: Get case channels from PostgreSQL
+        const initialChannels = caseFileData.tgchannels || [];
+        
+        if (initialChannels.length > 0) {
+          try {
+            // ✅ STEP 2: Expand channels using RECOMMENDS relationships
+            const expandUrl = new URL(`${base}/messages/channels/expand`);
+            expandUrl.searchParams.set('channel_usernames', initialChannels.join(','));
+            const expandRes = await authFetch(expandUrl.toString());
+            const expandedChannels = await expandRes.json();
+            
+            console.log(`[DEBUG] Expanded ${initialChannels.length} to ${expandedChannels.length} channels`);
+            
+            // ✅ STEP 3: Get channel details for expanded list
+            // IMPORTANT: Only fetch if we have channels to fetch
+            const channelsToFetch = expandedChannels.length > 0 ? expandedChannels : initialChannels;
+            
+            if (channelsToFetch.length > 0) {
+              const channelsUrl = new URL(`${base}/messages/channels`);
+              channelsUrl.searchParams.set('usernames', channelsToFetch.join(','));
+              const channelsRes = await authFetch(channelsUrl.toString());
+              const tgChannelsData = await channelsRes.json();
+              
+              // Handle case where channels exist in case but aren't scraped yet
+              if (tgChannelsData.length === 0) {
+                console.log('[INFO] Channels not yet scraped, showing placeholder data');
+                // Create placeholder entries for unscraped channels
+                const placeholderChannels = channelsToFetch.map((username: string) => ({
+                  channel_id: `pending_${username}`,
+                  username: username,
+                  title: `${username} (pending scrape)`,
+                  message_count: 0,
+                  last_message_date: null,
+                  is_scraped: false,
+                  scraped_at: null,
+                }));
+                setTgChannels(placeholderChannels);
+                setSelectedTgChannelIds([]);  // Don't select unscraped channels
+              } else {
+                setTgChannels(tgChannelsData);
+                setSelectedTgChannelIds(tgChannelsData.map((c: any) => c.channel_id));
+              }
+            } else {
+              // No channels found after expansion
+              setTgChannels([]);
+              setSelectedTgChannelIds([]);
+            }
+            
+          } catch (expandError) {
+            console.warn('Failed to expand channels, using initial list:', expandError);
+            
+            // Fallback: fetch details for initial channels only
+            const channelsUrl = new URL(`${base}/messages/channels`);
+            channelsUrl.searchParams.set('usernames', initialChannels.join(','));
+            const channelsRes = await authFetch(channelsUrl.toString());
+            const tgChannelsData = await channelsRes.json();
+            
+            // Handle empty response for unscraped channels
+            if (tgChannelsData.length === 0) {
+              const placeholderChannels = initialChannels.map((username: string) => ({
+                channel_id: `pending_${username}`,
+                username: username,
+                title: `${username} (pending scrape)`,
+                message_count: 0,
+                last_message_date: null,
+                is_scraped: false,
+                scraped_at: null,
+              }));
+              setTgChannels(placeholderChannels);
+              setSelectedTgChannelIds([]);
+            } else {
+              setTgChannels(tgChannelsData);
+              setSelectedTgChannelIds(tgChannelsData.map((c: any) => c.channel_id));
+            }
+          }
+        } else {
+          // No channels in case
+          setTgChannels([]);
+          setSelectedTgChannelIds([]);
         }
+        
       } catch (error) {
-        console.error('Fetch error:', error);
+        console.error('Error fetching case data:', error);
+        // Handle error appropriately
       } finally {
-        setLoading(false);
+        setLoading(false);  // Always stop loading
       }
     };
-
+    
     fetchData();
   }, [id]);
+  
 
   // Function to deduplicate messages based on message_id
   const deduplicateMessages = useCallback((messages: any[]) => {
@@ -142,6 +218,14 @@ export function CaseFileDetail() {
       const results = await Promise.all(
         selectedTgChannelIds.map(async (channelId) => {
           const before = currentLastDates[channelId];
+
+          /**
+           * So könnte man eine richtige Timeline nicht nach channeln sortiert haben: 
+           * const url = new URL(`${base}/messages/timeline`);
+           * url.searchParams.set('channel_ids', selectedTgChannelIds.join(','));
+           * 
+           */
+          
           const url = new URL(`${base}/messages/channels/${channelId}/messages`);
           url.searchParams.set('limit', `${LIMIT}`);
           if (searchQuery) {
@@ -151,7 +235,7 @@ export function CaseFileDetail() {
             url.searchParams.set('before', before);
           }
 
-          const res = await fetch(url.toString());
+          const res = await authFetch(url.toString());
           const data = await res.json();
           return { channelId, messages: data };
         })
@@ -226,6 +310,50 @@ export function CaseFileDetail() {
   const isVideoFile = (path: string): boolean => {
     const videoExtensions: string[] = ['.mp4', '.webm', '.ogg', '.avi', '.mov', '.wmv', '.flv', '.mkv'];
     return videoExtensions.some((ext: string) => path.toLowerCase().endsWith(ext));
+  };
+
+  const updateCaseWithDiscoveredChannels = async () => {
+    if (!caseFile?.tgchannels?.length) return;
+  
+    try {
+      const base = apiUrl ?? 'http://localhost:8000/api';
+      
+      // Get expanded channels using RECOMMENDS
+      const expandUrl = new URL(`${base}/messages/channels/expand`);
+      expandUrl.searchParams.set('channel_usernames', caseFile.tgchannels.join(','));
+      
+      const expandRes = await authFetch(expandUrl.toString());
+      const expandedChannels = await expandRes.json();
+      
+      // Check if we discovered new channels
+      const originalChannels = new Set(caseFile.tgchannels);
+      const newChannels = expandedChannels.filter((ch: string) => !originalChannels.has(ch));
+      
+      if (newChannels.length > 0) {
+        console.log(`[DISCOVERY] Found ${newChannels.length} new channels:`, newChannels);
+        
+        // Add new channels to case
+        const addChannelsRes = await authFetch(`${base}/casefiles/${id}/add-channels`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(newChannels)
+        });
+        
+        if (addChannelsRes.ok) {
+          const result = await addChannelsRes.json();
+          alert(`Discovered ${result.added_channels.length} new channels: ${result.added_channels.join(', ')}`);
+          window.location.reload();
+        }
+      } else {
+        alert('No new channels found');
+      }
+      
+    } catch (error) {
+      console.error('Error updating case with discoveries:', error);
+      alert('Error checking for new channels');
+    }
   };
 
   // Component for individual message content with measurement
@@ -456,7 +584,23 @@ export function CaseFileDetail() {
                 </Tabs.Panel>
 
                 <Tabs.Panel value="scraper" mt="md">
-                  <TelegramScraper/>
+                  <Stack gap="md">
+                    <Card withBorder p="md">
+                      <Stack gap="xs">
+                        <Title order={4}>Channel Discovery</Title>
+                        <Text size="sm" c="dimmed">
+                          Check for new channels discovered through scraping
+                        </Text>
+                        <Button 
+                          onClick={updateCaseWithDiscoveredChannels}
+                          variant="outline"
+                        >
+                          Check for New Channels
+                        </Button>
+                      </Stack>
+                    </Card>
+                    <TelegramScraper case_id={parseInt(id!)} />
+                  </Stack>
                 </Tabs.Panel>
 
                 <Tabs.Panel value="visuals" mt="md">

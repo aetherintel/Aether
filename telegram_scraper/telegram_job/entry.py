@@ -30,7 +30,6 @@ NEO4J_WRITE = os.getenv("NEO4J_WRITE", "0") == "1"
 # SKIP_HISTORY
 SKIP_HISTORY = os.getenv("SKIP_HISTORY", "0") == "1"
 
-
 async def main():
     if not MODE:
         sys.exit("MODE environment variable is required")
@@ -39,7 +38,6 @@ async def main():
     if not CHANNELS:
         print("[]")
         return
-
 
     if MODE == "similar":
         root = CHANNELS[0]
@@ -67,15 +65,18 @@ async def main():
             if await is_scraped(root):
                 print(f"[SKIP] Channel {root} already scraped, skipping...")
                 continue
+            
+            # Step 1: Scrape the root channel (with recursive container spawning)
             await run_scraper([root], SESSION_NAME, recursive=RECURSIVE, skip_history=SKIP_HISTORY)
 
+            # Step 2: Find similar channels and scrape them (without recursion to avoid exponential growth)
             recs = await similar_channels(root)
             if NEO4J_WRITE:
                 await write_recommendations(root, recs)
 
             usernames = [c["username"] for c in recs if c.get("username")]
             if usernames:
-                await run_scraper(usernames, SESSION_NAME, recursive=RECURSIVE, skip_history=SKIP_HISTORY)
+                await run_scraper(usernames, SESSION_NAME, recursive=False, skip_history=SKIP_HISTORY)
     
     elif MODE == "live":
         print("[LIVE] Listening for new messages only...")

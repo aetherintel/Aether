@@ -1,3 +1,5 @@
+import { authFetch } from "@/utils/authFetch";
+
 const apiUrl = import.meta.env.VITE_API_URL;
 
 export interface LoginCredentials {
@@ -23,7 +25,7 @@ export const keycloakLogin = async (credentials: LoginCredentials): Promise<Logi
   body.append('username', credentials.username);
   body.append('password', credentials.password);
 
-  const response = await fetch(`${apiUrl ? apiUrl : 'http://localhost:8000/api'}/auth/login`, {
+  const response = await authFetch(`${apiUrl ? apiUrl : 'http://localhost:8000/api'}/auth/login`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded',
@@ -41,7 +43,7 @@ export const keycloakLogin = async (credentials: LoginCredentials): Promise<Logi
 export const keycloakRegister = async (
   credentials: RegisterCredentials
 ): Promise<LoginResponse> => {
-  const response = await fetch(`${apiUrl ? apiUrl : 'http://localhost:8000/api'}/auth/register`, {
+  const response = await authFetch(`${apiUrl ? apiUrl : 'http://localhost:8000/api'}/auth/register`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

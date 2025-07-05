@@ -6,6 +6,7 @@ import { notifications } from '@mantine/notifications';
 import { TermMultiSelect } from '../TermMultiSelect';
 import { TopicMultiSelect } from '../TopicMultiSelect';
 import { TgChannelMultiSelect } from '../TgChannelMultiSelect';
+import { authFetch } from '@/utils/authFetch';
 
 const apiUrl = import.meta.env.VITE_API_URL;
 
@@ -52,7 +53,7 @@ export function CreateCaseFileForm() {
   const handleSubmit = async (values: CaseFileFormValues) => {
     setLoading(true);
     try {
-      const res = await fetch(`${apiUrl ? apiUrl : 'http://localhost:8000/api'}/casefiles/`, {
+      const res = await authFetch(`${apiUrl ? apiUrl : 'http://localhost:8000/api'}/casefiles/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

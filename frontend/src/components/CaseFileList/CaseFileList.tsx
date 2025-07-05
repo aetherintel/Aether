@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Grid, Loader } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import CaseCard from '../CaseCard/CaseCard';
+import { authFetch } from '@/utils/authFetch';
 
 const apiUrl = import.meta.env.VITE_API_URL;
 
@@ -23,7 +24,7 @@ export function CaseFileList() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch(`${apiUrl ? apiUrl : 'http://localhost:8000/api'}/casefiles/`)
+    authFetch(`${apiUrl ?? 'http://localhost:8000/api'}/casefiles/`)
       .then((res) => res.json())
       .then((data) => setCaseFiles(data))
       .catch((err) => {
@@ -37,9 +38,7 @@ export function CaseFileList() {
   }, []);
 
   const handleDelete = async (id: number) => {
-    const res = await fetch(`${apiUrl ? apiUrl : 'http://localhost:8000/api'}/casefiles/${id}`, {
-      method: 'DELETE',
-    });
+    const res = await authFetch(`${apiUrl ?? '...'}/casefiles/${id}`, { method: 'DELETE' });
 
     if (res.ok) {
       setCaseFiles((files) => files.filter((file) => file.id !== id));

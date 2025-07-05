@@ -21,6 +21,7 @@ import {
   IconExclamationCircle,
   IconActivity,
 } from '@tabler/icons-react';
+import { authFetch } from '@/utils/authFetch';
 
 const API_BASE = 'http://localhost:8000';
 
@@ -64,11 +65,16 @@ interface ScrapePayload {
   tg_session: string;
   recursive?: boolean;
   neo4j?: boolean;
+  case_id?: number;
 }
 
-type ScraperMode = 'scrape' | 'full' | 'live' | 'similar';
 
-const TelegramScraper: React.FC = () => {
+type ScraperMode = 'scrape' | 'full' | 'live' | 'similar';
+interface TelegramScraperProps {
+  case_id?: number;
+}
+
+const TelegramScraper: React.FC<TelegramScraperProps> = ({ case_id }) => {
   const [sessions, setSessions] = useState<TelegramSession[]>([]);
   const [activeSessions, setActiveSessions] = useState<TelegramSession[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
@@ -97,7 +103,7 @@ const TelegramScraper: React.FC = () => {
 
   const fetchSessions = async (): Promise<void> => {
     try {
-      const response = await fetch(`${API_BASE}/telegram-auth/sessions`, {
+      const response = await authFetch(`${API_BASE}/telegram-auth/sessions`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token') || ''}`
         }
@@ -130,7 +136,7 @@ const TelegramScraper: React.FC = () => {
 
   const fetchStatus = async (): Promise<void> => {
     try {
-      const response = await fetch(`${API_BASE}/auth/telegram/status`, {
+      const response = await authFetch(`${API_BASE}/auth/telegram/status`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token') || ''}`
         }
@@ -184,26 +190,64 @@ const TelegramScraper: React.FC = () => {
             channel: channel.trim(),
             tg_session: selectedSession,
             recursive,
-            neo4j
+            neo4j,
+            case_id: case_id || undefined
           };
           break;
         case 'live':
           endpoint = `${API_BASE}/auth/telegram/live`;
           payload = {
             channels: [channel.trim()],
-            tg_session: selectedSession
+            tg_session: selectedSession,
+            case_id: case_id || undefined
           };
           break;
         case 'similar':
           endpoint = `${API_BASE}/auth/telegram/similar`;
           payload = {
             channel: channel.trim(),
-            tg_session: selectedSession
+            tg_session: selectedSession,
+            case_id: case_id || undefined
           };
           break;
       }
-
-      const response = await fetch(endpoint, {
+      const addChannelToCase = async (caseId: number, channelUsername: string) => {
+        try {
+          const response = await authFetch(`${API_BASE}/api/casefiles/${caseId}/add-channels`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${localStorage.getItem('token') || ''}`
+            },
+            body: JSON.stringify([channelUsername]) // Send as array of channel usernames
+          });
+      
+          if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.detail || 'Failed to add channel to case');
+          }
+      
+          const result = await response.json();
+          console.log(`Added channel ${channelUsername} to case ${caseId}:`, result);
+          
+          notifications.show({
+            title: 'Channel added to case',
+            message: `Successfully added ${channelUsername} to case ${caseId}`,
+            color: 'green'
+          });
+      
+          return result;
+        } catch (error) {
+          console.error('Error adding channel to case:', error);
+          notifications.show({
+            title: 'Error',
+            message: `Failed to add channel to case: ${(error as Error).message}`,
+            color: 'red'
+          });
+          throw error;
+        }
+      };
+      const response = await authFetch(endpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -216,12 +260,23 @@ const TelegramScraper: React.FC = () => {
         const errorData = await response.json();
         throw new Error(errorData.detail || 'Request failed');
       }
+      
 
       const result = await response.json();
       
+      if (case_id) {
+        try {
+          await addChannelToCase(case_id, channel.trim());
+        } catch (addChannelError) {
+          // Log the error but don't fail the entire operation
+          console.warn('Failed to add channel to case, but scraping started successfully:', addChannelError);
+        }
+      }
       notifications.show({
         title: 'Success',
-        message: result.message || 'Scraper started successfully',
+        message: case_id 
+          ? `Scraper started for case ${case_id}. Click "Check for New Channels" after scraping completes.`
+          : 'Scraper started successfully',
         color: 'green'
       });
 
@@ -240,6 +295,9 @@ const TelegramScraper: React.FC = () => {
       setSubmitting(false);
     }
   };
+
+  
+
 
   const getSessionOptions = (): SelectOption[] => {
     return activeSessions.map(session => ({
@@ -339,6 +397,11 @@ const TelegramScraper: React.FC = () => {
               <Group align="center" gap="xs">
                 <IconActivity size="1.2rem" />
                 <Title order={3}>Scrape Containers</Title>
+                {case_id && (
+                  <Alert color="blue">
+                    🎯 Scraping for Case {case_id}. Use "Check for New Channels" button after scraping to discover related channels.
+                  </Alert>
+                )}
               </Group>
               
               <Stack gap="sm">
