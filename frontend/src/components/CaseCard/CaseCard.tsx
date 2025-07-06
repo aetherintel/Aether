@@ -1,4 +1,4 @@
-import { IconEdit, IconTrash, IconUser } from '@tabler/icons-react';
+import { IconArchive, IconEdit, IconTrash } from '@tabler/icons-react';
 import { Link } from 'react-router-dom';
 import { LineChart } from '@mantine/charts';
 import { ActionIcon, Box, Divider, Flex, Group, Menu, rem, Text } from '@mantine/core';
@@ -23,15 +23,19 @@ const exampleChartData = [
 interface CaseCardProps {
   caseFile: CaseFile;
   onDelete: (id: number) => void;
+  onArchive: (id: number, archive: boolean) => void;
 }
 
-export default function CaseCard({ caseFile, onDelete }: CaseCardProps) {
+export default function CaseCard({ caseFile, onDelete, onArchive }: CaseCardProps) {
   const handleDeleteCaseClick = () => {
     onDelete(caseFile.id);
   };
+  const handleArchiveCaseClick = () => {
+    onArchive(caseFile.id, !caseFile.archived);
+  };
 
   return (
-    <Box className={classes.root}>
+    <Box className={classes.root} opacity={caseFile.archived ? 0.5 : 1}>
       <Box className={classes.imageSection}>
         <Group w="100%" align="center" justify="space-between">
           <Flex direction="column" align="start" gap={3} component={Link} to={`/cases/${caseFile.id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
@@ -96,22 +100,31 @@ export default function CaseCard({ caseFile, onDelete }: CaseCardProps) {
                   }}
                 />
               }
-              fz={12}
             >
               Edit case
             </Menu.Item>
+            {!caseFile.archived ? (
+              <Menu.Item
+                leftSection={<IconArchive style={{ width: rem(14), height: rem(14) }} />}
+                onClick={handleArchiveCaseClick}
+              >
+                Archive case
+              </Menu.Item>
+            ) : null}
+            {caseFile.archived ? (
+              <Menu.Item
+                leftSection={<IconArchive style={{ width: rem(14), height: rem(14) }} />}
+                onClick={handleArchiveCaseClick}
+              >
+                Unarchive case
+              </Menu.Item>
+            ) : null}
             <Menu.Item
-              fz={12}
-              leftSection={<IconUser style={{ width: rem(14), height: rem(14) }} />}
-            >
-              Manage permission
-            </Menu.Item>
-            <Menu.Item
-              color="red"
-              leftSection={<IconTrash style={{ width: rem(14), height: rem(14) }} />}
-              onClick={handleDeleteCaseClick}
-            >
-              Delete case
+                color="red"
+                leftSection={<IconTrash style={{ width: rem(14), height: rem(14) }} />}
+                onClick={handleDeleteCaseClick}
+              >
+                Delete case
             </Menu.Item>
           </Menu.Dropdown>
         </Menu>
