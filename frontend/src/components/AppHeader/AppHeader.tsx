@@ -1,7 +1,6 @@
-import { IconMessageCircle, IconSearch, IconSettings, IconTrash, IconUser } from '@tabler/icons-react';
-import { SearchNormal1 } from 'iconsax-react';
+import { IconSettings, IconTrash, IconUser } from '@tabler/icons-react';
 import { Link } from 'react-router-dom';
-import { Avatar, Burger, Flex, Group, Input, Menu, rem, Text } from '@mantine/core';
+import { Avatar, Burger, Flex, Group, Menu, rem } from '@mantine/core';
 import { useMediaQuery } from '@mantine/hooks';
 import { useStore } from '../../store/client/useStore';
 import ThemeSwitch from '../ThemeSwitch/ThemeSwitch';
@@ -31,11 +30,6 @@ export default function AppHeader({ opened, toggle }: Props) {
             onClick={toggleNavbar}
           />
         )}
-        <Input
-          leftSection={<SearchNormal1 size={18} />}
-          placeholder="Search..."
-          w={smallScreen ? 100 : 300}
-        />
       </Flex>
 
       <Flex align="center" gap={24}>
@@ -56,21 +50,6 @@ export default function AppHeader({ opened, toggle }: Props) {
               to="/settings"
             >
               Settings
-            </Menu.Item>
-            <Menu.Item
-              leftSection={<IconMessageCircle style={{ width: rem(14), height: rem(14) }} />}
-            >
-              Notifications
-            </Menu.Item>
-            <Menu.Item
-              leftSection={<IconSearch style={{ width: rem(14), height: rem(14) }} />}
-              rightSection={
-                <Text size="xs" c="dimmed">
-                  ⌘K
-                </Text>
-              }
-            >
-              Search
             </Menu.Item>
 
             <Menu.Divider />

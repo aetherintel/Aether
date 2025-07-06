@@ -4,8 +4,6 @@ import {
   IconHome2,
   IconLogout,
   IconSettings,
-  IconSwitchHorizontal,
-  IconUser,
 } from '@tabler/icons-react';
 import { useNavigate } from 'react-router-dom';
 import { Box, Center, Stack, Text, Tooltip, UnstyledButton } from '@mantine/core';
@@ -34,9 +32,8 @@ function NavbarLink({ icon: Icon, label, active, onClick }: NavbarLinkProps) {
 }
 
 const mockdata = [
-  { icon: IconHome2, label: 'Home', href: '/' },
+  { icon: IconHome2, label: 'Dashboard', href: '/' },
   { icon: IconFiles, label: 'Cases', href: '/cases' },
-  { icon: IconUser, label: 'Account', href: '/account' },
   { icon: IconSettings, label: 'Settings', href: '/settings' },
 ];
 
@@ -81,7 +78,6 @@ export function Navbar({ isNavbarOpen }: NavbarProps) {
       </div>
 
       <Stack justify="center" gap={0}>
-        <NavbarLink icon={IconSwitchHorizontal} label="Change account" />
         <NavbarLink icon={IconLogout} label="Logout" onClick={handleLogout} />
       </Stack>
     </nav>

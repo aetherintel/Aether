@@ -1,9 +1,9 @@
 import BreadcrumbsBar from '@/components/BreadcrumbsBar/BreadcrumbsBar';
 import { useEffect } from 'react';
 
-export function HomePage() {
+export function Dashboard() {
   useEffect(() => {
-    document.title = 'Home - Æther';
+    document.title = 'Dashboard - Æther';
   }, []);
   
   return (
