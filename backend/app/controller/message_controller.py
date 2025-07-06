@@ -1,7 +1,7 @@
 import os
 from datetime import datetime
 from pathlib import Path
-from typing import Optional, List
+from typing import Dict, Optional, List
 from fastapi import APIRouter, HTTPException, Query, Depends
 from pydantic import BaseModel, Field
 from services.neo4j_backend_client import (
@@ -67,8 +67,11 @@ async def list_channels(
         
         # If usernames filter is provided, filter the results
         if usernames:
-            username_list = [u.strip() for u in usernames.split(',') if u.strip()]
-            channels = [ch for ch in all_channels if ch.get('username') in username_list]
+            username_list = [u.strip().lower() for u in usernames.split(',') if u.strip()]
+            channels = [
+                ch for ch in all_channels 
+                if ch.get('username', '').lower() in username_list
+            ]
             print(f"[DEBUG] Filtered {len(all_channels)} channels to {len(channels)} based on usernames: {username_list}")
             
             # If requested channels don't exist yet (not scraped), return empty list
@@ -87,7 +90,7 @@ async def list_channels(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Fehler beim Abrufen der Channel-Liste: {str(e)}")
 
-@router.get("/channels/expand", response_model=List[str])
+@router.get("/channels/expand", response_model=Dict[str, List[str]])
 async def expand_channels_with_recommendations(
     channel_usernames: str = Query(..., description="Comma-separated channel usernames"),
     user: UserCtx = Depends(user_ctx),

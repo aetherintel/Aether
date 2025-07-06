@@ -16,7 +16,7 @@ export interface RegisterCredentials {
 }
 
 export interface LoginResponse {
-  access_token: string; // adapt if your backend returns a different structure
+  access_token: string;
   token_type: string;
 }
 

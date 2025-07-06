@@ -155,3 +155,43 @@ def add_channels_to_case(
     except Exception as e:
         raise HTTPException(500, f"Error adding channels to case: {str(e)}")
 
+@router.post("/{casefile_id}/remove-channels")
+def remove_channels_from_case(
+    casefile_id: int,
+    channel_usernames: List[str],
+    db: Session = Depends(get_db),
+    user: UserCtx = Depends(user_ctx),
+):
+    """Remove specified channels from case"""
+    try:
+        obj = db.query(CaseFileModel).get(casefile_id)
+        if not obj:
+            raise HTTPException(404, "CaseFile not found")
+        
+        if not is_admin(user) and obj.owner_id != user["id"]:
+            raise HTTPException(403, "Forbidden")
+        
+        # Get existing channels
+        existing_channels = set(obj.tgchannels or [])
+        
+        # Remove specified channels
+        to_remove = set(channel_usernames)
+        updated_channels = list(existing_channels - to_remove)
+        
+        # Update case
+        obj.tgchannels = updated_channels
+        db.commit()
+        
+        print(f"[CASE] Removed {len(to_remove & existing_channels)} channels from case {casefile_id}")
+        print(f"[CASE] Total channels: {len(updated_channels)}")
+        
+        return {
+            "case_id": casefile_id,
+            "removed_channels": list(to_remove & existing_channels),
+            "total_channels": updated_channels
+        }
+        
+    except Exception as e:
+        raise HTTPException(500, f"Error removing channels from case: {str(e)}")
+
+    
