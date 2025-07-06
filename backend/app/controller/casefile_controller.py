@@ -1,12 +1,14 @@
 # controller/casefile_controller.py  (full rewritten file)
 
+from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from typing import List
-from sqlalchemy import Column, Integer, String, create_engine
+from typing import List, Optional
+from sqlalchemy import Column, Integer, String, create_engine, Text, DateTime
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session
+from sqlalchemy.sql import func
 import os
 from controller.message_controller import (
     list_channels
@@ -31,16 +33,19 @@ class CaseFileModel(Base):
     id         = Column(Integer, primary_key=True, index=True)
     owner_id   = Column(String,  nullable=False, index=True)          # already present
     title      = Column(String,  index=True)
+    description = Column(Text)  
     category   = Column(String)
     postCount  = Column(Integer)
     tgchannels = Column(ARRAY(String))
     topics     = Column(ARRAY(String))
     terms      = Column(ARRAY(String))
     duration   = Column(Integer)
+    created_at  = Column(DateTime(timezone=True), server_default=func.now())
 
 # --- Schemas ------------------------------------------------------------
 class CaseFileCreate(BaseModel):
     title: str
+    description: Optional[str] = None
     category: str
     postCount: int
     tgchannels: List[str]
@@ -50,6 +55,9 @@ class CaseFileCreate(BaseModel):
 
 class CaseFile(CaseFileCreate):
     id: int
+    owner_id: str
+    created_at: datetime
+
     class Config:
         from_attributes = True
 
@@ -88,9 +96,6 @@ def read_casefiles(
     q = db.query(CaseFileModel)
     if not is_admin(user):                                # NEW
         q = q.filter_by(owner_id=user["id"])
-
-        
-
     return q.all()
 
 
