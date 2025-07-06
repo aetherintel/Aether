@@ -56,7 +56,8 @@ export function CaseFileList({ archived, refreshTrigger, onRefresh }: CaseFileLi
   }, [archived, refreshTrigger]);
 
   const handleDelete = async (id: number) => {
-    const res = await authFetch(`${apiUrl ?? '...'}/casefiles/${id}`, { method: 'DELETE' });
+    const base = apiUrl ?? 'http://localhost:8000/api';
+    const res = await authFetch(`${base}/casefiles/${id}`, { method: 'DELETE' });
 
     if (res.ok) {
       setCaseFiles((files) => files.filter((file) => file.id !== id));
