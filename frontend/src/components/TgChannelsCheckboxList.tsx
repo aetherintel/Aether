@@ -74,7 +74,7 @@ const TgChannelsCheckboxList: React.FC<TgChannelsCheckboxListProps> = ({ structu
                 indeterminate={indeterminate}
                 onChange={() => handleParentChange(parentId, recommendedIds)}
                 />
-                <Stack pl="md" mt="xs">
+                <Stack pl="lg" mt="xs">
                 {recommendedChannels.map(([recUsername, recData]) => (
                     <Checkbox
                     key={recData.channel.channel_id}

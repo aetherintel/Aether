@@ -8,7 +8,12 @@ from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session
 import os
-
+from controller.message_controller import (
+    list_channels
+)
+from services.neo4j_backend_client import (
+    get_total_message_count_for_channels
+)
 # ⬇︎ NEW:  bring in the user-context helper
 from services.auth_ctx import user_ctx, is_admin, UserCtx
 
@@ -83,17 +88,45 @@ def read_casefiles(
     q = db.query(CaseFileModel)
     if not is_admin(user):                                # NEW
         q = q.filter_by(owner_id=user["id"])
+
+        
+
     return q.all()
 
 
 @router.get("/{casefile_id}", response_model=CaseFile)
-def read_casefile(
+async def read_casefile(
     casefile_id: int,
     db: Session = Depends(get_db),
     user: UserCtx = Depends(user_ctx),                    # NEW
 ):
     obj = db.query(CaseFileModel).get(casefile_id)
     print(f"read_casefile: user={user}, obj={obj.tgchannels if obj else 'None'}")
+
+    # TODO: Updating postCount while reading the casefile is only temporary. Needs to be moved to a better place.
+
+    # Get channel usernames from tgchannels and convert to comma-separated string
+    channel_usernames = obj.tgchannels if obj.tgchannels else []
+    usernames_str = ','.join(channel_usernames) if channel_usernames else None
+    
+    # Get channel details using the existing list_channels function
+    channels = await list_channels(usernames=usernames_str, user=user)
+    
+    # Extract channel IDs from the channels
+    channel_ids = [ch['channel_id'] for ch in channels if ch.get('channel_id')]
+    
+    # Get total message count for all channels
+    owner = None if is_admin(user) else user["id"]
+    total_message_count = await get_total_message_count_for_channels(
+        channel_ids=channel_ids,
+        owner_id=owner
+    )
+
+    obj.postCount = total_message_count
+    db.commit()
+
+    # TODO: End of temporary postCount update...
+
     if not obj:
         raise HTTPException(404, "CaseFile not found")
     if not is_admin(user) and obj.owner_id != user["id"]: # NEW

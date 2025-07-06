@@ -513,3 +513,54 @@ async def get_case_channels_with_recommendations(channel_usernames: List[str], o
         print(f"[WARN] Error expanding channels: {str(e)}. Returning empty dict for original list.")
         # Return empty lists for all input channels in case of error
         return {username.lower(): [] for username in channel_usernames}
+    
+async def get_total_message_count_for_channels(
+    channel_ids: list[str],
+    owner_id: str | None,
+    before: datetime | None = None,
+    query: str | None = None,
+):
+    """
+    Get the total message count for multiple channels combined.
+    
+    Args:
+        channel_ids: List of channel IDs to count messages for
+        owner_id: Owner ID filter (None for all owners)
+        before: Optional datetime to filter messages before this date
+        query: Optional text query to filter messages
+        
+    Returns:
+        int: Total count of messages across all specified channels
+    """
+    if not channel_ids:
+        return 0
+        
+    async with get_session(owner_id) as session:
+        cypher = """
+        MATCH (ch:Channel)
+        WHERE ch.channel_id IN $channel_ids
+          AND ($ownerId IS NULL OR ch.owner_id = $ownerId)
+        MATCH (ch)-[:HAS_MESSAGE]->(m:Message)
+        WHERE ($ownerId IS NULL OR m.owner_id = $ownerId)
+          AND m.date IS NOT NULL
+          AND m.text IS NOT NULL
+        MATCH (u:User)-[:SENT]->(m)
+        WHERE ($ownerId IS NULL OR u.owner_id = $ownerId)
+        AND (
+            $query IS NULL OR $query = '' OR
+            toLower(m.text) CONTAINS toLower($query)
+        )
+        AND ($before IS NULL OR m.date < $before)
+        RETURN count(m) AS total_count
+        """
+
+        params = {
+            "channel_ids": [str(channel_id) for channel_id in channel_ids],
+            "query": query,
+            "before": before,
+            "ownerId": owner_id,
+        }
+
+        result = await session.run(cypher, params)
+        record = await result.single()
+        return record["total_count"] if record else 0
