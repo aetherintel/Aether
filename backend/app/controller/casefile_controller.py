@@ -4,7 +4,7 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from typing import List, Optional
-from sqlalchemy import Column, Integer, String, create_engine, Text, DateTime
+from sqlalchemy import Column, Integer, String, create_engine, Text, DateTime, Boolean
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session
@@ -41,6 +41,7 @@ class CaseFileModel(Base):
     terms      = Column(ARRAY(String))
     duration   = Column(Integer)
     created_at  = Column(DateTime(timezone=True), server_default=func.now())
+    archived   = Column(Boolean, default=False)
 
 # --- Schemas ------------------------------------------------------------
 class CaseFileCreate(BaseModel):
@@ -57,6 +58,7 @@ class CaseFile(CaseFileCreate):
     id: int
     owner_id: str
     created_at: datetime
+    archived: bool
 
     class Config:
         from_attributes = True
@@ -90,12 +92,17 @@ def create_casefile(
 
 @router.get("/", response_model=List[CaseFile])
 def read_casefiles(
+    archived: bool | None = False,
     db: Session = Depends(get_db),
     user: UserCtx = Depends(user_ctx),                    # NEW
 ):
     q = db.query(CaseFileModel)
     if not is_admin(user):                                # NEW
         q = q.filter_by(owner_id=user["id"])
+
+    if archived is not None:
+        q = q.filter_by(archived=archived)
+
     return q.all()
 
 
@@ -153,6 +160,25 @@ def delete_casefile(
     db.delete(obj)
     db.commit()
     return {"ok": True}
+
+@router.patch("/{casefile_id}/archive")
+def archive_casefile(
+    casefile_id: int,
+    archived: bool,
+    db: Session = Depends(get_db),
+    user: UserCtx = Depends(user_ctx),
+):
+    obj = db.query(CaseFileModel).get(casefile_id)
+    if not obj:
+        raise HTTPException(404, "CaseFile not found")
+    if not is_admin(user) and obj.owner_id != user["id"]:
+        raise HTTPException(403, "Forbidden")
+    
+    obj.archived = archived
+    db.commit()
+    db.refresh(obj)
+    
+    return {"ok": True, "archived": obj.archived}
 
 @router.post("/{casefile_id}/add-channels")
 def add_channels_to_case(

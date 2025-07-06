@@ -36,6 +36,8 @@ export function CaseFileDetail() {
         const resCaseFile = await authFetch(`${base}/casefiles/${id}`);
         const caseFileData = await resCaseFile.json();
         setCaseFile(caseFileData);
+
+        console.log(caseFileData);
   
         // ✅ STEP 1: Get case channels from PostgreSQL
         const initialChannels = caseFileData.tgchannels || [];
