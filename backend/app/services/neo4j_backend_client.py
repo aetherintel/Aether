@@ -3,7 +3,7 @@ from contextlib import asynccontextmanager
 import os
 from datetime import datetime
 from http.client import HTTPException
-from typing import AsyncIterator, List, Optional
+from typing import AsyncIterator, Dict, List, Optional
 from neo4j import AsyncGraphDatabase
 from dotenv import load_dotenv
 from model.message_model import Author, Channel, Message
@@ -469,7 +469,7 @@ async def get_user_messages(
             )
         return messages
     
-async def get_case_channels_with_recommendations(channel_usernames: List[str], owner_id: str = None) -> List[str]:
+async def get_case_channels_with_recommendations(channel_usernames: List[str], owner_id: str = None) -> Dict[str, List[str]]:
     """
     Get channels and their recommendations from Neo4j
     Now with case-insensitive matching!
@@ -480,23 +480,13 @@ async def get_case_channels_with_recommendations(channel_usernames: List[str], o
             lowercase_usernames = [u.lower() for u in channel_usernames]
             
             query = """
-            // Find channels with case-insensitive matching
-            MATCH (ch:Channel)
-            WHERE toLower(ch.username) IN $usernames
-              AND ($ownerId IS NULL OR ch.owner_id = $ownerId)
-            
-            // Get recommended channels
-            OPTIONAL MATCH (ch)-[:RECOMMENDS]->(rec:Channel)
-            WHERE $ownerId IS NULL OR rec.owner_id = $ownerId
-            
-            // Collect all channels
-            WITH COLLECT(DISTINCT ch) + COLLECT(DISTINCT rec) AS allChannels
-            UNWIND allChannels AS channel
-            
-            // Filter out null usernames and return
-            WITH channel
-            WHERE channel.username IS NOT NULL
-            RETURN DISTINCT channel.username AS username
+            MATCH (c:Channel)-[:RECOMMENDS]-(recommended:Channel)
+            WHERE c.channel_id IN $usernames
+            AND ($ownerId IS NULL OR c.owner_id = $ownerId)
+            AND recommended.username IS NOT NULL 
+            AND recommended.username <> ''
+            RETURN c.channel_id as channel_username, 
+                   COLLECT(DISTINCT recommended.username) as recommendations
             """
             
             result = await session.run(
@@ -505,15 +495,21 @@ async def get_case_channels_with_recommendations(channel_usernames: List[str], o
                 ownerId=owner_id
             )
             
-            # Collect all channel usernames
-            expanded_channels = []
+            # Collect channels with their recommendations
+            channel_recommendations = {}
             async for record in result:
-                if record["username"]:
-                    expanded_channels.append(record["username"])
+                channel_username = record["channel_username"]
+                recommendations = record["recommendations"]
+                channel_recommendations[channel_username] = recommendations
             
-            print(f"[NEO4J] Found {len(expanded_channels)} channels (including recommendations) for input: {channel_usernames}")
-            return expanded_channels
+            for username in channel_usernames:
+                if username.lower() not in channel_recommendations:
+                    channel_recommendations[username.lower()] = []
+            
+            print(f"[NEO4J] Found recommendations for {len(channel_recommendations)} channels from input: {channel_usernames}")
+            return channel_recommendations
             
     except Exception as e:
-        print(f"[WARN] Error expanding channels: {str(e)}. Returning original list.")
-        return channel_usernames
+        print(f"[WARN] Error expanding channels: {str(e)}. Returning empty dict for original list.")
+        # Return empty lists for all input channels in case of error
+        return {username.lower(): [] for username in channel_usernames}

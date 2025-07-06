@@ -1,0 +1,34 @@
+.card {
+  background-color: var(--mantine-color-body);
+}
+
+.label {
+  font-family: Outfit, var(--mantine-font-family);
+  font-weight: 700;
+  line-height: 1;
+}
+
+.lead {
+  font-family: Outfit, var(--mantine-font-family);
+  font-weight: 700;
+  font-size: 22px;
+  line-height: 1;
+}
+
+.inner {
+  display: flex;
+
+  @media (max-width: $mantine-breakpoint-xs) {
+    flex-direction: column;
+  }
+}
+
+mark {
+  background-color: var(--mantine-color-blue-filled);
+  color: var(--mantine-color-body);
+}
+
+.loadingContainer {
+  text-align: center;
+  padding: 10px;
+}

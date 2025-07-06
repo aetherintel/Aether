@@ -1,0 +1,63 @@
+.messageContent {
+  margin-top: 4px;
+}
+
+.messageText {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  line-height: 1.4;
+}
+
+.messageTextExpanded {
+  -webkit-line-clamp: none;
+}
+
+.messageTextTruncated {
+  -webkit-line-clamp: 3;
+  max-height: calc(1.4em * 3);
+}
+
+.expandButton {
+  margin-top: 4px;
+  padding: 0 4px;
+  height: auto;
+}
+
+.checkboxColumn {
+  width: 40px;
+}
+
+.messageCell {
+  position: relative;
+  padding-right: 80px;
+}
+
+.authorRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 4px;
+}
+
+.authorName {
+  color: var(--mantine-color-blue-6);
+}
+
+.channelName {
+  color: var(--mantine-color-gray-6);
+  font-weight: 400;
+}
+
+.timestamp {
+  color: var(--mantine-color-gray-5);
+  position: absolute;
+  top: 8px;
+  right: 16px;
+}
+
+.messageImage, .messageVideo {
+  width: 100px;
+  height: auto;
+  margin-top: 10px;
+}

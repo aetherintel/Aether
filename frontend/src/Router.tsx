@@ -1,7 +1,7 @@
 import { createBrowserRouter, RouterProvider } from 'react-router-dom';
 import AppContainer from './components/AppContainer/AppContainer';
 import { ProtectedRoute } from './components/ProtectedRoute';
-import { CaseFileDetail } from './pages/CaseFileDetail.page';
+import { CaseFileDetail } from './pages/CaseFileDetail/CaseFileDetail.page';
 import CaseOverview from './pages/CaseOverview.page';
 import { CreateCaseFilePage } from './pages/CreateCaseFile.page';
 import { HomePage } from './pages/Home.page';
