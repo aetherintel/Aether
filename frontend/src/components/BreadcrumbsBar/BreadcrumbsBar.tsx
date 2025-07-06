@@ -33,7 +33,7 @@ export default function BreadcrumbsBar({ overrides = {} }: BreadcrumbsBarProps) 
   return (
     <Breadcrumbs separator=">" separatorMargin="md" mt="xs" mb="lg">
       <Anchor component={Link} to="/" c={computedColorScheme === 'dark' ? 'white' : 'black'}>
-        Home
+        Dashboard
       </Anchor>
       {crumbs}
     </Breadcrumbs>
