@@ -43,7 +43,7 @@ export default function CaseCard({ caseFile, onDelete }: CaseCardProps) {
 
               <Divider component="span" orientation="vertical" />
               <Text fz={12} component="span">
-                {caseFile.postCount} posts
+                {caseFile.postCount} messages
               </Text>
             </Flex>
           </Flex>
