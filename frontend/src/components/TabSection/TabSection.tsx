@@ -19,13 +19,10 @@ export default function TabSection() {
       <Tabs w="100%" variant="none" value={value} onChange={setValue}>
         <Tabs.List ref={setRootRef} className={classes.list}>
           <Tabs.Tab value="1" ref={setControlRef('1')} className={classes.tab}>
-            Recent
+            Active
           </Tabs.Tab>
           <Tabs.Tab value="2" ref={setControlRef('2')} className={classes.tab}>
-            Favourites
-          </Tabs.Tab>
-          <Tabs.Tab value="3" ref={setControlRef('3')} className={classes.tab}>
-            Achieved
+            Archived
           </Tabs.Tab>
 
           <FloatingIndicator
@@ -39,8 +36,7 @@ export default function TabSection() {
           <Tabs.Panel w="100%" value="1">
             <CaseFileList />
           </Tabs.Panel>
-          <Tabs.Panel value="2">Second tab content</Tabs.Panel>
-          <Tabs.Panel value="3">Third tab content</Tabs.Panel>
+          <Tabs.Panel value="2">Archived cases...</Tabs.Panel>
         </Box>
       </Tabs>
     </Flex>

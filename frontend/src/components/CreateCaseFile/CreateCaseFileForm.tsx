@@ -10,6 +10,7 @@ const apiUrl = import.meta.env.VITE_API_URL;
 
 interface CaseFileFormValues {
   title: string;
+  description: string;
   category: string;
   postCount: number;
   tgchannels: string[],
@@ -37,6 +38,7 @@ export function CreateCaseFileForm() {
   const form = useForm<CaseFileFormValues>({
     initialValues: {
       title: '',
+      description: '',
       category: '',
       postCount: 0,
       tgchannels: [],
@@ -98,6 +100,7 @@ export function CreateCaseFileForm() {
               label="Description of the case"
               autosize
               minRows={3}
+              {...form.getInputProps('description')}
             />
           </Stack>
         </Stepper.Step>

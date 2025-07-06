@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { Loader, Text, Title, Grid, Card, Tabs, Stack } from '@mantine/core';
+import { Loader, Text, Title, Grid, Card, Tabs, Stack, Group, Badge } from '@mantine/core';
 import BreadcrumbsBar from '@/components/BreadcrumbsBar/BreadcrumbsBar';
 import classes from './CaseFileDetail.module.css';
 import {
   IconUsersGroup,
   IconMessage,
   IconEye,
+  IconInfoCircle,
 } from '@tabler/icons-react';
 import GraphVisualization from '@/components/GraphVisualization/GraphVisualization';
 import MessagesTab from '@/components/MessagesTab/MessagesTab';
@@ -150,6 +151,14 @@ export function CaseFileDetail() {
     fetchData();
   }, [id]);
 
+  function formatDate(dateString: string | null): string {
+    if (!dateString) {
+      return "No valid date provided";
+    }
+    const date = new Date(dateString);
+    return date.toLocaleString();
+  }
+
   function transformChannelData(
     channelData: Channel[],
     groupedStructure: GroupedChannelStructure
@@ -224,6 +233,9 @@ export function CaseFileDetail() {
                   <Tabs.Tab value="visuals" leftSection={<IconEye size={16} />}>
                     Graph
                   </Tabs.Tab>
+                  <Tabs.Tab value="details" leftSection={<IconInfoCircle size={16} />}>
+                    Details
+                  </Tabs.Tab>
                 </Tabs.List>
 
                 <Tabs.Panel value="messages" mt="md">
@@ -239,6 +251,34 @@ export function CaseFileDetail() {
                     selectedChannelIds={selectedTgChannelIds}
                     searchQuery={searchQuery}
                   />
+                </Tabs.Panel>
+
+                <Tabs.Panel value="details" mt="md">
+                  <Card withBorder p="md">
+                    <Stack gap="md">
+                      <Group justify="flex-start" align="flex-start">
+                        <Title order={2} size="h2" fw={600}>
+                          {caseFile.title}
+                        </Title>
+                        <Badge color="blue" variant="light">
+                          {caseFile.postCount} messages
+                        </Badge>
+                      </Group>
+                      
+                      <Text size="md" c="dimmed" lineClamp={3}>
+                        {caseFile.description}
+                      </Text>
+                      
+                      <Group gap="xs">
+                        <Text size="sm" fw={500}>
+                          Created:
+                        </Text>
+                        <Text size="sm" c="dimmed">
+                          {formatDate(caseFile.created_at)}
+                        </Text>
+                      </Group>
+                    </Stack>
+                  </Card>
                 </Tabs.Panel>
               </Tabs>
             </div>
