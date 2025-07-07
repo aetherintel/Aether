@@ -137,15 +137,21 @@ const TelegramScraper: React.FC<TelegramScraperProps> = ({ case_id }) => {
   const fetchStatus = async (): Promise<void> => {
     try {
       const response = await authFetch(`${API_BASE}/auth/telegram/status`, {
+        method: 'POST', // Changed from GET to POST
         headers: {
+          'Content-Type': 'application/json',
           'Authorization': `Bearer ${localStorage.getItem('token') || ''}`
-        }
+        },
+        body: JSON.stringify({ case_id: String(case_id) || null })
       });
       
-      if (!response.ok) {throw new Error('Failed to fetch status');}
+      if (!response.ok) {
+        throw new Error('Failed to fetch status');
+      }
       
-      const data: ContainerInfo[] = await response.json();
-      setStatus(data || []);
+      const data = await response.json();
+      // The response now has a different structure
+      setStatus(data.containers || []);
     } catch (error) {
       console.error('Error fetching status:', error);
     }
@@ -181,7 +187,8 @@ const TelegramScraper: React.FC<TelegramScraperProps> = ({ case_id }) => {
           endpoint = `${API_BASE}/auth/telegram/scrape`;
           payload = {
             channels: [channel.trim()],
-            tg_session: selectedSession
+            tg_session: selectedSession,
+            case_id: case_id ? case_id : undefined
           };
           break;
         case 'full':
@@ -191,7 +198,7 @@ const TelegramScraper: React.FC<TelegramScraperProps> = ({ case_id }) => {
             tg_session: selectedSession,
             recursive,
             neo4j,
-            case_id: case_id || undefined
+            case_id: case_id ? case_id : undefined
           };
           break;
         case 'live':
@@ -199,7 +206,7 @@ const TelegramScraper: React.FC<TelegramScraperProps> = ({ case_id }) => {
           payload = {
             channels: [channel.trim()],
             tg_session: selectedSession,
-            case_id: case_id || undefined
+            case_id: case_id ? case_id : undefined
           };
           break;
         case 'similar':
@@ -207,7 +214,7 @@ const TelegramScraper: React.FC<TelegramScraperProps> = ({ case_id }) => {
           payload = {
             channel: channel.trim(),
             tg_session: selectedSession,
-            case_id: case_id || undefined
+            case_id: case_id ? case_id : undefined
           };
           break;
       }
