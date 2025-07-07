@@ -31,7 +31,7 @@ def run_similarity(channel: str, tg_session: str, owner_id: str) -> dict:
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Similarity job failed: {str(e)}")
 
-def start_scraper(channels: list[str], tg_session: str, owner_id: str) -> str:
+def start_scraper(channels: list[str], tg_session: str, owner_id: str, case_id: int) -> str:
     try:
         response = requests.post(
             f"{LAUNCHER_URL}/scrape",
@@ -40,6 +40,7 @@ def start_scraper(channels: list[str], tg_session: str, owner_id: str) -> str:
                 "channels": channels,
                 "tg_session": tg_session,
                 "owner_id": owner_id,
+                "case_id": case_id,
             },
             timeout=10
         )
@@ -49,7 +50,7 @@ def start_scraper(channels: list[str], tg_session: str, owner_id: str) -> str:
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Scraper job failed: {str(e)}")
 
-def launch_full_scrape_job(channel: str, tg_session: str, recursive: bool = True, neo4j: bool = True, owner_id: str = "") -> dict:
+def launch_full_scrape_job(channel: str, tg_session: str, recursive: bool = True, neo4j: bool = True, owner_id: str = "", case_id: int = None) -> dict:
     """
     Launch a Docker container to run a Telegram scraping + similarity job.
     """
@@ -63,7 +64,8 @@ def launch_full_scrape_job(channel: str, tg_session: str, recursive: bool = True
                 "mode": "full",
                 "recursive": recursive,
                 "neo4j": neo4j,
-                "owner_id": owner_id
+                "owner_id": owner_id,
+                "case_id": case_id,  # Optional case ID for tracking
             },
             timeout=15
         )
@@ -73,7 +75,7 @@ def launch_full_scrape_job(channel: str, tg_session: str, recursive: bool = True
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to launch scraper job: {str(e)}")
 
-def launch_live_scrape_job(channels: list[str], tg_session: str, neo4j: bool, owner_id: str) -> dict:
+def launch_live_scrape_job(channels: list[str], tg_session: str, neo4j: bool, owner_id: str, case_id: int = None) -> dict:
     """
     Launch a Docker container to run live-only Telegram listener.
     """
@@ -86,7 +88,8 @@ def launch_live_scrape_job(channels: list[str], tg_session: str, neo4j: bool, ow
                 "tg_session": tg_session,
                 "neo4j": neo4j,
                 "mode": "live",
-                "owner_id": owner_id  # Owner ID is not needed for live mode
+                "owner_id": owner_id,  # Owner ID is not needed for live mode
+                "case_id": case_id
             },
             timeout=10
         )

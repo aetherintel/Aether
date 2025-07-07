@@ -1,4 +1,4 @@
-from typing import List, TypedDict
+from typing import List, Optional, TypedDict
 from fastapi import APIRouter, Depends, HTTPException, Form
 from fastapi.security import OAuth2PasswordRequestForm
 from fastapi.security import OAuth2PasswordBearer
@@ -19,6 +19,7 @@ class ExtendedScrapeRequest(BaseModel):
     tg_session: str
     recursive: bool = True
     neo4j: bool = True
+    case_id: Optional[int] = None
 
 class LoginRequest(BaseModel):
     username: str
@@ -44,6 +45,11 @@ class ChannelListInput(BaseModel):
     channels: List[str]
     tg_session: str
     neo4j: bool = True
+    case_id: Optional[int] = None  # Optional case ID for tracking
+
+class StatusRequest(BaseModel):
+    case_id: Optional[int] = None
+
 
 def get_admin_token():
     token_url = f"{os.getenv('KEYCLOAK_BASE_URL')}/realms/HotTopics/protocol/openid-connect/token"
@@ -162,50 +168,110 @@ def register(data: RegisterRequest):
 def get_user(token: str = Depends(oauth2_scheme)):
     return {"token": token}
 
-@router.get("/telegram/status")
-def telegram_status():
+@router.post("/telegram/status")
+def telegram_status(
+    req: StatusRequest, 
+    user: UserCtx = Depends(user_ctx)
+):
+    """
+    Get telegram job containers filtered by case_id and user ownership
+    """
     containers = docker_client.containers.list(all=True)
     container_list = []
+    
     for c in containers:
         try:
             image_tags = c.image.tags if c.image and c.image.tags else []
             
             is_telegram_job = False
             if image_tags:
-                is_telegram_job = any("telegram-job" in tag for tag in image_tags)
+                is_telegram_job = any("telegram-job:latest" in tag for tag in image_tags)
             
             if is_telegram_job:
-                container_list.append({
+                # Check if container belongs to the current user
+                container_owner = c.labels.get("OWNER_ID")
+                if container_owner != user["id"]:
+                    continue  # Skip containers not owned by current user
+                
+                # Check case_id filter if provided
+                if req.case_id is not None and c.labels.get("case_id") is not None:
+                    container_case_id = c.labels.get("case_id")
+                    print(c.labels)
+                    # Convert to int for comparison, skip if no case_id or doesn't match
+                    try:
+                        if container_case_id is None or int(container_case_id) != req.case_id:
+                            continue
+                    except (ValueError, TypeError):
+                        continue  # Skip if case_id is not a valid integer
+                
+                container_info = {
                     "id": c.id,
                     "name": c.name,
                     "image": image_tags[0] if image_tags else None,
                     "status": c.status,
                     "labels": c.labels,
                     "created": c.attrs['Created'],
-                })
+                    # Extract useful info from labels for frontend
+                    "case_id": c.labels.get("case_id"),
+                    "owner_id": c.labels.get("owner_id"),
+                    "channels": c.labels.get("channels", ""),
+                    "mode": c.labels.get("mode", "unknown"),
+                    "session": c.labels.get("tg_session", "unknown")
+                }
+                container_list.append(container_info)
+                
         except (docker.errors.ImageNotFound, docker.errors.APIError) as e:
             print(f"Warning: Container {c.id} references a missing image: {e}")
             
+            # For containers with missing images, still check if they're telegram jobs
             if (c.labels and "telegram-job" in str(c.labels).lower()) or \
                (c.name and "telegram" in c.name.lower()):
-                container_list.append({
+                
+                # Apply same filtering logic
+                container_owner = c.labels.get("owner_id")
+                if container_owner != user["id"]:
+                    continue
+                
+                if req.case_id is not None:
+                    container_case_id = c.labels.get("case_id")
+                    try:
+                        if container_case_id is None or int(container_case_id) != req.case_id:
+                            continue
+                    except (ValueError, TypeError):
+                        continue
+                
+                container_info = {
                     "id": c.id,
                     "name": c.name,
                     "image": "Image not found",
                     "status": c.status,
                     "labels": c.labels,
                     "created": c.attrs['Created'],
-                })
+                    "case_id": c.labels.get("case_id"),
+                    "owner_id": c.labels.get("owner_id"),
+                    "channels": c.labels.get("channels", ""),
+                    "mode": c.labels.get("mode", "unknown"),
+                    "session": c.labels.get("tg_session", "unknown")
+                }
+                container_list.append(container_info)
             continue
         except Exception as e:
             print(f"Unexpected error processing container {c.id}: {e}")
             continue
     
-    return container_list
+    return {
+        "containers": container_list,
+        "total": len(container_list),
+        "filtered_by_case": req.case_id,
+        "user_id": user["id"]
+    }
 
 @router.post("/telegram/similar")
 def telegram_similar(req: ChannelInput, user: UserCtx = Depends(user_ctx)):
-    result = run_similarity(req.channel,tg_session=req.tg_session, owner_id=user["id"])  # ← NEW
+    result = run_similarity(req.channel,
+                            tg_session=req.tg_session, 
+                            owner_id=user["id"], 
+                            case_id = req.case_id or None)  # ← NEW
     return {"similar": result}
 
 @router.post("/telegram/scrape")
@@ -216,7 +282,8 @@ def telegram_scrape(
     container_id = start_scraper(
         channels=req.channels,
         tg_session=req.tg_session,
-        owner_id=user["id"]                       # ← NEW
+        owner_id=user["id"],                       
+        case_id=req.case_id or None,               # ← NEW
     )
     return {"message": "Scraper started", "container_id": container_id}
 
@@ -227,7 +294,8 @@ def telegram_full_scrape(req: ExtendedScrapeRequest, user: UserCtx = Depends(use
         tg_session=req.tg_session,
         recursive=req.recursive,
         neo4j=req.neo4j,
-        owner_id=user["id"]  # ← NEW
+        owner_id=user["id"],  # ← NEW
+        case_id=req.case_id or None  # ← NEW
     )
 @router.post("/telegram/live")
 def telegram_live_scrape(req: ChannelListInput, user: UserCtx = Depends(user_ctx)):

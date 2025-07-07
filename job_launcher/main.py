@@ -26,6 +26,7 @@ class ScrapeRequest(BaseModel):
     parent_container_id: Optional[str] = None  # Track parent container to prevent cycles
     depth: int = 0  # Track recursion depth
     max_discover_messages: int = 200  # Limit for quick discovery mode
+    case_id: Optional[int] = None  # Optional case ID for tracking
 
 def _check_auth(request: Request):
     auth = request.headers.get("Authorization")
@@ -69,6 +70,7 @@ def launch_similarity(req: SimilarRequest, request: Request):
             "MODE": "similar",
             "CHANNELS": req.channel,
             "OWNER_ID": req.owner_id,
+            "case_id": req.case_id or None
         }
     )
     return {"result": container.decode()}
@@ -116,8 +118,10 @@ def launch_scraper(req: ScrapeRequest, request: Request):
         "CHANNELS": ",".join(req.channels),
         "OWNER_ID": req.owner_id,
         "RECURSION_DEPTH": str(req.depth),
+        "case_id": req.case_id or None
     }
-    
+    print("[DEBUG] Launching container with labels:")
+    print(req.case_id)
     if req.parent_container_id:
         labels["PARENT_CONTAINER_ID"] = req.parent_container_id
     
@@ -163,6 +167,7 @@ def list_containers(request: Request):
             "owner_id": labels.get("OWNER_ID"),
             "recursion_depth": labels.get("RECURSION_DEPTH"),
             "parent_container_id": labels.get("PARENT_CONTAINER_ID"),
+            "case_id": labels.get("case_id"),
         })
     
     return {"containers": result}
