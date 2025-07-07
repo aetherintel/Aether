@@ -56,6 +56,7 @@ def launch_similarity(req: SimilarRequest, request: Request):
             "OWNER_ID": req.owner_id,
             "JOB_LAUNCHER_URL": os.getenv("JOB_LAUNCHER_URL"),
             "JOB_SECRET_TOKEN": os.getenv("JOB_SECRET_TOKEN"),
+            "MEDIA_ROOT": "/app/public/media",
         },
         volumes={
             media_host_path: {
@@ -107,6 +108,7 @@ def launch_scraper(req: ScrapeRequest, request: Request):
         "JOB_SECRET_TOKEN": os.getenv("JOB_SECRET_TOKEN"),
         "PARENT_CONTAINER_ID": req.parent_container_id or "",
         "RECURSION_DEPTH": str(req.depth),
+        "MEDIA_ROOT": "/app/public/media",
     }
     
     labels = {
