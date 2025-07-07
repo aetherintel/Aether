@@ -69,12 +69,44 @@ def extract_all_telegram_references(messages: list[str]) -> list[str]:
     
     return list(links)
 
+def generate_media_path(username: str, msg_id: int, media_type: str, message=None) -> str:
+    """Generate predictable media path before download - FIXED VERSION"""
+    # Use MEDIA_ROOT consistently
+    channel_dir = MEDIA_ROOT / username
+    
+    # Try to get the original filename if available
+    original_name = None
+    if message and hasattr(message, 'file') and message.file:
+        original_name = getattr(message.file, 'name', None)
+    
+    # Generate filename with message ID and type
+    if original_name:
+        base_name = Path(original_name).stem
+        ext = Path(original_name).suffix
+        filename = f"msg_{msg_id}_{base_name}{ext}"
+    elif media_type == "photo":
+        filename = f"msg_{msg_id}_photo.jpg"
+    elif media_type == "video":
+        filename = f"msg_{msg_id}_video.mp4"
+    elif media_type == "document":
+        filename = f"msg_{msg_id}_document"
+    elif media_type == "audio":
+        filename = f"msg_{msg_id}_audio.mp3"
+    elif media_type == "webpage":
+        return None
+    else:
+        filename = f"msg_{msg_id}_media"
+    
+    return str(channel_dir / filename)
+
+# Also update the old download_media function to be consistent:
 async def download_media(channel: str, message, client) -> str | None:
     if not message.media or not client:
         return None
 
+    # Use MEDIA_ROOT consistently
     channel_dir = MEDIA_ROOT / channel
-    media_folder = channel_dir / "media"
+    media_folder = channel_dir / "media"  # Keep the /media subfolder if needed
     media_folder.mkdir(parents=True, exist_ok=True)
 
     # Default fallback
@@ -102,6 +134,84 @@ async def download_media(channel: str, message, client) -> str | None:
             print(f"[MEDIA] Failed to download media (attempt {attempt}): {e}")
             await asyncio.sleep(2 ** attempt)
     return None
+
+async def download_media_to_path(username: str, msg, client_ref, target_path: str) -> str:
+    """Download media to specific path, return actual path - WITH DEBUGGING"""
+    try:
+        print(f"[DOWNLOAD] Starting download to: {target_path}")
+        
+        # Check if message has media
+        if not msg.media:
+            print(f"[DOWNLOAD] No media in message {msg.id}")
+            return None
+        
+        # Ensure directory exists
+        directory = os.path.dirname(target_path)
+        print(f"[DOWNLOAD] Ensuring directory exists: {directory}")
+        os.makedirs(directory, exist_ok=True)
+        
+        # Check if file already exists
+        if os.path.exists(target_path):
+            print(f"[DOWNLOAD] File already exists: {target_path}")
+            return target_path
+        
+        print(f"[DOWNLOAD] Calling client.download_media with target: {target_path}")
+        
+        # Download to target path
+        downloaded_path = await client_ref.download_media(msg.media, file=target_path)
+        
+        print(f"[DOWNLOAD] Download completed. Returned path: {downloaded_path}")
+        
+        # Verify the file exists
+        if downloaded_path and os.path.exists(str(downloaded_path)):
+            file_size = os.path.getsize(str(downloaded_path))
+            print(f"[DOWNLOAD] ✅ File verified: {downloaded_path} ({file_size} bytes)")
+            return str(downloaded_path)
+        else:
+            print(f"[DOWNLOAD] ❌ File not found after download: {downloaded_path}")
+            return None
+        
+    except Exception as e:
+        print(f"[ERROR] Failed to download media to {target_path}: {e}")
+        import traceback
+        traceback.print_exc()
+        return None
+def get_media_type(media) -> str:
+    """Determine media type for file naming - FIXED VERSION"""
+    try:
+        # Use type name string comparison to avoid import issues
+        media_type_name = type(media).__name__
+        
+        if media_type_name == "MessageMediaPhoto":
+            return "photo"
+        elif media_type_name == "MessageMediaDocument":
+            # Safely access document properties
+            if hasattr(media, 'document') and media.document:
+                doc = media.document
+                # Safely get mime_type as string
+                mime_type = getattr(doc, 'mime_type', '')
+                if isinstance(mime_type, str):
+                    mime_lower = mime_type.lower()
+                    if mime_lower.startswith('video/'):
+                        return "video"
+                    elif mime_lower.startswith('audio/'):
+                        return "audio"
+                    elif mime_lower.startswith('image/'):
+                        return "image"
+            return "document"
+        elif media_type_name == "MessageMediaWebPage":
+            # Web pages don't have downloadable media
+            return "webpage"
+        elif hasattr(media, 'video'):
+            return "video"
+        elif hasattr(media, 'audio'):
+            return "audio"
+        else:
+            print(f"[DEBUG] Unknown media type: {media_type_name}")
+            return "unknown"
+    except Exception as e:
+        print(f"[WARN] Error determining media type: {e}")
+        return "unknown"
 
 # Test function to verify the regex works
 def test_extract_links():

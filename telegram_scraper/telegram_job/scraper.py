@@ -1,4 +1,5 @@
 import asyncio
+from pathlib import Path
 import aiohttp
 import os
 import time
@@ -7,25 +8,23 @@ from telethon.tl.functions.messages import ImportChatInviteRequest
 from telethon.errors import FloodWaitError, FloodError
 from telegram_client import client, login
 from neo4j_client import save_message_if_new, is_scraped, mark_scraped
-from utils import extract_invite_links, download_media
-
-# Alternative: import the more comprehensive function
-# from utils import extract_all_telegram_references as extract_invite_links
+from utils import download_media_to_path, extract_invite_links, generate_media_path, get_media_type
 
 # Job launcher configuration
 JOB_LAUNCHER_URL = os.getenv("JOB_LAUNCHER_URL", "http://job-launcher:9001")
 JOB_SECRET_TOKEN = os.getenv("JOB_SECRET_TOKEN", "changeme")
 CURRENT_SESSION_NAME = os.getenv("SESSION_NAME", "default")
 CURRENT_OWNER_ID = os.getenv("OWNER_ID", "unknown")
+MEDIA_ROOT = Path(os.getenv("MEDIA_ROOT", "/app/public/media"))
 
 # Rate limiting configuration
 RATE_LIMIT_DELAY = float(os.getenv("RATE_LIMIT_DELAY", "1.0"))
 MAX_RETRIES = int(os.getenv("MAX_RETRIES", "1"))
 BACKOFF_MULTIPLIER = float(os.getenv("BACKOFF_MULTIPLIER", "2.0"))
-MESSAGE_BATCH_SIZE = int(os.getenv("MESSAGE_BATCH_SIZE", "20"))  # Increased batch size
-MESSAGE_BATCH_DELAY = float(os.getenv("MESSAGE_BATCH_DELAY", "0.05"))  # Reduced delay
+MESSAGE_BATCH_SIZE = int(os.getenv("MESSAGE_BATCH_SIZE", "20"))
+MESSAGE_BATCH_DELAY = float(os.getenv("MESSAGE_BATCH_DELAY", "0.05"))
 
-# NEW: Separate queue for media downloads (low priority)
+# Media download queue
 media_download_queue = asyncio.Queue()
 
 async def get_entity_safe(identifier):
@@ -99,20 +98,19 @@ channel_state = {}
 MAX_CONCURRENT_SCRAPERS = 5
 scraper_semaphore = asyncio.Semaphore(MAX_CONCURRENT_SCRAPERS)
 invite_queue = asyncio.Queue()
+channel_queue = asyncio.Queue()
 
-# NEW: Track processed channels to avoid self-references
 def normalize_channel_name(name_or_link):
     """Normalize channel names/links for comparison"""
     if not name_or_link:
         return None
     
-    # Remove common URL parts and formatting
     name = str(name_or_link).lower()
     name = name.replace('https://t.me/', '')
     name = name.replace('http://t.me/', '')
     name = name.replace('t.me/', '')
     name = name.replace('@', '')
-    name = name.strip('⁠ \t\n\r')  # Remove invisible chars
+    name = name.strip('⁠ \t\n\r')
     
     return name if name else None
 
@@ -126,6 +124,73 @@ def is_self_reference(link, current_channel):
     
     return normalized_link == normalized_current
 
+async def process_single_message(msg, username, recursive, visited, processed_links):
+    """Process a single message - SAVE ONCE with predicted media path"""
+    try:
+        await ensure_rate_limit()
+        sender = await msg.get_sender()
+        
+        # Determine media path (predicted or None)
+        media_path = None
+        if msg.media:
+            media_type = get_media_type(msg.media)
+            
+            # Only generate path for downloadable media types (silently skip webpages)
+            if media_type in ["photo", "video", "document", "audio"]:
+                media_path = generate_media_path(username, msg.id, media_type, msg)
+                
+                # Only queue for download if we have a valid path
+                if media_path:
+                    await media_download_queue.put((username, msg, client, media_path))
+            # Don't log anything for webpages - just silently skip like the old version
+        
+        # SINGLE SAVE: Save message with predicted media path (or None)
+        await save_message_if_new(msg.chat_id, username, msg, sender, media_path)
+        
+        # Extract invite links for recursive processing
+        if recursive and msg.message:
+            links = extract_invite_links([msg.message])
+            for link in links:
+                if is_self_reference(link, username):
+                    continue
+                    
+                if link not in processed_links:
+                    processed_links.add(link)
+                    await invite_queue.put((link, visited))
+                    print(f"[STREAM] Found NEW invite link: {link}")
+        
+    except Exception as e:
+        print(f"[ERROR] Failed to process message {msg.id}: {e}")
+        import traceback
+        traceback.print_exc()
+async def media_download_worker():
+    """Background worker that downloads media to predicted paths"""
+    print("[MEDIA-WORKER] Started media download worker")
+    while True:
+        try:
+            username, msg, client_ref, predicted_path = await media_download_queue.get()
+            try:
+                os.makedirs(os.path.dirname(predicted_path), exist_ok=True)
+                actual_path = await download_media_to_path(username, msg, client_ref, predicted_path)
+                
+                if actual_path and actual_path != predicted_path:
+                    print(f"[MEDIA-WORKER] Path mismatch! Predicted: {predicted_path}, Actual: {actual_path}")
+                    # Could add database update here if needed
+                else:
+                    print(f"[MEDIA-WORKER] Downloaded to: {predicted_path}")
+                    
+            except Exception as e:
+                print(f"[MEDIA-WORKER] Failed to download media for message {msg.id}: {e}")
+            finally:
+                media_download_queue.task_done()
+                await asyncio.sleep(2)
+                
+        except asyncio.CancelledError:
+            break
+        except Exception as e:
+            print(f"[ERROR] Media worker exception: {e}")
+            await asyncio.sleep(5)
+
 async def try_join_invite_link(invite_link: str) -> str | None:
     try:
         print(f"[JOIN] Processing invite link: {invite_link}")
@@ -134,50 +199,34 @@ async def try_join_invite_link(invite_link: str) -> str | None:
         if slug.startswith('+'):
             slug = slug[1:]
             
-        print(f"[JOIN] Using slug: {slug}")
-        
         from telethon.tl.functions.messages import CheckChatInviteRequest
         try:
             invite_info = await rate_limited_request(
                 client(CheckChatInviteRequest(slug)),
                 f"CheckChatInvite({slug})"
             )
-            print(f"[JOIN] Got invite info: {type(invite_info).__name__}")
             
             if hasattr(invite_info, 'chat'):
                 joined = invite_info.chat
-                print(f"[JOIN] Already a member, got chat info")
             else:
-                print(f"[JOIN] Not a member, attempting to join...")
                 result = await rate_limited_request(
                     client(ImportChatInviteRequest(slug)),
                     f"ImportChatInvite({slug})"
                 )
                 joined = result.chats[0]
-                print(f"[JOIN] Successfully joined new chat")
                 
         except Exception as check_error:
-            print(f"[JOIN] CheckChatInvite failed: {check_error}")
-            try:
-                result = await rate_limited_request(
-                    client(ImportChatInviteRequest(slug)),
-                    f"ImportChatInvite({slug}) fallback"
-                )
-                joined = result.chats[0]
-                print(f"[JOIN] Successfully joined via fallback")
-            except Exception as join_error:
-                print(f"[JOIN] Both methods failed: {join_error}")
-                return None
+            result = await rate_limited_request(
+                client(ImportChatInviteRequest(slug)),
+                f"ImportChatInvite({slug}) fallback"
+            )
+            joined = result.chats[0]
         
         username = getattr(joined, 'username', None)
         if username:
-            print(f"[JOIN] Public channel: @{username}")
             return username
         else:
-            chat_id = str(joined.id)
-            title = getattr(joined, 'title', 'Unknown')
-            print(f"[JOIN] Private group: '{title}' (ID: {chat_id})")
-            return chat_id
+            return str(joined.id)
             
     except Exception as e:
         print(f"[WARN] Could not process invite link {invite_link}: {e}")
@@ -188,7 +237,7 @@ async def spawn_container_for_channel(channel_name: str):
     print(f"[SPAWN] Attempting to spawn container for: {channel_name}")
     
     if not JOB_LAUNCHER_URL or not JOB_SECRET_TOKEN:
-        print(f"[WARN] Job launcher not configured, cannot spawn container for {channel_name}")
+        print(f"[WARN] Job launcher not configured")
         return None
         
     try:
@@ -201,12 +250,10 @@ async def spawn_container_for_channel(channel_name: str):
             "channels": [channel_name],
             "tg_session": CURRENT_SESSION_NAME,
             "mode": "scrape",
-            "recursive": False,  # Don't make spawned containers recursive
+            "recursive": False,
             "neo4j": True,
             "owner_id": CURRENT_OWNER_ID
         }
-        
-        print(f"[SPAWN] Payload: {payload}")
         
         async with aiohttp.ClientSession() as session:
             async with session.post(
@@ -214,88 +261,108 @@ async def spawn_container_for_channel(channel_name: str):
                 headers=headers,
                 json=payload
             ) as response:
-                response_text = await response.text()
-                print(f"[SPAWN] Response status: {response.status}")
-                
                 if response.status == 200:
-                    try:
-                        result = await response.json()
-                        print(f"[SPAWN] ✅ Successfully spawned container for {channel_name}: {result.get('container_id')}")
-                        return result.get('container_id')
-                    except Exception as json_error:
-                        print(f"[ERROR] Failed to parse JSON response: {json_error}")
-                        return None
+                    result = await response.json()
+                    print(f"[SPAWN] ✅ Successfully spawned container: {result.get('container_id')}")
+                    return result.get('container_id')
                 else:
-                    print(f"[ERROR] Failed to spawn container for {channel_name}: {response.status} - {response_text}")
+                    print(f"[ERROR] Failed to spawn container: {response.status}")
                     return None
                     
     except Exception as e:
-        print(f"[ERROR] Exception spawning container for {channel_name}: {e}")
+        print(f"[ERROR] Exception spawning container: {e}")
         return None
 
-# NEW: Separate media download worker (low priority, runs in background)
-async def media_download_worker():
-    """Background worker for downloading media files"""
-    print("[MEDIA-WORKER] Started media download worker")
-    while True:
-        try:
-            username, msg, client_ref = await media_download_queue.get()
-            try:
-                media_path = await download_media(username, msg, client_ref)
-                print(f"[MEDIA-WORKER] Downloaded media for message {msg.id}")
-            except Exception as e:
-                print(f"[MEDIA-WORKER] Failed to download media for message {msg.id}: {e}")
-            finally:
-                media_download_queue.task_done()
-                # Add delay to keep media downloads low priority
-                await asyncio.sleep(2)
-                
-        except asyncio.CancelledError:
-            print("[MEDIA-WORKER] Media worker cancelled")
-            break
-        except Exception as e:
-            print(f"[ERROR] Media worker exception: {e}")
-            await asyncio.sleep(5)
-
 async def scrape_channel(channel_name: str, channel_info: dict):
+    """Simple channel scraping for polling"""
     try:
         entity, clean_name = await get_entity_safe(channel_name)
         if not entity:
-            print(f"[ERROR] Could not resolve entity for scraping: {channel_name}")
             return
             
         last_id = channel_info.get("last_id", 0)
         new_max_id = last_id
+        processed_links = set()
 
         async for msg in client.iter_messages(entity, min_id=last_id, reverse=True):
             if not msg.message:
                 continue
-            sender = await msg.get_sender()
-            
-            # PRIORITY 1: Save message text immediately (no media)
-            await save_message_if_new(msg.chat_id, clean_name, msg, sender, None)
-            
-            # PRIORITY 2: Queue media download for later (non-blocking)
-            if msg.media:
-                await media_download_queue.put((clean_name, msg, client))
-            
+                
+            # Use the same single message processing
+            await process_single_message(msg, clean_name, False, set(), processed_links)
             new_max_id = max(new_max_id, msg.id)
 
         if new_max_id > last_id:
             channel_info["last_id"] = new_max_id
             print(f"[SCRAPE] Updated last_id for {clean_name}: {new_max_id}")
-        else:
-            print(f"[SCRAPE] No new messages for {clean_name}")
 
     except Exception as e:
         print(f"[ERROR] Scraping channel {channel_name} failed: {e}")
+
+async def _streaming_backfill(channel_entity, channel_id, username, recursive: bool, visited: set):
+    """Process messages as a stream with single save per message"""
+    message_count = 0
+    processed_links = set()
+    
+    print(f"[STREAM] Starting backfill for {username}")
+    
+    async for msg in client.iter_messages(channel_entity, reverse=True):
+        if not hasattr(msg, 'message') or not msg.message:
+            continue
+            
+        message_count += 1
+        
+        # Process message once - saves with predicted media path
+        await process_single_message(msg, username, recursive, visited, processed_links)
+        
+        # Batching control
+        if message_count % MESSAGE_BATCH_SIZE == 0:
+            await asyncio.sleep(MESSAGE_BATCH_DELAY)
+        
+        if message_count % 100 == 0:
+            print(f"[STREAM] Processed {message_count} messages, found {len(processed_links)} links")
+            await asyncio.sleep(0.1)
+    
+    print(f"[STREAM] ✅ Processed {message_count} messages from {username}")
+    return message_count > 0
+
+async def _live_listener(channels):
+    """Live message listener"""
+    print(f"[LIVE] Setting up listener for {len(channels)} channels")
+    resolved = []
+    
+    for ch in channels:
+        try:
+            entity = await client.get_entity(ch)
+            resolved.append(entity)
+        except Exception as e:
+            print(f"[WARN] Could not resolve {ch}: {e}")
+
+    if not resolved:
+        print("[LIVE] No valid channels to listen to")
+        return
+
+    @client.on(events.NewMessage(chats=resolved))
+    async def handler(evt):
+        try:
+            sender = await evt.get_sender()
+            entity = await evt.get_chat()
+            username = getattr(entity, "username", None) or str(evt.chat_id)
+            
+            # Use single message processing for live messages too
+            await process_single_message(evt, username, False, set(), set())
+            
+        except Exception as e:
+            print(f"[ERROR] Failed to process live message: {e}")
+
+    print("[LIVE] Event handler attached, starting polling...")
+    await start_short_polling(channels)
 
 async def short_poll_channel(channel_name, poll_interval=60):
     if channel_name not in channel_state:
         channel_state[channel_name] = {"last_id": 0}
 
     while True:
-        print(f"[POLL] Checking for updates in {channel_name}")
         await scrape_channel(channel_name, channel_state[channel_name])
         await asyncio.sleep(poll_interval)
 
@@ -303,163 +370,38 @@ async def start_short_polling(channels, poll_interval=60):
     tasks = [asyncio.create_task(short_poll_channel(ch, poll_interval)) for ch in channels]
     await asyncio.gather(*tasks)
 
-# OPTIMIZED: Fast streaming backfill focused on text extraction and link discovery
-async def _streaming_backfill(channel_entity, channel_id, username, recursive: bool, visited: set):
-    """Process messages as a stream, prioritizing text and link extraction"""
-    message_count = 0
-    processed_links = set()
-    
-    print(f"[STREAM] Starting backfill for {username}")
-    
-    async for m in client.iter_messages(channel_entity, reverse=True):
-        if not hasattr(m, 'message') or not m.message:
-            continue
-            
-        message_count += 1
-        
-        # PRIORITY 1: Extract invite links IMMEDIATELY from each message
-        if recursive and m.message:
-            print(f"[DEBUG] Checking message {message_count} for links: {m.message[:100]}...")
-            links = extract_invite_links([m.message])
-            print(f"[DEBUG] Extracted {len(links)} links: {links}")
-            
-            for link in links:
-                print(f"[DEBUG] Processing link: {link}")
-                # NEW: Skip self-references
-                if is_self_reference(link, username):
-                    print(f"[SKIP] Self-reference detected: {link} (current: {username})")
-                    continue
-                    
-                if link not in processed_links:
-                    processed_links.add(link)
-                    # HIGH PRIORITY: Add to global queue for immediate processing
-                    await invite_queue.put((link, visited))
-                    print(f"[STREAM] 🚀 Found NEW invite link in message {message_count}: {link}")
-                else:
-                    print(f"[SKIP] Already processed link: {link}")
-        
-        # PRIORITY 2: Save message text immediately (fast operation)
-        async def process_message_fast(msg):
-            try:
-                await ensure_rate_limit()
-                sender = await msg.get_sender()
-                # Save message WITHOUT media first (fast)
-                await save_message_if_new(msg.chat_id, username, msg, sender, None)
-                
-                # PRIORITY 3: Queue media download for later (non-blocking)
-                if msg.media:
-                    await media_download_queue.put((username, msg, client))
-                    
-            except Exception as e:
-                print(f"[ERROR] Failed to process message {msg.id}: {e}")
-        
-        # Fire and forget - don't wait for anything
-        asyncio.create_task(process_message_fast(m))
-        
-        # REDUCED batching - process more messages before yielding
-        if message_count % MESSAGE_BATCH_SIZE == 0:
-            await asyncio.sleep(MESSAGE_BATCH_DELAY)
-        
-        # Progress updates
-        if message_count % 100 == 0:  # Less frequent updates
-            print(f"[STREAM] Processed {message_count} messages from {username}, found {len(processed_links)} unique links")
-            await asyncio.sleep(0.1)  # Minimal break
-    
-    print(f"[STREAM] ✅ Processed {message_count} messages from {username}, discovered {len(processed_links)} unique channels")
-    return message_count > 0
-
-async def _live_listener(channels):
-    print(f"[LIVE] Raw channels passed: {channels}")
-    resolved = []
-    for ch in channels:
-        try:
-            entity = await client.get_entity(ch)
-            resolved.append(entity)
-            print(f"[LIVE] Resolved entity: {getattr(entity, 'title', ch)}")
-        except Exception as e:
-            print(f"[WARN] Could not resolve {ch}: {e}")
-
-    if not resolved:
-        print("[LIVE] No valid channels to listen to. Exiting early.")
-        return
-
-    @client.on(events.NewMessage(chats=resolved))
-    async def handler(evt):
-        try:
-            print(f"[EVENT] New message in chat {evt.chat_id}")
-            sender = await evt.get_sender()
-            entity = await evt.get_chat()
-            username = getattr(entity, "username", None) or str(evt.chat_id)
-            
-            # PRIORITY: Save text immediately, queue media for later
-            await save_message_if_new(evt.chat_id, username, evt, sender, None)
-            if evt.media:
-                await media_download_queue.put((username, evt, client))
-                
-            print(f"[DB] Message saved for chat {evt.chat_id}, user {username}")
-        except Exception as e:
-            print(f"[ERROR] Failed to process live message: {e}")
-
-    print("[DEBUG] NewMessage handler attached.")
-    await start_short_polling(channels)
-    await client.run_until_disconnected()
-
-# HIGH PRIORITY: Worker that processes invite links and spawns containers
 async def invite_link_worker():
-    """Continuously process invite links from the queue with HIGH PRIORITY"""
-    print("[INVITE-WORKER] 🚀 Started HIGH PRIORITY invite link worker")
+    """Process invite links and spawn containers"""
+    print("[INVITE-WORKER] Started invite link worker")
     while True:
         try:
-            print("[INVITE-WORKER] Waiting for invite links...")
             link, visited = await invite_queue.get()
-            print(f"[INVITE-WORKER] 🔥 PRIORITY: Processing invite link: {link}")
+            print(f"[INVITE-WORKER] Processing: {link}")
             
             if not client.is_connected():
-                print("[INVITE-WORKER] Client disconnected, attempting to reconnect...")
-                try:
-                    await client.connect()
-                    await asyncio.sleep(2)
-                except Exception as conn_error:
-                    print(f"[INVITE-WORKER] Reconnection failed: {conn_error}")
-                    await invite_queue.put((link, visited))
-                    await asyncio.sleep(30)
-                    continue
+                await client.connect()
+                await asyncio.sleep(2)
             
             joined_username = await try_join_invite_link(link)
             if joined_username and joined_username not in visited:
-                print(f"[INVITE-WORKER] 🚀 HIGH PRIORITY: Spawning container for: {joined_username}")
                 container_id = await spawn_container_for_channel(joined_username)
                 if container_id:
                     visited.add(joined_username)
-                    print(f"[CONTAINER] ✅ Successfully spawned container {container_id} for {joined_username}")
-                    print(f"[CONTAINER] 🎯 NEW CHANNEL WILL BE SCRAPED IN SEPARATE CONTAINER!")
+                    print(f"[CONTAINER] ✅ Spawned container for {joined_username}")
                 else:
-                    print(f"[FAILED] ❌ Could not spawn container for {joined_username}")
-                    print(f"[FALLBACK] Adding {joined_username} to local queue as fallback")
-                    # FALLBACK: Only add to local queue if container spawning failed
                     await channel_queue.put(joined_username)
-            elif joined_username:
-                print(f"[SKIP] Already processed {joined_username}")
-            else:
-                print(f"[FAILED] Could not join channel from link: {link}")
             
             invite_queue.task_done()
-            print(f"[INVITE-WORKER] ✅ Finished processing {link}")
-            
-            # Minimal delay for high priority processing
             await asyncio.sleep(2)
             
         except asyncio.CancelledError:
-            print("[INVITE-WORKER] Worker cancelled")
             break
         except Exception as e:
             print(f"[ERROR] Invite worker exception: {e}")
             await asyncio.sleep(5)
 
-channel_queue = asyncio.Queue()
-
 async def channel_worker(visited: set, recursive: bool, skip_history: bool, live_channels: list):
-    """Worker that processes channels from the queue asynchronously"""
+    """Worker that processes channels from the queue"""
     while True:
         try:
             ch = await channel_queue.get()
@@ -474,17 +416,15 @@ async def channel_worker(visited: set, recursive: bool, skip_history: bool, live
                 try:
                     entity, clean_name = await get_entity_safe(ch)
                     if not entity:
-                        print(f"[ERROR] Could not resolve entity for: {ch}")
                         continue
                     
-                    print(f"[WORKER] Processing {ch} (resolved to: {clean_name})")
+                    print(f"[WORKER] Processing {clean_name}")
                     
                     if await is_scraped(clean_name):
                         print(f"[SKIP] Already scraped: {clean_name}")
                         live_channels.append(ch)
                     else:
                         if not skip_history:
-                            # Use optimized streaming backfill
                             had_messages = await _streaming_backfill(
                                 entity, entity.id, clean_name, recursive, visited
                             )
@@ -509,15 +449,14 @@ async def channel_worker(visited: set, recursive: bool, skip_history: bool, live
 
 async def run_scraper(channels, _session_name, recursive=False, skip_history=False):
     await login()
-    print(f"[DEBUG] Logged in with recursive={recursive}, skip_history={skip_history}")
+    print(f"[DEBUG] Starting scraper: recursive={recursive}, skip_history={skip_history}")
     
     visited = set()
     live_channels = []
     
-    # Add initial channels to queue
+    # Queue initial channels
     for ch in channels:
         await channel_queue.put(ch)
-        print(f"[DEBUG] Added channel to queue: {ch}")
     
     async with client:
         workers = []
@@ -529,53 +468,36 @@ async def run_scraper(channels, _session_name, recursive=False, skip_history=Fal
             )
             workers.append(worker)
         
-        # HIGH PRIORITY: Invite link processing workers
+        # Invite link workers (if recursive)
         if recursive:
-            print(f"[DEBUG] Starting {5} HIGH PRIORITY invite link workers")  # More workers
-            for i in range(5):  # More workers for faster processing
+            for i in range(3):
                 worker = asyncio.create_task(invite_link_worker())
                 workers.append(worker)
         
-        # LOW PRIORITY: Media download workers (background)
-        print(f"[DEBUG] Starting {2} LOW PRIORITY media download workers")
-        for i in range(2):  # Fewer media workers
+        # Media download workers
+        for i in range(2):
             worker = asyncio.create_task(media_download_worker())
             workers.append(worker)
         
-        # Monitor queues with more frequent updates
+        # Monitor progress
         while not channel_queue.empty() or not invite_queue.empty():
-            await asyncio.sleep(2)  # Check every 2 seconds
-            invite_count = invite_queue.qsize()
-            channel_count = channel_queue.qsize()
-            media_count = media_download_queue.qsize()
-            print(f"[STATUS] 📊 Channels: {channel_count}, 🚀 Invites: {invite_count}, 📷 Media: {media_count}")
-            
-            # DEBUG: Show what channels are in the queue
-            if channel_count > 0:
-                print(f"[DEBUG] Channels in queue waiting to be processed locally")
-            if invite_count > 0:
-                print(f"[DEBUG] Invite links waiting to spawn new containers")
+            await asyncio.sleep(2)
+            print(f"[STATUS] Channels: {channel_queue.qsize()}, Invites: {invite_queue.qsize()}, Media: {media_download_queue.qsize()}")
                 
-        print("[STATUS] ✅ All initial channels processed and all invite links spawned as containers")
-        
-        # Give more time for final processing
-        await asyncio.sleep(15)
+        print("[STATUS] ✅ Processing complete")
+        await asyncio.sleep(10)
         
         # Cancel workers
         for worker in workers:
             worker.cancel()
-        
         await asyncio.gather(*workers, return_exceptions=True)
         
         # Start live listening
         if live_channels:
-            print(f"[LIVE] Starting real-time tracking for {len(live_channels)} channels")
+            print(f"[LIVE] Starting live tracking for {len(live_channels)} channels")
             await _live_listener(live_channels)
 
 async def run_live_listener_only(channels):
-    print("[DEBUG] Running live listener only")
     await login()
-    print("[DEBUG] Logged in")
     async with client:
-        print("[LIVE-ONLY] Running live listener")
         await _live_listener(channels)
