@@ -47,12 +47,14 @@ class CaseFileModel(Base):
 class CaseFileCreate(BaseModel):
     title: str
     description: Optional[str] = None
-    category: str
-    postCount: int
-    tgchannels: List[str]
-    topics: List[str]
-    terms: List[str]
-    duration: int
+    category: Optional[str] = None
+    postCount: Optional[int] = None
+    tgchannels: List[str] = []
+    topics: List[str] = []
+    terms: List[str] = []
+    duration: Optional[int] = None
+    tg_session: Optional[str] = None  # NEW: From frontend
+    scraper_mode: Optional[str] = "full"
 
 class CaseFile(CaseFileCreate):
     id: int
@@ -77,17 +79,106 @@ Base.metadata.create_all(bind=engine)
 # Routes – every one now receives `user` and decides `owner`
 # -----------------------------------------------------------------------
 
+# Update your CaseFileCreate Pydantic model:
+class CaseFileCreate(BaseModel):
+    title: str
+    description: Optional[str] = None
+    category: Optional[str] = None
+    postCount: Optional[int] = None
+    tgchannels: List[str] = []
+    topics: List[str] = []
+    terms: List[str] = []
+    duration: Optional[int] = None
+    tg_session: Optional[str] = None  # NEW: From frontend
+    scraper_mode: Optional[str] = "full"  # NEW: Always "full" from frontend
+
+# Import the telegram controller function
+from controller.telegram_controller import launch_full_scrape_job
+
 @router.post("/", response_model=CaseFile)
 def create_casefile(
     payload: CaseFileCreate,
     db: Session = Depends(get_db),
-    user: UserCtx = Depends(user_ctx),                    # NEW
+    user: UserCtx = Depends(user_ctx),
 ):
-    db_case = CaseFileModel(**payload.model_dump(), owner_id=user["id"])  # NEW
+    # Create the case file (exclude scraper-specific fields from database)
+    case_data = payload.model_dump(exclude={"tg_session", "scraper_mode"})
+    db_case = CaseFileModel(**case_data, owner_id=user["id"])
     db.add(db_case)
     db.commit()
     db.refresh(db_case)
+    
+    # Auto-start scrapers for channels if conditions are met
+    if payload.tgchannels and len(payload.tgchannels) > 0 and payload.tg_session:
+        try:
+            # Use the existing full scrape function for each channel
+            for channel in payload.tgchannels:
+                container_info = launch_full_scrape_job(
+                    channel=channel,
+                    tg_session=payload.tg_session,
+                    recursive=True,  # Always recursive for full scrape
+                    neo4j=True,     # Always write to Neo4j
+                    owner_id=user["id"],
+                    case_id=db_case.id  # Link to this case
+                )
+                
+                print(f"Auto-started full scraper for channel '{channel}' in case {db_case.id}: {container_info}")
+            
+            print(f"Auto-started {len(payload.tgchannels)} full scrapers for case {db_case.id}")
+            
+        except Exception as e:
+            # Don't fail case creation if scraper fails to start
+            print(f"Failed to auto-start scrapers for case {db_case.id}: {str(e)}")
+            # Log the error but don't raise it - case creation should still succeed
+    
     return db_case
+
+# Alternative: If you want to return scraper status info (optional)
+class CaseFileCreateResponse(BaseModel):
+    case: CaseFile
+    scrapers_started: int
+    scraper_error: Optional[str] = None
+
+@router.post("/", response_model=CaseFileCreateResponse)
+def create_casefile_with_status(
+    payload: CaseFileCreate,
+    db: Session = Depends(get_db),
+    user: UserCtx = Depends(user_ctx),
+):
+    # Create the case file
+    case_data = payload.model_dump(exclude={"tg_session", "scraper_mode"})
+    db_case = CaseFileModel(**case_data, owner_id=user["id"])
+    db.add(db_case)
+    db.commit()
+    db.refresh(db_case)
+    
+    scrapers_started = 0
+    scraper_error = None
+    
+    # Auto-start scrapers for channels if conditions are met
+    if payload.tgchannels and len(payload.tgchannels) > 0 and payload.tg_session:
+        try:
+            for channel in payload.tgchannels:
+                container_info = launch_full_scrape_job(
+                    channel=channel,
+                    tg_session=payload.tg_session,
+                    recursive=True,
+                    neo4j=True,
+                    owner_id=user["id"],
+                    case_id=db_case.id
+                )
+                scrapers_started += 1
+                print(f"Auto-started full scraper for channel '{channel}': {container_info}")
+            
+        except Exception as e:
+            scraper_error = str(e)
+            print(f"Failed to auto-start scrapers for case {db_case.id}: {str(e)}")
+    
+    return {
+        "case": db_case,
+        "scrapers_started": scrapers_started,
+        "scraper_error": scraper_error
+    }
 
 
 @router.get("/", response_model=List[CaseFile])
