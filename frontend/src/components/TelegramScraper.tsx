@@ -17,6 +17,9 @@ import {
 } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import {
+  IconPlayerPause,
+  IconRefresh,
+  IconTrash,
   IconPlayerPlay,
   IconExclamationCircle,
   IconActivity,
@@ -52,8 +55,34 @@ interface ContainerInfo {
   status: string;
   labels: Record<string, string>;
   created: string;
+  case_id?: string;
+  owner_id?: string;
+  channels?: string;
+  mode?: string;
+  session?: string;
+}
+// Add new type for container actions
+type ContainerAction = 'start' | 'stop' | 'restart' | 'remove';
+
+// Add interface for control response
+interface ContainerControlResponse {
+  message: string;
+  status: string;
 }
 
+// Update your component props interface if needed
+interface TelegramScraperProps {
+  case_id?: number;
+}
+
+// Helper type for action states
+interface ContainerActionStates {
+  canStart: boolean;
+  canStop: boolean;
+  canRestart: boolean;
+  canRemove: boolean;
+  loading: boolean;
+}
 interface SelectOption {
   value: string;
   label: string;
@@ -80,6 +109,7 @@ const TelegramScraper: React.FC<TelegramScraperProps> = ({ case_id }) => {
   const [loading, setLoading] = useState<boolean>(true);
   const [submitting, setSubmitting] = useState<boolean>(false);
   const [status, setStatus] = useState<ContainerInfo[]>([]);
+  const [controlLoading, setControlLoading] = useState<Record<string, boolean>>({});
   
   // Form state
   const [channel, setChannel] = useState<string>('');
@@ -89,10 +119,8 @@ const TelegramScraper: React.FC<TelegramScraperProps> = ({ case_id }) => {
   const [selectedSession, setSelectedSession] = useState<string>('');
 
   const modes: SelectOption[] = [
-    { value: 'scrape', label: 'Basic Scrape' },
     { value: 'full', label: 'Full Scrape' },
     { value: 'live', label: 'Live Scrape' },
-    { value: 'similar', label: 'Similar Channels' }
   ];
 
   // Fetch sessions on component mount
@@ -132,6 +160,67 @@ const TelegramScraper: React.FC<TelegramScraperProps> = ({ case_id }) => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleContainerControl = async (
+    containerId: string, 
+    action: 'start' | 'stop' | 'restart' | 'remove'
+  ): Promise<void> => {
+    setControlLoading((prev: any) => ({ ...prev, [containerId]: true }));
+    
+    try {
+      const endpoint = `${API_BASE}/auth/telegram/container/${containerId}/${action}`;
+      const method = action === 'remove' ? 'DELETE' : 'POST';
+      
+      const response = await authFetch(endpoint, {
+        method,
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token') || ''}`
+        }
+      });
+  
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || `Failed to ${action} container`);
+      }
+  
+      const result = await response.json();
+      
+      notifications.show({
+        title: 'Success',
+        message: result.message,
+        color: 'green'
+      });
+  
+      // Refresh status after action
+      setTimeout(fetchStatus, 1000);
+      
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : `Failed to ${action} container`;
+      notifications.show({
+        title: 'Error',
+        message: errorMessage,
+        color: 'red'
+      });
+      console.error(`Error ${action}ing container:`, error);
+    } finally {
+      setControlLoading((prev: any) => ({ ...prev, [containerId]: false }));
+    }
+  };
+  
+  // Helper function to get appropriate button props based on container status
+  const getContainerActions = (container: ContainerInfo) => {
+    const isRunning = container.status === 'running';
+    const isExited = container.status === 'exited';
+    const loading = controlLoading[container.id];
+  
+    return {
+      canStart: isExited && !loading,
+      canStop: isRunning && !loading,
+      canRestart: (isRunning || isExited) && !loading,
+      canRemove: !loading,
+      loading
+    };
   };
 
   const fetchStatus = async (): Promise<void> => {
@@ -183,14 +272,6 @@ const TelegramScraper: React.FC<TelegramScraperProps> = ({ case_id }) => {
       let payload: ScrapePayload = { tg_session: selectedSession };
 
       switch (mode) {
-        case 'scrape':
-          endpoint = `${API_BASE}/auth/telegram/scrape`;
-          payload = {
-            channels: [channel.trim()],
-            tg_session: selectedSession,
-            case_id: case_id ? case_id : undefined
-          };
-          break;
         case 'full':
           endpoint = `${API_BASE}/auth/telegram/full`;
           payload = {
@@ -205,14 +286,6 @@ const TelegramScraper: React.FC<TelegramScraperProps> = ({ case_id }) => {
           endpoint = `${API_BASE}/auth/telegram/live`;
           payload = {
             channels: [channel.trim()],
-            tg_session: selectedSession,
-            case_id: case_id ? case_id : undefined
-          };
-          break;
-        case 'similar':
-          endpoint = `${API_BASE}/auth/telegram/similar`;
-          payload = {
-            channel: channel.trim(),
             tg_session: selectedSession,
             case_id: case_id ? case_id : undefined
           };
@@ -267,8 +340,7 @@ const TelegramScraper: React.FC<TelegramScraperProps> = ({ case_id }) => {
         const errorData = await response.json();
         throw new Error(errorData.detail || 'Request failed');
       }
-      
-
+    
       const result = await response.json();
       
       if (case_id) {
@@ -371,16 +443,10 @@ const TelegramScraper: React.FC<TelegramScraperProps> = ({ case_id }) => {
             {mode === 'full' && (
               <Stack gap="xs">
                 <Switch
-                  label="Recursive scraping"
+                  label="Autofollow scraping"
                   description="Include related channels and references"
                   checked={recursive}
                   onChange={(e) => setRecursive(e.currentTarget.checked)}
-                />
-                <Switch
-                  label="Store in Neo4j"
-                  description="Save results to graph database"
-                  checked={neo4j}
-                  onChange={(e) => setNeo4j(e.currentTarget.checked)}
                 />
               </Stack>
             )}
@@ -412,30 +478,98 @@ const TelegramScraper: React.FC<TelegramScraperProps> = ({ case_id }) => {
               </Group>
               
               <Stack gap="sm">
-                {status.map((container, index) => (
-                  <Card key={container.id || index} padding="sm" withBorder>
-                    <Group justify="space-between" align="flex-start">
-                      <Stack gap="xs" style={{ flex: 1 }}>
-                        <Group align="center" gap="xs">
-                          <Text fw={500}>{container.name} [{container.labels.CHANNELS}]</Text>
-                          <Badge 
-                            color={container.status === 'running' ? 'green' : 'gray'}
-                            variant="light"
-                          >
-                            {container.status}
-                          </Badge>
-                        </Group>
-                        <Text size="sm" c="dimmed">
-                          {container.image}
-                        </Text>
-                        <Text size="xs" c="dimmed">
-                          ID: {container.id?.substring(0, 12)}
-                        </Text>
-                      </Stack>
-                    </Group>
-                  </Card>
-                ))}
-              </Stack>
+  {status.map((container, index) => {
+    const actions = getContainerActions(container);
+    
+    return (
+      <Card key={container.id || index} padding="sm" withBorder>
+        <Group justify="space-between" align="flex-start">
+          <Stack gap="xs" style={{ flex: 1 }}>
+            <Group align="center" gap="xs">
+              <Text fw={500}>
+                {container.name} [{container.labels?.CHANNELS || container.channels}]
+              </Text>
+              <Badge 
+                color={
+                  container.status === 'running' ? 'green' : 
+                  container.status === 'exited' ? 'gray' : 'yellow'
+                }
+                variant="light"
+              >
+                {container.status}
+              </Badge>
+            </Group>
+            <Text size="sm" c="dimmed">
+              {container.image}
+            </Text>
+            <Text size="xs" c="dimmed">
+              ID: {container.id?.substring(0, 12)}
+            </Text>
+            {container.case_id && (
+              <Text size="xs" c="blue">
+                Case: {container.case_id}
+              </Text>
+            )}
+          </Stack>
+          
+          <Stack gap="xs" align="flex-end">
+            <Group gap="xs">
+              {actions.canStart && (
+                <Button
+                  size="xs"
+                  variant="light"
+                  color="green"
+                  leftSection={<IconPlayerPlay size="0.75rem" />}
+                  onClick={() => handleContainerControl(container.id, 'start')}
+                  loading={actions.loading}
+                >
+                  Start
+                </Button>
+              )}
+              
+              {actions.canStop && (
+                <Button
+                  size="xs"
+                  variant="light"
+                  color="orange"
+                  leftSection={<IconPlayerPause size="0.75rem" />}
+                  onClick={() => handleContainerControl(container.id, 'stop')}
+                  loading={actions.loading}
+                >
+                  Stop
+                </Button>
+              )}
+              
+              {actions.canRestart && (
+                <Button
+                  size="xs"
+                  variant="light"
+                  color="blue"
+                  leftSection={<IconRefresh size="0.75rem" />}
+                  onClick={() => handleContainerControl(container.id, 'restart')}
+                  loading={actions.loading}
+                >
+                  Restart
+                </Button>
+              )}
+            </Group>
+            
+            <Button
+              size="xs"
+              variant="light"
+              color="red"
+              leftSection={<IconTrash size="0.75rem" />}
+              onClick={() => handleContainerControl(container.id, 'remove')}
+              loading={actions.loading}
+            >
+              Remove
+            </Button>
+          </Stack>
+        </Group>
+      </Card>
+    );
+  })}
+</Stack>
             </Stack>
           </Paper>
         )}
@@ -445,7 +579,7 @@ const TelegramScraper: React.FC<TelegramScraperProps> = ({ case_id }) => {
             <Stack gap="md">
               <Title order={3}>Available Sessions</Title>
               <Stack gap="sm">
-                {sessions.map((session, index) => (
+                {sessions.map((session: TelegramSession, index: any) => (
                   <Group key={index} justify="space-between">
                     <Stack gap="xs">
                       <Text fw={500}>{session.name}</Text>

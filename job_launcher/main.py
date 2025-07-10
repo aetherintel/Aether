@@ -11,6 +11,10 @@ SECRET = os.getenv("JOB_SECRET_TOKEN", "changeme")
 SESSION_DIR = Path("/app/sessions")
 media_host_path = os.environ["MEDIA_PATH"]
 
+class ContainerControlRequest(BaseModel):
+    owner_id: str
+    force: Optional[bool] = False
+
 class SimilarRequest(BaseModel):
     channel: str
     tg_session: str
@@ -70,7 +74,7 @@ def launch_similarity(req: SimilarRequest, request: Request):
             "MODE": "similar",
             "CHANNELS": req.channel,
             "OWNER_ID": req.owner_id,
-            "case_id": req.case_id or None
+            "case_id": str(req.case_id) if req.case_id is not None else ""
         }
     )
     return {"result": container.decode()}
@@ -118,10 +122,9 @@ def launch_scraper(req: ScrapeRequest, request: Request):
         "CHANNELS": ",".join(req.channels),
         "OWNER_ID": req.owner_id,
         "RECURSION_DEPTH": str(req.depth),
-        "case_id": req.case_id or None
+        "case_id": str(req.case_id) if req.case_id is not None else ""
     }
-    print("[DEBUG] Launching container with labels:")
-    print(req.case_id)
+
     if req.parent_container_id:
         labels["PARENT_CONTAINER_ID"] = req.parent_container_id
     
@@ -172,19 +175,178 @@ def list_containers(request: Request):
     
     return {"containers": result}
 
-@app.delete("/containers/{container_id}")
-def kill_container(container_id: str, request: Request):
-    """Kill a specific container"""
+@app.post("/containers/{container_id}/start")
+def start_container(container_id: str, req: ContainerControlRequest, request: Request):
+    """Start a specific container"""
     _check_auth(request)
     
     try:
         container = docker_client.containers.get(container_id)
-        container.kill()
-        return {"message": f"Container {container_id} killed successfully"}
+        
+        # Verify ownership
+        container_owner = container.labels.get("OWNER_ID")
+        if container_owner != req.owner_id:
+            raise HTTPException(status_code=403, detail="Access denied: container not owned by user")
+        
+        # Verify it's a telegram job
+        image_tags = container.image.tags if container.image and container.image.tags else []
+        is_telegram_job = any("telegram-job" in tag for tag in image_tags) if image_tags else any("telegram-job" in value for value in container.labels.values())
+        if not is_telegram_job and container.labels.get("telegram-job:latest") != "true":
+            print(f"[DEBUG] Container {container.name} is not a telegram job (tags: {container.image.tags} {container.labels})")
+            raise HTTPException(status_code=400, detail="Container is not a telegram job")
+        
+        # Check current status
+        container.reload()
+        if container.status == 'running':
+            return {
+                "message": f"Container {container.name} is already running",
+                "status": "running"
+            }
+        
+        # Start the container
+        container.start()
+        container.reload()
+        
+        return {
+            "message": f"Container {container.name} started successfully",
+            "status": container.status
+        }
+        
     except docker.errors.NotFound:
         raise HTTPException(status_code=404, detail="Container not found")
+    except docker.errors.APIError as e:
+        raise HTTPException(status_code=500, detail=f"Docker API error: {str(e)}")
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
+
+@app.post("/containers/{container_id}/stop")
+def stop_container(container_id: str, req: ContainerControlRequest, request: Request):
+    """Stop a specific container"""
+    _check_auth(request)
+    
+    try:
+        container = docker_client.containers.get(container_id)
+        
+        # Verify ownership
+        container_owner = container.labels.get("OWNER_ID")
+        if container_owner != req.owner_id:
+            raise HTTPException(status_code=403, detail="Access denied: container not owned by user")
+        
+        # Verify it's a telegram job
+        image_tags = container.image.tags if container.image and container.image.tags else []
+        is_telegram_job = any("telegram-job" in tag for tag in image_tags) if image_tags else False
+        if not is_telegram_job and container.labels.get("telegram-job:latest") != "true":
+            raise HTTPException(status_code=400, detail="Container is not a telegram job")
+        
+        # Check current status
+        container.reload()
+        if container.status in ['exited', 'stopped']:
+            return {
+                "message": f"Container {container.name} is already stopped",
+                "status": container.status
+            }
+        
+        # Stop the container
+        container.stop(timeout=10)
+        container.reload()
+        
+        return {
+            "message": f"Container {container.name} stopped successfully",
+            "status": container.status
+        }
+        
+    except docker.errors.NotFound:
+        raise HTTPException(status_code=404, detail="Container not found")
+    except docker.errors.APIError as e:
+        raise HTTPException(status_code=500, detail=f"Docker API error: {str(e)}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
+
+@app.post("/containers/{container_id}/restart")
+def restart_container(container_id: str, req: ContainerControlRequest, request: Request):
+    """Restart a specific container"""
+    _check_auth(request)
+    
+    try:
+        container = docker_client.containers.get(container_id)
+        
+        # Verify ownership
+        container_owner = container.labels.get("OWNER_ID")
+        if container_owner != req.owner_id:
+            raise HTTPException(status_code=403, detail="Access denied: container not owned by user")
+        
+        # Verify it's a telegram job
+        image_tags = container.image.tags if container.image and container.image.tags else []
+        is_telegram_job = any("telegram-job" in tag for tag in image_tags) if image_tags else False
+        if not is_telegram_job and container.labels.get("telegram-job:latest") != "true":
+            raise HTTPException(status_code=400, detail="Container is not a telegram job")
+        
+        # Restart the container
+        container.restart(timeout=10)
+        container.reload()
+        
+        return {
+            "message": f"Container {container.name} restarted successfully",
+            "status": container.status
+        }
+        
+    except docker.errors.NotFound:
+        raise HTTPException(status_code=404, detail="Container not found")
+    except docker.errors.APIError as e:
+        raise HTTPException(status_code=500, detail=f"Docker API error: {str(e)}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
+
+@app.delete("/containers/{container_id}")
+def remove_container(container_id: str, req: ContainerControlRequest, request: Request):
+    """Remove a specific container"""
+    _check_auth(request)
+    
+    try:
+        # Try to get running container first
+        try:
+            container = docker_client.containers.get(container_id)
+        except docker.errors.NotFound:
+            # If not found in running, search in all containers
+            all_containers = docker_client.containers.list(all=True)
+            container = None
+            for c in all_containers:
+                if c.id == container_id or c.id.startswith(container_id):
+                    container = c
+                    break
+            print(f"[DEBUG] Searching for container {container_id} in all containers: found={bool(container)} in {len(all_containers)} total")
+            if not container:
+                raise HTTPException(status_code=404, detail="Container not found")
+        
+        # Verify ownership
+        container_owner = container.labels.get("OWNER_ID")
+        if container_owner != req.owner_id:
+            raise HTTPException(status_code=403, detail="Access denied: container not owned by user")
+        
+        # Verify it's a telegram job
+        image_tags = container.image.tags if container.image and container.image.tags else []
+        is_telegram_job = (any("telegram-job" in tag for tag in image_tags) if image_tags else False) or container.labels.get("com.docker.compose.service") == "telegram-job"
+        
+        if not is_telegram_job:
+            raise HTTPException(status_code=400, detail="Container is not a telegram job")
+        
+        container_name = container.name
+        
+        # Stop and remove the container
+        if container.status == 'running':
+            container.stop(timeout=10)
+        
+        container.remove(force=req.force)
+        
+        return {
+            "message": f"Container {container_name} removed successfully",
+            "status": "removed"
+        }
+        
+    except docker.errors.APIError as e:
+        raise HTTPException(status_code=500, detail=f"Docker API error: {str(e)}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
 
 def load_string_session(session_name: str) -> tuple:
     """StringSession aus JSON-Datei"""

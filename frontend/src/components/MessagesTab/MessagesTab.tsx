@@ -1,7 +1,7 @@
-import { Text, Box, Button, Checkbox, Input, Loader, ScrollArea, Table } from "@mantine/core";
+import { Text, Box, Button, Checkbox, Input, Loader, ScrollArea, Table, ActionIcon, Group, Tooltip } from "@mantine/core";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import classes from './MessagesTab.module.css';
-import { IconSearch } from "@tabler/icons-react";
+import { IconSearch, IconRefresh } from "@tabler/icons-react";
 import { authFetch } from '@/utils/authFetch';
 
 const apiUrl = import.meta.env.VITE_API_URL;
@@ -23,6 +23,7 @@ const MessagesTab : React.FC<MessagesTabProps> = ({ selectedTgChannelIds, search
     const [hasMore, setHasMore] = useState(true);
 
     const [isLoadingMore, setIsLoadingMore] = useState(false);
+    const [isRefreshing, setIsRefreshing] = useState(false);
     const [channelLastDates, setChannelLastDates] = useState<{ [channelId: string]: string | null }>({});
 
     const toggleMessageExpansion = (messageId: string) => {
@@ -213,6 +214,21 @@ const MessagesTab : React.FC<MessagesTabProps> = ({ selectedTgChannelIds, search
         }
     }, [selectedTgChannelIds, searchQuery, channelLastDates, isLoadingMore, deduplicateMessages]);
 
+    // Simple full refresh function - moved after loadMessages declaration
+    const handleRefresh = useCallback(() => {
+        if (isRefreshing || selectedTgChannelIds.length === 0) return;
+        
+        setIsRefreshing(true);
+        setMessages([]);
+        setHasMore(true);
+        setChannelLastDates(Object.fromEntries(selectedTgChannelIds.map(id => [id, null])));
+        
+        // Just reload all messages from the beginning
+        loadMessages(true).finally(() => {
+            setIsRefreshing(false);
+        });
+    }, [selectedTgChannelIds, loadMessages, isRefreshing]);
+
     // Reset and load initial messages when channels or search query changes
     useEffect(() => {
         if (selectedTgChannelIds.length > 0) {
@@ -287,16 +303,31 @@ const MessagesTab : React.FC<MessagesTabProps> = ({ selectedTgChannelIds, search
     
     return (
         <div>
-            <Input placeholder="Search messages..." 
-            value={searchQuery} 
-            onChange={(e) => setSearchQuery(e.target.value)}
-            onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                handleSearchSubmit();
-                }
-            }} 
-            leftSection={<IconSearch size={16} />}
-            mb="md" />
+            <Group mb="md">
+                <Input 
+                    placeholder="Search messages..." 
+                    value={searchQuery} 
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                            handleSearchSubmit();
+                        }
+                    }} 
+                    leftSection={<IconSearch size={16} />}
+                    style={{ flex: 1 }}
+                />
+                <Tooltip label="Refresh for new messages">
+                    <ActionIcon 
+                        variant="light" 
+                        size="lg"
+                        onClick={handleRefresh}
+                        loading={isRefreshing}
+                        disabled={selectedTgChannelIds.length === 0}
+                    >
+                        <IconRefresh size={18} />
+                    </ActionIcon>
+                </Tooltip>
+            </Group>
 
             <ScrollArea
             h={475}
