@@ -27,13 +27,13 @@
   "oauth2DevicePollingInterval" : 5,
   "enabled" : true,
   "sslRequired" : "external",
-  "registrationAllowed" : false,
+  "registrationAllowed" : true,
   "registrationEmailAsUsername" : false,
   "rememberMe" : false,
-  "verifyEmail" : false,
+  "verifyEmail" : true,
   "loginWithEmailAllowed" : true,
   "duplicateEmailsAllowed" : false,
-  "resetPasswordAllowed" : false,
+  "resetPasswordAllowed" : true,
   "editUsernameAllowed" : false,
   "bruteForceProtected" : false,
   "permanentLockout" : false,
@@ -378,20 +378,21 @@
   "webAuthnPolicyPasswordlessAcceptableAaguids" : [ ],
   "webAuthnPolicyPasswordlessExtraOrigins" : [ ],
   "users" : [ {
-    "id" : "22a95e2e-18ff-4b00-952d-542827b4e517",
-    "username" : "hannah",
-    "firstName" : "han",
-    "lastName" : "nah",
-    "email" : "h@g.de",
-    "emailVerified" : false,
-    "createdTimestamp" : 1751622172468,
+    "id" : "b027efa2-9ee5-47e8-990d-820c6e9aae47",
+    "username" : "fred",
+    "firstName" : "Jan-Frederik",
+    "lastName" : "Felsch",
+    "email" : "janfrederik.felsch@googlemail.com",
+    "emailVerified" : true,
+    "createdTimestamp" : 1752012062379,
     "enabled" : true,
     "totp" : false,
     "credentials" : [ {
-      "id" : "9c4ec2bc-9b31-48de-959f-e2d06440814c",
+      "id" : "205d08dc-7dfb-4d28-8d25-91966c256240",
       "type" : "password",
-      "createdDate" : 1751622172624,
-      "secretData" : "{\"value\":\"pt/lVaIjdiQ5gw1miUpdTvg0YCICUeHbRTaXR5lfM9ocKKGw/rRFUlHdwSeg788qLBo9zxKIo6oIsqDtEl92vQ==\",\"salt\":\"SVsJIQF9u4Z3CrdJOKAksw==\",\"additionalParameters\":{}}",
+      "userLabel" : "My password",
+      "createdDate" : 1752012219823,
+      "secretData" : "{\"value\":\"hJXVs9EaIPAG3Vlwe0ADOULue8WqaMq9o5yFSt6C0LiaUeaGr8/3ge7ONBiehSiM/Gi3d9YfspbkRxJ+T+VDCQ==\",\"salt\":\"KfK1kyxn3cFgZA/i4+/neA==\",\"additionalParameters\":{}}",
       "credentialData" : "{\"hashIterations\":210000,\"algorithm\":\"pbkdf2-sha512\",\"additionalParameters\":{}}"
     } ],
     "disableableCredentialTypes" : [ ],
@@ -536,7 +537,7 @@
     "enabled" : true,
     "alwaysDisplayInConsole" : false,
     "clientAuthenticatorType" : "client-secret",
-    "secret" : "DT4uLhjfnhf5414KUFgm8lAxHrmrjsF9",
+    "secret" : "F0DVD1k2c9N6IBRxbhvCsHaUpQbXltHz",
     "redirectUris" : [ "/*" ],
     "webOrigins" : [ "/*" ],
     "notBefore" : 0,
@@ -551,7 +552,7 @@
     "protocol" : "openid-connect",
     "attributes" : {
       "oidc.ciba.grant.enabled" : "false",
-      "client.secret.creation.time" : "1747683540",
+      "client.secret.creation.time" : "1752011456",
       "backchannel.logout.session.required" : "true",
       "post.logout.redirect.uris" : "+",
       "oauth2.device.authorization.grant.enabled" : "false",
@@ -648,7 +649,7 @@
     "enabled" : true,
     "alwaysDisplayInConsole" : false,
     "clientAuthenticatorType" : "client-secret",
-    "secret" : "NnVo5XzQv3xmq3RSK5kWoWTJB3Xn1Cbs",
+    "secret" : "IVe53dL7kdbCLz8rpepuDEr1KaZnvNx0",
     "redirectUris" : [ "http://localhost:8000/*" ],
     "webOrigins" : [ "http://localhost:8000" ],
     "notBefore" : 0,
@@ -663,7 +664,7 @@
     "protocol" : "openid-connect",
     "attributes" : {
       "oidc.ciba.grant.enabled" : "false",
-      "client.secret.creation.time" : "1747683430",
+      "client.secret.creation.time" : "1752042330",
       "backchannel.logout.session.required" : "true",
       "post.logout.redirect.uris" : "+",
       "oauth2.device.authorization.grant.enabled" : "false",
@@ -839,9 +840,10 @@
       "consentRequired" : false,
       "config" : {
         "included.client.audience" : "HotTopics",
+        "introspection.token.claim" : "true",
+        "userinfo.token.claim" : "true",
         "id.token.claim" : "true",
         "lightweight.claim" : "false",
-        "introspection.token.claim" : "true",
         "access.token.claim" : "true"
       }
     } ]
@@ -1280,11 +1282,25 @@
     "xXSSProtection" : "1; mode=block",
     "strictTransportSecurity" : "max-age=31536000; includeSubDomains"
   },
-  "smtpServer" : { },
-  "eventsEnabled" : false,
-  "eventsListeners" : [ "jboss-logging" ],
-  "enabledEventTypes" : [ ],
-  "adminEventsEnabled" : false,
+  "smtpServer" : {
+    "replyToDisplayName" : "",
+    "starttls" : "false",
+    "auth" : "true",
+    "envelopeFrom" : "",
+    "ssl" : "true",
+    "password" : "jkni ztpm aurz wpuk",
+    "port" : "465",
+    "host" : "smtp.gmail.com",
+    "replyTo" : "",
+    "from" : "aether.hottopics@gmail.com",
+    "fromDisplayName" : "",
+    "user" : "aether.hottopics@gmail.com"
+  },
+  "eventsEnabled" : true,
+  "eventsExpiration" : 36288000,
+  "eventsListeners" : [ "jboss-logging", "email" ],
+  "enabledEventTypes" : [ "UPDATE_CONSENT_ERROR", "SEND_RESET_PASSWORD", "GRANT_CONSENT", "VERIFY_PROFILE_ERROR", "UPDATE_TOTP", "REMOVE_TOTP", "REVOKE_GRANT", "LOGIN_ERROR", "CLIENT_LOGIN", "RESET_PASSWORD_ERROR", "IMPERSONATE_ERROR", "CODE_TO_TOKEN_ERROR", "CUSTOM_REQUIRED_ACTION", "OAUTH2_DEVICE_CODE_TO_TOKEN_ERROR", "RESTART_AUTHENTICATION", "UPDATE_PROFILE_ERROR", "IMPERSONATE", "LOGIN", "UPDATE_PASSWORD_ERROR", "OAUTH2_DEVICE_VERIFY_USER_CODE", "CLIENT_INITIATED_ACCOUNT_LINKING", "USER_DISABLED_BY_PERMANENT_LOCKOUT", "OAUTH2_EXTENSION_GRANT", "TOKEN_EXCHANGE", "REGISTER", "LOGOUT", "AUTHREQID_TO_TOKEN", "DELETE_ACCOUNT_ERROR", "CLIENT_REGISTER", "IDENTITY_PROVIDER_LINK_ACCOUNT", "USER_DISABLED_BY_TEMPORARY_LOCKOUT", "UPDATE_PASSWORD", "DELETE_ACCOUNT", "FEDERATED_IDENTITY_LINK_ERROR", "CLIENT_DELETE", "IDENTITY_PROVIDER_FIRST_LOGIN", "VERIFY_EMAIL", "CLIENT_DELETE_ERROR", "CLIENT_LOGIN_ERROR", "RESTART_AUTHENTICATION_ERROR", "REMOVE_FEDERATED_IDENTITY_ERROR", "EXECUTE_ACTIONS", "TOKEN_EXCHANGE_ERROR", "PERMISSION_TOKEN", "SEND_IDENTITY_PROVIDER_LINK_ERROR", "EXECUTE_ACTION_TOKEN_ERROR", "SEND_VERIFY_EMAIL", "OAUTH2_EXTENSION_GRANT_ERROR", "OAUTH2_DEVICE_AUTH", "EXECUTE_ACTIONS_ERROR", "REMOVE_FEDERATED_IDENTITY", "OAUTH2_DEVICE_CODE_TO_TOKEN", "IDENTITY_PROVIDER_POST_LOGIN", "IDENTITY_PROVIDER_LINK_ACCOUNT_ERROR", "UPDATE_EMAIL", "OAUTH2_DEVICE_VERIFY_USER_CODE_ERROR", "REGISTER_ERROR", "REVOKE_GRANT_ERROR", "LOGOUT_ERROR", "UPDATE_EMAIL_ERROR", "EXECUTE_ACTION_TOKEN", "CLIENT_UPDATE_ERROR", "UPDATE_PROFILE", "AUTHREQID_TO_TOKEN_ERROR", "FEDERATED_IDENTITY_LINK", "CLIENT_REGISTER_ERROR", "SEND_VERIFY_EMAIL_ERROR", "SEND_IDENTITY_PROVIDER_LINK", "RESET_PASSWORD", "CLIENT_INITIATED_ACCOUNT_LINKING_ERROR", "OAUTH2_DEVICE_AUTH_ERROR", "UPDATE_CONSENT", "REMOVE_TOTP_ERROR", "VERIFY_EMAIL_ERROR", "SEND_RESET_PASSWORD_ERROR", "CLIENT_UPDATE", "IDENTITY_PROVIDER_POST_LOGIN_ERROR", "CUSTOM_REQUIRED_ACTION_ERROR", "UPDATE_TOTP_ERROR", "CODE_TO_TOKEN", "VERIFY_PROFILE", "GRANT_CONSENT_ERROR", "IDENTITY_PROVIDER_FIRST_LOGIN_ERROR" ],
+  "adminEventsEnabled" : true,
   "adminEventsDetailsEnabled" : false,
   "identityProviders" : [ ],
   "identityProviderMappers" : [ ],
@@ -1319,7 +1335,7 @@
       "subType" : "authenticated",
       "subComponents" : { },
       "config" : {
-        "allowed-protocol-mapper-types" : [ "saml-user-attribute-mapper", "oidc-address-mapper", "oidc-sha256-pairwise-sub-mapper", "oidc-usermodel-attribute-mapper", "saml-role-list-mapper", "saml-user-property-mapper", "oidc-full-name-mapper", "oidc-usermodel-property-mapper" ]
+        "allowed-protocol-mapper-types" : [ "oidc-address-mapper", "oidc-usermodel-attribute-mapper", "saml-user-attribute-mapper", "saml-user-property-mapper", "oidc-sha256-pairwise-sub-mapper", "oidc-full-name-mapper", "oidc-usermodel-property-mapper", "saml-role-list-mapper" ]
       }
     }, {
       "id" : "08013a7b-4baf-46f9-bb3a-15b9e37f5f49",
@@ -1337,7 +1353,7 @@
       "subType" : "anonymous",
       "subComponents" : { },
       "config" : {
-        "allowed-protocol-mapper-types" : [ "saml-user-attribute-mapper", "oidc-full-name-mapper", "oidc-address-mapper", "saml-role-list-mapper", "oidc-usermodel-attribute-mapper", "saml-user-property-mapper", "oidc-sha256-pairwise-sub-mapper", "oidc-usermodel-property-mapper" ]
+        "allowed-protocol-mapper-types" : [ "oidc-usermodel-property-mapper", "saml-role-list-mapper", "saml-user-attribute-mapper", "oidc-address-mapper", "oidc-usermodel-attribute-mapper", "oidc-full-name-mapper", "oidc-sha256-pairwise-sub-mapper", "saml-user-property-mapper" ]
       }
     }, {
       "id" : "7edd8afe-d79c-4ed9-9643-ec744b3e3dc5",
@@ -1365,9 +1381,8 @@
       "providerId" : "rsa-generated",
       "subComponents" : { },
       "config" : {
-        "privateKey" : [ "MIIEowIBAAKCAQEAmrE6rUpwDlfM16GpDLEFjZgJoomoP61g5FIfp91xyFioPs5MxQd1frQ81J7QojoqtbcMmRiJXut+FusES2BxfWPBG8dpuzMlRUO32s06in/fcpsuWAiD8goiP0LQyMQgQJEONe5fkYUbcSppOeo3XknbuXaFkKgEN7uMa7aaRj4R/z4r6ZnOxSR9qb5Z1jsMs08O9fibblqdDF10OAS6l6+wzTYq8clY0rYdKT77a5JbbaMu3gcg66O3fYsxLiU2nFxwhAwGP3AeUhpnjeIqs4mxUwntJIHLuROdpXHrCFq6DGDbyQ73cwBSVXmZ4WUwyoo4tla9Ys8uwfNM1nW9dQIDAQABAoIBAACuyBDEO5bgndOUz9Nxw5HCqkY4n9C6IeuYDjI2OL6W35U5YV7cP9FBl+QjWE3i/lXDe0+Aq3iLBwkwW9o+UHnqcwt9l5KfMOqrmBfj4H6Efna5xxxV20k58LlBQP0l2nOWgE7OIMdaZErdUk4SYdCteEYLBx9iknQxhHbkPS2SrkuFlHW2uU3dFHWpazAeR1WZm+uVm8tdW+zp/yWHHeeeLPRDTbdVPR8qRo1Ab4HluppUHlmtvVIHQMZJF90gIAzhIWWoxj16wgh5in6Ru0xDCvW8VlLGaLMTLa20TMz4VOiB2gc3r8dUB4sohbjahBgYDPQWNyZo6edywje2NukCgYEA2llrZmEU6rfC5u2/+DW9+lkSJfgOF8dxpP+wCfkN1ubNcmYodWTCECu2y8xaqOkUgBv9mZ45PDhmtYmtLgoKNh4zibJ5MP2cm6hwfL0F+AvOMMr31H4Xj/WfieYYnFcaGSvfqwETxD1k6fsK82q8c+Rru2Vs+U4bKUWPnOAdSd0CgYEAtV3NekP8k+DJ9am8lAq5S/zqXIpkUMkR3euOmx+IihfrsbwC4snqVq1IlbVoaFdbj5iyeqfwaThfekjy5meZoR/2pta7abhsnMl1ugpo0RWeiq8xPfGo34Lz9qUJphK2OelYqxPnu35Zzmj6Jq8XakVa2h/dYw6sOH+QdOlZ5HkCgYEAsUGUSbmYNG/Xnob1p/dg8aJrdD1qm21C2dLkQ0RXMtWNhUhfoeWZEW2baNjN5H/LL7EJcDMdfcC/yLIqz8xAu+xKpIcpkVbhUxAruWfuN47F5aBwDqYKVMjuqhEMe6bOPg769aTbOh0pFjXBjxhgQqj1uFy/WahJrniU/KKHxFUCgYBCVCvxqyuUaYFy9sCg48sgnz6W2YYWhXKjVqKw2Ld2yYjJV5k2l+G8EWOaXN3ySwCRY6bidMjXsmY4srUizoDBDI+INMAVyfzu2j7T6zqqPN3emnPH07mPBLV0XqdItU8vnsduybjWOT9e3cWeoCpQE01GuKCeuZ8CiqSqHS1jAQKBgFzkdsAdhVsyiFdjYpZGHKQBqTa8Aq6LvhY1Zu/hnDUEetk56dKqE8Mk8qxmaG6gHJ3ULIsNSAvVE+sLqNnONrJmPFNOdPBjSetEfMo1r2xezEyhR9LLn0mG3yoqlbXHaDMOQSuq8TFhHtSM48Ia3y2dkWpA7j3vbro2BmakAb8y" ],
-        "keyUse" : [ "SIG" ],
-        "certificate" : [ "MIICoTCCAYkCBgGW6gt/ojANBgkqhkiG9w0BAQsFADAUMRIwEAYDVQQDDAlIb3RUb3BpY3MwHhcNMjUwNTE5MTkzNDA0WhcNMzUwNTE5MTkzNTQ0WjAUMRIwEAYDVQQDDAlIb3RUb3BpY3MwggEiMA0GCSqGSIb3DQEBAQUAA4IBDwAwggEKAoIBAQCasTqtSnAOV8zXoakMsQWNmAmiiag/rWDkUh+n3XHIWKg+zkzFB3V+tDzUntCiOiq1twyZGIle634W6wRLYHF9Y8Ebx2m7MyVFQ7fazTqKf99ymy5YCIPyCiI/QtDIxCBAkQ417l+RhRtxKmk56jdeSdu5doWQqAQ3u4xrtppGPhH/Pivpmc7FJH2pvlnWOwyzTw71+JtuWp0MXXQ4BLqXr7DNNirxyVjSth0pPvtrklttoy7eByDro7d9izEuJTacXHCEDAY/cB5SGmeN4iqzibFTCe0kgcu5E52lcesIWroMYNvJDvdzAFJVeZnhZTDKiji2Vr1izy7B80zWdb11AgMBAAEwDQYJKoZIhvcNAQELBQADggEBAFoK1Bz6gkKX1aFyWdvqwdwUcTJf7/y59h7HEUtoIsUHkRmymBtKE49PF1KL3bLE9LDzkt2/HR98VnnnSBvJFI1zXV2ej7OP52pqbW7H6GUO0ZOYzT5FvWRNuQxP62ngISqyHsCKossSXebulB9kwuBjpIV0fTe59rc/ptkpC8J9RxXHtwbt+z4nee0XWDoa8opXP9SOaw2gDeujQMizeq9ve6HiMwoLPlA7R1mbKz8g0Np7/rgmdslBx/YZW+Yax96AvwGtsGeM/EIjws3sfPpv7tn+cO4hDTO6lXs/VmcZIc3FrsHsZ8l0jNexhhD3wDT//Iyu5UTPzJsgHqKRO0c=" ],
+        "privateKey" : [ "MIIEowIBAAKCAQEA3Xic/esgxUBFuv0f1jCqi+56ke+OTPPUXipu5dxtHxmVHlOiBYzluDNheplEacl6Jp312j7lnzgGPHlm4qJsh/s2fy4f3Az+rBr1mbcwoEQdBW4FL+KE7IComQhBtIgCNjlwC19TWfctnA+APvpYG2qLG4SF4Ty9c+aOgIlVojLDrzbEcaA3kpEOOY/Cbcia7sSur7U5zb/D9shkgBRll354Sggi2Z5s3wr231FHaZbJH7UVUHpRzX7HFb42NbViIbeY+d5I0kQecbiLYQNdAyvWSQ1w05wGgc4Xnm2s/Hn2lS2ZeB6Y+qLy6fI5RRKvJg99+vcgvNgcSc5V/095YwIDAQABAoIBACNBrTRa9wePuMoQu728V5oZJ9gNm8iyVE99T9Q16AU4bF28kKFzkapmO5FpztNMaK63HMlWk/Vp1MxRw0g29TIckstiS14bj3tUe16yJAKPdVNE9XxvAhwoSy65esRDlp6NPEIDNeCvkcozSYY9EkOjDWwfB7UYl0xZGrxpoIFGaa3VhMdH7Vb4bxajHS/hFcs2WdnwFx52h+bXjgctR+9lXc4K6RK5IJQA0ProJ+RlOZ2Xi82XWck4D9Nh4IvtLnc0JioueK6IHmSb5MWNNExWeVbWhloa25Ru7s6+zSemrnfE+0c3PPnTmReFpCUX4toNFmPdqTG+fD1fZHqH06kCgYEA+WPlpGull8Z9Xgy9UvTFACck+n/0B0pl/Ldww5pvTY0IlxnzXtoQ2tXTUBnGVM9Q6s+Ng5jBAhJInjT3O7tzz/QS6wPoofH0mWk5E1ZRj6dNMPBwhmOnNVf9ULnpUjm7Tc/9w74zztOvT69K9k6Z8nindD1Ch/ZcNo8IiKnfQM0CgYEA41dJTqACHhHd/6Z/pm/a2xXYjkTbvtqp7vbrvX1m43cBz+2K1lx/CW6x5dcCmPpiLzfCov0cum5W17Ju4/T5l8NuBoIzUWl0q9u1vJBstUx9gn7Fqv4MSFwIAUZ6+9Bd+n5ik8oAR6KuLIN8vwfxC70i7fc4XJ+4+L/o989h4u8CgYBCQTLqKpsUpmv6B4JovpRzxPKDBmlLYo2TxRxVKvs07CoDEqbgZSijKrl4B1D0iRtjNn7PHk7wgPD/7uxb1yIediZsf15XX9NuylCafY0vj+/m94m9ek4a0uR+hNWivamwM3ikfyx+XyitD9Hne9xUWY+LRxcczeuTpw5KWG7yZQKBgQDXZ4z+An3/H87IvGmWucUUcM6Pfo73dxgsY6laEce7HreI2/oAwgNcXJYSwHalnBgLxTmWVV0zB/kgxuBq/WLAeVt2r0cQjGsPq023LODTp3YEfzmrmqropMqw6qb8kaF6BuZAQdWiCnIdmzhHiK7MAJloACZXHL+Wcb+7jbOh4QKBgHSCYy5DnBLW0MMX56mRxuP8q7hyFDB5Oym7KvGPzpsLP6WppvFmbwDfXkNpz9W62QyFQQeexbJtwX9cYyKYBaKC/mCQscM+gd1o8AnieoZPqIbjgE4g9dB+KqwW7Q9tiZNzuqyqKKrqXfYfnwMQyPFX8XJHIqnAuadG2g2MQg7D" ],
+        "certificate" : [ "MIICoTCCAYkCBgGX6+7bHDANBgkqhkiG9w0BAQsFADAUMRIwEAYDVQQDDAlIb3RUb3BpY3MwHhcNMjUwNzA4MjEyNDQ4WhcNMzUwNzA4MjEyNjI4WjAUMRIwEAYDVQQDDAlIb3RUb3BpY3MwggEiMA0GCSqGSIb3DQEBAQUAA4IBDwAwggEKAoIBAQDdeJz96yDFQEW6/R/WMKqL7nqR745M89ReKm7l3G0fGZUeU6IFjOW4M2F6mURpyXomnfXaPuWfOAY8eWbiomyH+zZ/Lh/cDP6sGvWZtzCgRB0FbgUv4oTsgKiZCEG0iAI2OXALX1NZ9y2cD4A++lgbaosbhIXhPL1z5o6AiVWiMsOvNsRxoDeSkQ45j8JtyJruxK6vtTnNv8P2yGSAFGWXfnhKCCLZnmzfCvbfUUdplskftRVQelHNfscVvjY1tWIht5j53kjSRB5xuIthA10DK9ZJDXDTnAaBzheebaz8efaVLZl4Hpj6ovLp8jlFEq8mD3369yC82BxJzlX/T3ljAgMBAAEwDQYJKoZIhvcNAQELBQADggEBANP9EzKjAwUvw/1JTLPhCSpRouNYKvfUXQ/UHHnRM7+JYY1X1TFPrxaw8Ys/DJYCz53/5wjUmY+7b1VRc5XNuAIddJEBMRGi3CTK1f/vwkDMuic4zLn7mXjcXBxaU8wizohhdfRKd0OlJYOumtzGimOfSlUNwXATmcT4M+vVGWtwiPXiyVVg92ow1sX3cBdHBK1zSC4jcT+czQYpmIJdhqmmLv3MXw2JcUt4cHEDop+K5cimT9GixHCXpMVYOW85Zw8wHIKZ/bFVucHYxV2MLvaJCqmpP9JvotJVzJW2c2R1kPIeFJ+zF7Jc8hVn7V1A+RDZtepZBCfkIjGMOYUb78I=" ],
         "priority" : [ "100" ]
       }
     }, {
@@ -1376,9 +1391,8 @@
       "providerId" : "rsa-enc-generated",
       "subComponents" : { },
       "config" : {
-        "privateKey" : [ "MIIEowIBAAKCAQEAnsxOH66qCIZOx4U7p6weiGWlY0SSm4TteVvAepgLAlUrh6QRMZGlnfExAkePzcOebh3S8WQwVbct09nivVF/JEw+8+ED8ktrrxfk+ZLNeYH4sgroJypxREGxjwYA4LSB0Zi0+CkR681t4Tnx3sjtP47JjQPQ6L2YSZSgyBzkZvNvUycA7va5awmAD1QLKT5sS4Q51h1IkL/kz09htoprMfbZ5V5jXGL/iRDqS7U4A0A+UpLOp9cWsdpObsDa/w6XH//7sTFCfYdKO+b/uC/dG0XpiC/rma0TJkyo3hzJPJ/yBBJCVUVbzXYU3+AxeFathL5azRxwb97J3V14NTXcUwIDAQABAoIBABJZtFgflwaP1Aq6cBUFjtcJkqh7WXXJ+/yfiF6iXfinCaC4akQ60H4FS+SM4Hv8Cb2FNMXbDhAvBYdgZmik7PcE2JbWKd6WA0ZN5z1FTvlQ9lbyFmHFmyaIG5IA35kX7ZM1p7QFtaHKMNMWHx008DWoCnfWjmMBhdellUQ1Z9ooQ3eyk7SXhXM13YZ9NH6KfiaKhxxrmh8rV8MSjKzAxHY38zXV44IkthYLCuaVKiQLBH3Fxrv70NMiRdAfLISTSaTDGdIc0kNB7xzRkMcDimB4uoTVH4BuFVGZ+tzrSxgy9BD66fxus12YplAcXMd9azgD4IeADMoYHRDQqP74KgECgYEA09yW9QgBVUCTKWMpQBerYP+yu7n6ydseLFjAEPX9J+K81ats+siKKTsqeul3aruXm6En/y1NZp9KhTq27YNFlIgTYhJszv/dURrlX5zdy43ZJcucXcbXFt7D8hPCCynEC6vLxpwFUliqsMS23mdz8zV6xcSMNVhR2LymgZy4kS0CgYEAv+GgPzhtTLof9XGSzhjR5Nx4sW+DchYT9xMObC21bLfpSsqU9/2TJobUvE8hHNVdtd3Hrvftfc82PnxX7EZtquJ9mC6Wgv4QHN3rK+VFOLfdyk8oUfZu2a0ObBnUs9wejMrJ5gWTg6HRv8DuHe7UCIxo+OKvRkmAzSFVGWcNk38CgYA4+SE/U5/IJU1t29TD/5l+xER0Z1ch4WMD2foMlZo2l6rgavErn7JH1DlgRFhww3HJ0FTJMo2WA1Au89MtnBeiEdXkkb/hCr2hifIU/EJI8yRqHY83SLme1NksyFNuXRTzboemKV7k/iMo1j23IWr1BHS3qltqHQ4lktXUFSktIQKBgFQqmQsCKldskRYtglKq6m60ErDqFENX0dwf3MSw7BLLPSbUY7G/5esRW4FaSFEIenmK1cs271KvMMEJ89stLW+2t5aoYNcGsHSpFz4C7HErnbrfK/V/3jHXSis6zWUzmabyUMt4CLPFqGavLwOsPg+d33HEpVN0bG4OP/DLllXrAoGBAJnQa2VZpdkdT1XfngcLZGSB3nkRSwPMddvJOADdMkSljfWy+RwwGi/zsEtwajkXR8JoEA6XHTXvGmaJAN7VPB5bHkFtB+FjxMGfHm3Ww2iRMK7uScsCrsh5ZuKltH0wDvGLp1gtDEJqkHF+LICpD7H9c7mn7tdm6sbQOMcy44A2" ],
-        "keyUse" : [ "ENC" ],
-        "certificate" : [ "MIICoTCCAYkCBgGW6guAWTANBgkqhkiG9w0BAQsFADAUMRIwEAYDVQQDDAlIb3RUb3BpY3MwHhcNMjUwNTE5MTkzNDA0WhcNMzUwNTE5MTkzNTQ0WjAUMRIwEAYDVQQDDAlIb3RUb3BpY3MwggEiMA0GCSqGSIb3DQEBAQUAA4IBDwAwggEKAoIBAQCezE4frqoIhk7HhTunrB6IZaVjRJKbhO15W8B6mAsCVSuHpBExkaWd8TECR4/Nw55uHdLxZDBVty3T2eK9UX8kTD7z4QPyS2uvF+T5ks15gfiyCugnKnFEQbGPBgDgtIHRmLT4KRHrzW3hOfHeyO0/jsmNA9DovZhJlKDIHORm829TJwDu9rlrCYAPVAspPmxLhDnWHUiQv+TPT2G2imsx9tnlXmNcYv+JEOpLtTgDQD5Sks6n1xax2k5uwNr/Dpcf//uxMUJ9h0o75v+4L90bRemIL+uZrRMmTKjeHMk8n/IEEkJVRVvNdhTf4DF4Vq2EvlrNHHBv3sndXXg1NdxTAgMBAAEwDQYJKoZIhvcNAQELBQADggEBAB5S4IKyHw5rFxTy1m38TbIHrz55GISGRkCfG7yLXNiAI9hbTHinDmjgjVCUb7xMYwB6jhjLDwBtuELJ0fxNz1KkDOmoysuKGw9wztOTm5G/r9fJRWKXPdbp1e2vT7wX6cI0m9xyTVMr+wY5rzFixEh0t8vE0bAC/31jNb8W4cQrt4JgS3nj3o4UKtJhpYpDZ1dl4rpG0g3KxMsG1o3aB5qVuHEQKDF5MBfbZ66eQZOLaH564VhNkIwMvAdlz6bwQRuvvx2/SRWlW/AdWGHlR1DUtZE85LHFH3DORiUt26CFjVw9XEUMCQFRGEunWysGqwcavCC80XVKirANzdN374U=" ],
+        "privateKey" : [ "MIIEowIBAAKCAQEA5uQ0qmZuhphBWq88+IzvZKmYOO6iymmL3SIUhPMctAGWnkr/826kxOfvYGconPKWW51FuYRXOvmWcpy177gAa1+HZjJMbs+JVvdspCDh/elp6rgVqBE1eMatPDe3NxpjkzyyR0aohWhWKnvIYiEeGDsHXigwSQh3+j0ZiEvX2z1J+iPb9PRQSdEHjTRy83yrMKhG2eUiy3xfz2/j6dobdvivUdPRx5aD89Enjf/bBhAdZTQ1Gu1cGwBTjB8AYDJqga6LYh0fEYJSWkeMXctUKzJ6D3rcM63XxITupOrevaPk3IIOIaOalxvmhHU6WGnSoylQj3C8cvu5zu6KwUA6SwIDAQABAoIBAEcvdZNRuGLT31Zjr8MbxJT++rkWzeblCqOXZccloyRWVwcfrXDynGc+8N0CgRF+c1/0ibIsPK6ok7trWGZ7jtmL3tVhzZHed4PyDbM+lh5wD+E3dynVgGxnqLJnpRuejbOv43E5NizHYcWAW2PxvPMQg/GCJ3zk2QS0QMJ2S6tCULc+HUkB3iZ3vXXX8dCmmJMWX3mM7M+sm4UG9AO/JO79JNxArgAYWkWwH1BoVcZ9UxfZU2/6VyCcWxtFy9UmNlYhjLkLWhXqj1BvzxG3vxxKjuUmKV0unbSHK1kdEtz2ukvT1ksNT7Aybwige0YlcUC3d9fLTg4b/8mLI91Br40CgYEA9gOIWo5MYm6p7oQ0K0viOlYeBUrlVvou20DjphPBH5j+PB0YP0i2mimfhJAhvq1sQf6f6KqJ0PybYPdP3eF1vEamnmH1mrVUnNF7tzsTjAquT+htcIGyNh64UfCDdk27jbmjEd1l+mAqALAuaQvneUYh0F1dNkiy5GFrappjaS0CgYEA8EOHLseSYdGTYzwhn/ZNkFk4S1P3KDehsZCMzGngV1XNWO4as0tV8Muz87rN7DdA+xET+zv7ow15V95W8pDas6/avaCArEKgxgLxwnQhUTHo6AaxZ+2OgfpFQXWdAgbKkcCfChC+MJSst7d1fPRK9tji+rC/Smv20sKfZKPK7FcCgYBkGl3iUyKbruHwjtTXhUIhcKc4ihg1wwlL5+R50HH11IAmn8QdBA5hPmyNOUSx3Mk/NUeGGdaINjFXTGqwIyyQFsN3kO6qK/yo7siDb0Nt6W6yTyYw8GU+hlOD6/TiL5EQgyfqfgcf0P9mVkocLl7axwG9UjA6hWxdZ5KYxweKZQKBgQC6K7kuGFpnDZvlQwzTBGlptpiWVgOn2COkkVtocYnyYnvxst5hm7iGE3HnJBK4PMBPSxZukDYWTDSAT7qTzoaIwXT/hsTttdsaU+G9SXsfjUrpr3X8D+li8eiEJnx4u4ZvlhAmHn8g6bND0BZrsmf8Cmcm1ZoEMtBY05Hqy7hLlQKBgBQTaSTktsJYAQFj465F8LnrXw1zXl9RTSSu2wLR6cVDr7ugexUIScTUixxfF8kNshVYxthaq0g+Yft/eifkR6U4zPKGmzf2kY8WQ3yXmPjlRY7L+kS3DbaFQoVbZ2smqcTJXO1xSJJBWqLokCIfxLGh4+N6SUejb1WYwSU7DpGN" ],
+        "certificate" : [ "MIICoTCCAYkCBgGX6+7bxjANBgkqhkiG9w0BAQsFADAUMRIwEAYDVQQDDAlIb3RUb3BpY3MwHhcNMjUwNzA4MjEyNDQ5WhcNMzUwNzA4MjEyNjI5WjAUMRIwEAYDVQQDDAlIb3RUb3BpY3MwggEiMA0GCSqGSIb3DQEBAQUAA4IBDwAwggEKAoIBAQDm5DSqZm6GmEFarzz4jO9kqZg47qLKaYvdIhSE8xy0AZaeSv/zbqTE5+9gZyic8pZbnUW5hFc6+ZZynLXvuABrX4dmMkxuz4lW92ykIOH96WnquBWoETV4xq08N7c3GmOTPLJHRqiFaFYqe8hiIR4YOwdeKDBJCHf6PRmIS9fbPUn6I9v09FBJ0QeNNHLzfKswqEbZ5SLLfF/Pb+Pp2ht2+K9R09HHloPz0SeN/9sGEB1lNDUa7VwbAFOMHwBgMmqBrotiHR8RglJaR4xdy1QrMnoPetwzrdfEhO6k6t69o+Tcgg4ho5qXG+aEdTpYadKjKVCPcLxy+7nO7orBQDpLAgMBAAEwDQYJKoZIhvcNAQELBQADggEBAC/V566W+H0+2sh7gt9i2sdmhsKq8ltSlMlCGPD+nPzsnXXZj8y9fLGlbH8KpnVPKaI+bcXsHNz0PvKvGtVIDGrDJ2w+FSFpp2qcV/oEqoVM27oljPPwUnKdzfe814arM6Fo3vUPhywDo//jE0ErMFRR7vTquJfSm6ClQn43aV3lu9m1W49Lny/Rho6qCJX4Jxs4UCpn7uCk++os0MATdBcf6pMRR69daN2ll3HcYvtK3NY4lRI0jqo7r5/IKSlSYouxjVbGcM+UmPkkpqmN6Hcx3fDpX52cI7N5YwAR7Ezcd9sP/RdmktFg4ATOyTAeqIZwJvia87dkhjCnlVVlqeQ=" ],
         "priority" : [ "100" ],
         "algorithm" : [ "RSA-OAEP" ]
       }
@@ -1388,8 +1402,8 @@
       "providerId" : "hmac-generated",
       "subComponents" : { },
       "config" : {
-        "kid" : [ "eb79ae48-3771-400f-86b5-89c31bbf3f05" ],
-        "secret" : [ "lViQp6W1G9JpB22wwEyUZ04gnbNdx1rI_8Qz0uOQJPV2PIHC8HTSy92JQCh7UjX8f3QTYIlB2VLg42U_e3MklG691a8laUOkOhSrg4FCdc_Sr0HwQioJNfDNn-7YH59AW2zqhgVauiToTIzhcQ5MdGC-V_pHNsU_NDtjiE7aUsk" ],
+        "kid" : [ "73b70c1b-cd29-4527-8f3e-861b13ee117e" ],
+        "secret" : [ "5GBcjCBcscwneNVjQAiTc72QI4__OYQ4I-KgMfau2XA91oZxmbK2iA6vsJE3EIlLIFXw1i0dT2MvZ_9T5kqgBAbDQFVoeeWyqeF6d69uiJRJ2lDS9LcwrHCnTwgfmODrZ9nvP4MSKvui712TWBRdWfOwkASgN-FcsGVroP2jrOk" ],
         "priority" : [ "100" ],
         "algorithm" : [ "HS512" ]
       }
@@ -1399,8 +1413,8 @@
       "providerId" : "aes-generated",
       "subComponents" : { },
       "config" : {
-        "kid" : [ "272aac11-6ab0-477f-85a6-b1799848538b" ],
-        "secret" : [ "oNLOPa4hwcySweCFewJD3A" ],
+        "kid" : [ "7574b365-4fa6-413e-8778-679c09ff9125" ],
+        "secret" : [ "SczEUFAZ6_Ugzqv_0FAW7g" ],
         "priority" : [ "100" ]
       }
     } ]
@@ -1518,6 +1532,65 @@
       "userSetupAllowed" : false
     } ]
   }, {
+    "id" : "1f7ea1c5-e3ed-4ac5-8efe-9fd92ec0d688",
+    "alias" : "Registration with Email",
+    "description" : "registration flow",
+    "providerId" : "basic-flow",
+    "topLevel" : true,
+    "builtIn" : false,
+    "authenticationExecutions" : [ {
+      "authenticator" : "registration-page-form",
+      "authenticatorFlow" : true,
+      "requirement" : "REQUIRED",
+      "priority" : 10,
+      "autheticatorFlow" : true,
+      "flowAlias" : "Registration with Email registration form",
+      "userSetupAllowed" : false
+    }, {
+      "authenticator" : "idp-email-verification",
+      "authenticatorFlow" : false,
+      "requirement" : "REQUIRED",
+      "priority" : 11,
+      "autheticatorFlow" : false,
+      "userSetupAllowed" : false
+    } ]
+  }, {
+    "id" : "b9974af1-11e5-4aec-9ba0-68288c5a83d6",
+    "alias" : "Registration with Email registration form",
+    "description" : "registration form",
+    "providerId" : "form-flow",
+    "topLevel" : false,
+    "builtIn" : false,
+    "authenticationExecutions" : [ {
+      "authenticator" : "registration-user-creation",
+      "authenticatorFlow" : false,
+      "requirement" : "REQUIRED",
+      "priority" : 20,
+      "autheticatorFlow" : false,
+      "userSetupAllowed" : false
+    }, {
+      "authenticator" : "registration-password-action",
+      "authenticatorFlow" : false,
+      "requirement" : "REQUIRED",
+      "priority" : 50,
+      "autheticatorFlow" : false,
+      "userSetupAllowed" : false
+    }, {
+      "authenticator" : "registration-recaptcha-action",
+      "authenticatorFlow" : false,
+      "requirement" : "DISABLED",
+      "priority" : 60,
+      "autheticatorFlow" : false,
+      "userSetupAllowed" : false
+    }, {
+      "authenticator" : "registration-terms-and-conditions",
+      "authenticatorFlow" : false,
+      "requirement" : "DISABLED",
+      "priority" : 70,
+      "autheticatorFlow" : false,
+      "userSetupAllowed" : false
+    } ]
+  }, {
     "id" : "b0f4457f-1ddf-42f4-85bd-2d592c0e6a0b",
     "alias" : "Reset - Conditional OTP",
     "description" : "Flow to determine if the OTP should be reset or not. Set to REQUIRED to force.",
@@ -1618,6 +1691,93 @@
       "priority" : 30,
       "autheticatorFlow" : true,
       "flowAlias" : "forms",
+      "userSetupAllowed" : false
+    } ]
+  }, {
+    "id" : "4db8b589-fc66-46de-b5a7-9b5889802273",
+    "alias" : "browser with required actions",
+    "description" : "browser based authentication",
+    "providerId" : "basic-flow",
+    "topLevel" : true,
+    "builtIn" : false,
+    "authenticationExecutions" : [ {
+      "authenticator" : "auth-cookie",
+      "authenticatorFlow" : false,
+      "requirement" : "ALTERNATIVE",
+      "priority" : 10,
+      "autheticatorFlow" : false,
+      "userSetupAllowed" : false
+    }, {
+      "authenticator" : "auth-spnego",
+      "authenticatorFlow" : false,
+      "requirement" : "DISABLED",
+      "priority" : 20,
+      "autheticatorFlow" : false,
+      "userSetupAllowed" : false
+    }, {
+      "authenticator" : "identity-provider-redirector",
+      "authenticatorFlow" : false,
+      "requirement" : "ALTERNATIVE",
+      "priority" : 25,
+      "autheticatorFlow" : false,
+      "userSetupAllowed" : false
+    }, {
+      "authenticatorFlow" : true,
+      "requirement" : "REQUIRED",
+      "priority" : 30,
+      "autheticatorFlow" : true,
+      "flowAlias" : "browser with required actions forms",
+      "userSetupAllowed" : false
+    } ]
+  }, {
+    "id" : "0b5f29af-ce5a-46e4-b258-e5a62a6cad39",
+    "alias" : "browser with required actions Browser - Conditional OTP",
+    "description" : "Flow to determine if the OTP is required for the authentication",
+    "providerId" : "basic-flow",
+    "topLevel" : false,
+    "builtIn" : false,
+    "authenticationExecutions" : [ {
+      "authenticator" : "conditional-user-configured",
+      "authenticatorFlow" : false,
+      "requirement" : "REQUIRED",
+      "priority" : 10,
+      "autheticatorFlow" : false,
+      "userSetupAllowed" : false
+    }, {
+      "authenticator" : "auth-otp-form",
+      "authenticatorFlow" : false,
+      "requirement" : "REQUIRED",
+      "priority" : 20,
+      "autheticatorFlow" : false,
+      "userSetupAllowed" : false
+    } ]
+  }, {
+    "id" : "9d219012-ceb9-4508-8200-ddd249373aa0",
+    "alias" : "browser with required actions forms",
+    "description" : "Username, password, otp and other auth forms.",
+    "providerId" : "basic-flow",
+    "topLevel" : false,
+    "builtIn" : false,
+    "authenticationExecutions" : [ {
+      "authenticator" : "auth-username-password-form",
+      "authenticatorFlow" : false,
+      "requirement" : "REQUIRED",
+      "priority" : 10,
+      "autheticatorFlow" : false,
+      "userSetupAllowed" : false
+    }, {
+      "authenticatorFlow" : true,
+      "requirement" : "CONDITIONAL",
+      "priority" : 20,
+      "autheticatorFlow" : true,
+      "flowAlias" : "browser with required actions Browser - Conditional OTP",
+      "userSetupAllowed" : false
+    }, {
+      "authenticator" : "conditional-level-of-authentication",
+      "authenticatorFlow" : false,
+      "requirement" : "REQUIRED",
+      "priority" : 21,
+      "autheticatorFlow" : false,
       "userSetupAllowed" : false
     } ]
   }, {
@@ -1899,7 +2059,7 @@
     "name" : "Verify Email",
     "providerId" : "VERIFY_EMAIL",
     "enabled" : true,
-    "defaultAction" : false,
+    "defaultAction" : true,
     "priority" : 50,
     "config" : { }
   }, {
@@ -1966,6 +2126,7 @@
     "oauth2DeviceCodeLifespan" : "3600",
     "parRequestUriLifespan" : "60",
     "clientSessionMaxLifespan" : "0",
+    "adminEventsExpiration" : "36288000",
     "shortVerificationUri" : "",
     "actionTokenGeneratedByUserLifespan.reset-credentials" : ""
   },

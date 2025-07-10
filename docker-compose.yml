@@ -15,17 +15,35 @@ services:
     container_name: keycloak
     depends_on:
       - postgres
-    command: start-dev --import-realm  # ✅ easy bootstrap, switch to `start` later
+    command: 
+      - start-dev 
+      - --import-realm
+      - --hostname=localhost
+      - --hostname-port=8080
+      - --hostname-strict=false
+      - --hostname-strict-https=false
+      - --http-enabled=true
     ports:
       - "8080:8080"
     restart: always
     environment:
+      # Database
       KC_DB: postgres
       KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
       KC_DB_USERNAME: ${DB_USER}
       KC_DB_PASSWORD: ${DB_PASSWORD}
+      
+      # Admin
       KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN}
       KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
+      
+      # Hostname Config für Email Links
+      KC_HOSTNAME: localhost
+      KC_HOSTNAME_PORT: 8080
+      KC_HOSTNAME_STRICT: "false"
+      KC_HOSTNAME_STRICT_HTTPS: "false"
+      KC_HTTP_ENABLED: "true"
+      
     volumes:
       - keycloak_data:/opt/keycloak/data
       - ./keycloak/exports:/opt/keycloak/data/import
