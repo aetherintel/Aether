@@ -76,14 +76,14 @@ KEYCLOAK_HOSTNAME_STRICT=false
 
 KEYCLOAK_URL=http://localhost:8080/realms/HotTopics
 KEYCLOAK_CLIENT_ID=HotTopics
-KEYCLOAK_CLIENT_SECRET=NnVo5XzQv3xmq3RSK5kWoWTJB3Xn1Cbs
+KEYCLOAK_CLIENT_SECRET=IVe53dL7kdbCLz8rpepuDEr1KaZnvNx0
 PUBLIC_KEY_URL=/protocol/openid-connect/certs
 KEYCLOAK_BASE_URL=http://keycloak:8080
 SWAGGER_TOKEN_URL=http://localhost:8080/realms/HotTopics/protocol/openid-connect/token
 KEYCLOAK_PUBLIC_URL=http://localhost:8080/realms/HotTopics
 
 KEYCLOAK_ADMIN_CLIENT_ID=backend-admin-client
-KEYCLOAK_ADMIN_CLIENT_SECRET=DT4uLhjfnhf5414KUFgm8lAxHrmrjsF9
+KEYCLOAK_ADMIN_CLIENT_SECRET=F0DVD1k2c9N6IBRxbhvCsHaUpQbXltHz
 
 TG_API_ID=...
 TG_API_HASH=...
