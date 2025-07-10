@@ -62,9 +62,6 @@ async def main():
 
     elif MODE == "full":
         for root in CHANNELS:
-            if await is_scraped(root):
-                print(f"[SKIP] Channel {root} already scraped, skipping...")
-                continue
             
             # Step 1: Scrape the root channel (with recursive container spawning)
             await run_scraper([root], SESSION_NAME, recursive=RECURSIVE, skip_history=SKIP_HISTORY)
