@@ -378,29 +378,6 @@
   "webAuthnPolicyPasswordlessAcceptableAaguids" : [ ],
   "webAuthnPolicyPasswordlessExtraOrigins" : [ ],
   "users" : [ {
-    "id" : "b027efa2-9ee5-47e8-990d-820c6e9aae47",
-    "username" : "fred",
-    "firstName" : "Jan-Frederik",
-    "lastName" : "Felsch",
-    "email" : "janfrederik.felsch@googlemail.com",
-    "emailVerified" : true,
-    "createdTimestamp" : 1752012062379,
-    "enabled" : true,
-    "totp" : false,
-    "credentials" : [ {
-      "id" : "205d08dc-7dfb-4d28-8d25-91966c256240",
-      "type" : "password",
-      "userLabel" : "My password",
-      "createdDate" : 1752012219823,
-      "secretData" : "{\"value\":\"hJXVs9EaIPAG3Vlwe0ADOULue8WqaMq9o5yFSt6C0LiaUeaGr8/3ge7ONBiehSiM/Gi3d9YfspbkRxJ+T+VDCQ==\",\"salt\":\"KfK1kyxn3cFgZA/i4+/neA==\",\"additionalParameters\":{}}",
-      "credentialData" : "{\"hashIterations\":210000,\"algorithm\":\"pbkdf2-sha512\",\"additionalParameters\":{}}"
-    } ],
-    "disableableCredentialTypes" : [ ],
-    "requiredActions" : [ ],
-    "realmRoles" : [ "default-roles-hottopics" ],
-    "notBefore" : 0,
-    "groups" : [ ]
-  }, {
     "id" : "6c954d17-e690-429b-8e57-fd3165af96a4",
     "username" : "service-account-backend-admin-client",
     "emailVerified" : false,
@@ -650,7 +627,7 @@
     "alwaysDisplayInConsole" : false,
     "clientAuthenticatorType" : "client-secret",
     "secret" : "IVe53dL7kdbCLz8rpepuDEr1KaZnvNx0",
-    "redirectUris" : [ "http://localhost:8000/*" ],
+    "redirectUris" : [ "https://aether.tech/*", "http://localhost/*", "http://localhost:8000/*", "http://localhost:5713/*" ],
     "webOrigins" : [ "http://localhost:8000" ],
     "notBefore" : 0,
     "bearerOnly" : false,
@@ -667,6 +644,7 @@
       "client.secret.creation.time" : "1752042330",
       "backchannel.logout.session.required" : "true",
       "post.logout.redirect.uris" : "+",
+      "display.on.consent.screen" : "false",
       "oauth2.device.authorization.grant.enabled" : "false",
       "backchannel.logout.revoke.offline.tokens" : "false"
     },
