@@ -24,15 +24,21 @@ interface CaseFileListProps {
   archived: boolean;
   refreshTrigger?: number;
   onRefresh?: () => void;
+  limit?: number;
+  compact?: boolean;
 }
 
-export function CaseFileList({ archived, refreshTrigger, onRefresh }: CaseFileListProps) {
+export function CaseFileList({ archived, refreshTrigger, onRefresh, limit, compact = false }: CaseFileListProps) {
   const [caseFiles, setCaseFiles] = useState<CaseFile[]>([]);
   const [loading, setLoading] = useState(true);
 
   const fetchCaseFiles = async () => {
     const fetchUrl = new URL(`${apiUrl ?? 'http://localhost:8000/api'}/casefiles/`);
     fetchUrl.searchParams.set('archived', archived ? 'true' : 'false');
+
+    if (limit) {
+      fetchUrl.searchParams.set('limit', limit.toString());
+    }
 
     setLoading(true);
     
@@ -107,10 +113,10 @@ export function CaseFileList({ archived, refreshTrigger, onRefresh }: CaseFileLi
     {caseFiles.length === 0 ? (
       <Text>No cases found</Text>
     ) : (
-      <Grid columns={3} gutter={20}>
+      <Grid columns={compact ? 1 : 3} gutter={compact ? 10 : 20}>
         {caseFiles.map((caseFile) => (
-          <Grid.Col key={caseFile.id} span={{ base: 3, md: 1 }}>
-            <CaseCard caseFile={caseFile} onArchive={handleArchive} onDelete={handleDelete} />
+          <Grid.Col key={caseFile.id} span={compact ? 1 : { base: 3, md: 1 }}>
+            <CaseCard caseFile={caseFile} onArchive={handleArchive} onDelete={handleDelete} compact={compact} />
           </Grid.Col>
         ))}
       </Grid>
