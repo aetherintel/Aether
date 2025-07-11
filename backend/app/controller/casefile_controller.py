@@ -184,12 +184,16 @@ def create_casefile_with_status(
 @router.get("/", response_model=List[CaseFile])
 def read_casefiles(
     archived: bool | None = False,
+    limit: Optional[int] = None,
     db: Session = Depends(get_db),
     user: UserCtx = Depends(user_ctx),                    # NEW
 ):
     q = db.query(CaseFileModel)
     if not is_admin(user):                                # NEW
         q = q.filter_by(owner_id=user["id"])
+
+    if limit is not None:
+        q = q.limit(limit)
 
     if archived is not None:
         q = q.filter_by(archived=archived)
