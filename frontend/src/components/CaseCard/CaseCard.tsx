@@ -1,4 +1,4 @@
-import { IconArchive, IconEdit, IconTrash } from '@tabler/icons-react';
+import { IconArchive, IconTrash } from '@tabler/icons-react';
 import { ActionIcon, Badge, Button, Card, Group, Image, Menu, rem, SimpleGrid, Text } from '@mantine/core';
 import classes from './CaseCard.module.css';
 import { CaseFile } from '../CaseFileList/CaseFileList';

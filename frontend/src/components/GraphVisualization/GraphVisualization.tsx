@@ -5,18 +5,22 @@ import { authFetch } from '@/utils/authFetch';
 interface GraphVisualizationProps {
   selectedChannelIds: string[];
   searchQuery?: string;
+  user?: string | null;
+  type?: string | null;
 }
 
 const GraphVisualization: React.FC<GraphVisualizationProps> = ({ 
   selectedChannelIds, 
-  searchQuery 
+  searchQuery,
+  user,
+  type
 }) => {
   const vizRef = useRef<HTMLDivElement>(null);
   const networkRef = useRef<any>(null);
   const [loading, setLoading] = useState(false);
   const [visualizationType, setVisualizationType] = useState<string>('network');
   const [visLoaded, setVisLoaded] = useState(false);
-
+  
   // Load vis.js from CDN 
   // TODO: install npm packages vis-network and vis-data
   useEffect(() => {
@@ -49,38 +53,73 @@ const GraphVisualization: React.FC<GraphVisualizationProps> = ({
       networkRef.current = null;
     }
 
-    // Prepare nodes
+    // Prepare nodes with different colors for different types
+    const getNodeColor = (nodeType: string) => {
+      switch (nodeType) {
+        case 'Channel':
+          return {
+            background: '#ff6b6b',
+            border: '#ff5252',
+            highlight: { background: '#ff8a80', border: '#ff1744' }
+          };
+        case 'User':
+          return {
+            background: '#4ecdc4',
+            border: '#26c6da',
+            highlight: { background: '#80e5ff', border: '#00acc1' }
+          };
+        case 'Message':
+          return {
+            background: '#ffd93d',
+            border: '#ffcc02',
+            highlight: { background: '#ffeb3b', border: '#ff8f00' }
+          };
+        default:
+          return {
+            background: '#95a5a6',
+            border: '#7f8c8d',
+            highlight: { background: '#bdc3c7', border: '#34495e' }
+          };
+      }
+    };
+
     const nodes = data.nodes.map((node: any) => ({
       id: node.id,
       label: node.label,
       group: node.type,
       title: `${node.type}: ${node.label}`,
-      color: {
-        background: node.type === 'Channel' ? '#ff6b6b' : '#4ecdc4',
-        border: node.type === 'Channel' ? '#ff5252' : '#26c6da',
-        highlight: {
-          background: node.type === 'Channel' ? '#ff8a80' : '#80e5ff',
-          border: node.type === 'Channel' ? '#ff1744' : '#00acc1'
-        }
-      },
+      color: getNodeColor(node.type),
       size: Math.max((node.properties?.message_count || 1) * 2, 15),
       font: { size: 12, color: '#000000' }
     }));
 
-    // Prepare edges
+    // Prepare edges with different colors for different relationship types
+    const getEdgeColor = (relType: string) => {
+      switch (relType) {
+        case 'RECOMMENDS':
+          return { color: '#e74c3c', highlight: '#c0392b', hover: '#c0392b' };
+        case 'SENT':
+          return { color: '#3498db', highlight: '#2980b9', hover: '#2980b9' };
+        case 'IN_CHANNEL':
+          return { color: '#f39c12', highlight: '#e67e22', hover: '#e67e22' };
+        case 'POSTS_IN':
+          return { color: '#2ecc71', highlight: '#27ae60', hover: '#27ae60' };
+        case 'REPLIES_TO':
+          return { color: '#9b59b6', highlight: '#8e44ad', hover: '#8e44ad' };
+        default:
+          return { color: '#848484', highlight: '#2196f3', hover: '#2196f3' };
+      }
+    };
+
     const edges = data.relationships.map((rel: any) => ({
       id: rel.id,
       from: rel.from,
       to: rel.to,
       label: rel.type,
-      title: `${rel.type}${rel.properties?.message_count ? ` (${rel.properties.message_count} messages)` : ''}`,
-      width: Math.min(Math.max(rel.properties?.message_count || 1, 1), 10),
+      title: `${rel.type}${rel.properties?.message_count ? ` (${rel.properties.message_count} messages)` : ''}${rel.properties?.score ? ` (Score: ${rel.properties.score})` : ''}`,
+      width: Math.min(Math.max(rel.properties?.message_count || rel.properties?.score || 1, 1), 10),
       arrows: 'to',
-      color: { 
-        color: '#848484',
-        highlight: '#2196f3',
-        hover: '#2196f3'
-      },
+      color: getEdgeColor(rel.type),
       smooth: { type: 'continuous' }
     }));
 
@@ -163,6 +202,8 @@ const GraphVisualization: React.FC<GraphVisualizationProps> = ({
         body: JSON.stringify({
           channel_ids: selectedChannelIds,
           search_query: searchQuery,
+          user: user || null,
+          type: type || null,
           limit: 100,
           visualization_type: visualizationType
         })
@@ -172,8 +213,6 @@ const GraphVisualization: React.FC<GraphVisualizationProps> = ({
 
       if (visualizationType === 'network') {
         await renderNetworkVisualization(data);
-      } else if (visualizationType === 'timeline') {
-        renderTimelineVisualization(data);
       }
 
     } catch (error) {
@@ -183,64 +222,11 @@ const GraphVisualization: React.FC<GraphVisualizationProps> = ({
     }
   };
 
-  const renderTimelineVisualization = (data: any) => {
-    if (!vizRef.current) {return;}
-
-    // Clear previous network
-    if (networkRef.current) {
-      networkRef.current.destroy();
-      networkRef.current = null;
-    }
-
-    // Clear previous content
-    vizRef.current.innerHTML = '';
-
-    // Create timeline HTML
-    const timelineContainer = document.createElement('div');
-    timelineContainer.style.cssText = `
-      height: 400px;
-      overflow-y: auto;
-      padding: 20px;
-      background: #f8f9fa;
-      border-radius: 8px;
-    `;
-
-    data.timeline.forEach((item: any) => {
-      const timelineItem = document.createElement('div');
-      timelineItem.style.cssText = `
-        display: flex;
-        margin-bottom: 20px;
-        padding: 15px;
-        background: white;
-        border-radius: 8px;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        border-left: 4px solid #3b82f6;
-      `;
-
-      timelineItem.innerHTML = `
-        <div style="flex: 1;">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-            <strong style="color: #1f2937;">${item.author}</strong>
-            <div style="display: flex; gap: 10px; font-size: 12px; color: #6b7280;">
-              <span>@${item.channel}</span>
-              <span>${new Date(item.date).toLocaleDateString()}</span>
-            </div>
-          </div>
-          <p style="margin: 0; color: #374151; line-height: 1.5;">${item.text}</p>
-        </div>
-      `;
-
-      timelineContainer.appendChild(timelineItem);
-    });
-
-    vizRef.current.appendChild(timelineContainer);
-  };
-
   useEffect(() => {
     if (visLoaded && selectedChannelIds.length > 0) {
       renderVisualization();
     }
-  }, [visLoaded, selectedChannelIds, searchQuery, visualizationType]);
+  }, [visLoaded, selectedChannelIds, searchQuery, visualizationType, user, type]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -271,8 +257,7 @@ const GraphVisualization: React.FC<GraphVisualizationProps> = ({
             value={visualizationType}
             onChange={(value) => setVisualizationType(value || 'network')}
             data={[
-              { value: 'network', label: 'Network Graph' },
-              { value: 'timeline', label: 'Timeline View' }
+              { value: 'network', label: 'Network Graph' }
             ]}
             style={{ minWidth: 200 }}
           />
