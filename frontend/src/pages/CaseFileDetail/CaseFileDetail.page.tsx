@@ -176,6 +176,11 @@ export function CaseFileDetail() {
       const groupChannel = channelMap.get(groupKey.toLowerCase()) || null;
 
       const recommended: Record<string, { channel: Channel }> = {};
+
+      if (groupChannel) {
+        recommended[groupChannel.username] = { channel: groupChannel };
+      }
+
       for (const recUsername of recommendedUsernames) {
         const recChannel = channelMap.get(recUsername.toLowerCase());
         if (recChannel) {
