@@ -47,14 +47,14 @@ export function Login() {
       navigate('/'); // Redirect after successful login
 
       notifications.show({
-        title: 'Login erfolgreich',
-        message: 'Willkommen zurück!',
+        title: 'Login successful',
+        message: 'Welcome back!',
         color: 'green',
       });
     } catch (err) {
       notifications.show({
-        title: 'Login fehlgeschlagen',
-        message: 'E-Mail oder Passwort ist falsch',
+        title: 'Login failed',
+        message: 'E-mail or password is wrong',
         color: 'red',
       });
     }
