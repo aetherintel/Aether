@@ -22,6 +22,8 @@ class CypherQuery(BaseModel):
 class GraphVisualizationRequest(BaseModel):
     channel_ids: Optional[List[str]] = None
     search_query: Optional[str] = None
+    user: Optional[str] = None
+    type: Optional[str] = None
     limit: Optional[int] = 100
     visualization_type: str = "network"  # network, timeline, etc.
 
@@ -67,166 +69,126 @@ async def get_visualization_data(viz_request: GraphVisualizationRequest):
     try:
         if viz_request.visualization_type == "network":
             return await get_network_visualization(viz_request)
-        elif viz_request.visualization_type == "timeline":
-            return await get_timeline_visualization(viz_request)
         else:
             raise HTTPException(status_code=400, detail="Unsupported visualization type")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Visualization failed: {str(e)}")
 
 async def get_network_visualization(viz_request: GraphVisualizationRequest):
-    """Generate network visualization data"""
+    """Generate network visualization data for user or channel types"""
     async with driver.session() as session:
-        # Build dynamic query based on request
-        where_clauses = []
+        type_mode = viz_request.type
         params = {"limit": viz_request.limit}
-        
-        if viz_request.channel_ids:
-            where_clauses.append("ch.channel_id IN $channel_ids")
-            params["channel_ids"] = viz_request.channel_ids
-        
-        if viz_request.search_query:
-            where_clauses.append("toLower(m.text) CONTAINS toLower($search_query)")
-            params["search_query"] = viz_request.search_query
-        
-        where_clause = "WHERE " + " AND ".join(where_clauses) if where_clauses else ""
 
-        query = f"""
-        MATCH (ch:Channel)-[:HAS_MESSAGE]->(m:Message)<-[:SENT]-(u:User)
-        {where_clause}
-        WITH ch, u, count(m) as message_count
-        MATCH (ch)-[:HAS_MESSAGE]->(m2:Message)<-[:SENT]-(u)
-        OPTIONAL MATCH (u)-[:SENT]->(reply:Message)-[:REPLY_TO]->(original:Message)<-[:SENT]-(other_user:User)
-        RETURN 
-            ch.channel_id as channel_id,
-            ch.username as channel_name,
-            ch.title as channel_title,
-            u.user_id as user_id,
-            u.username as username,
-            u.first_name as first_name,
-            u.last_name as last_name,
-            message_count,
-            collect(DISTINCT other_user.user_id) as replied_to_users
-        LIMIT $limit
-        """
-        
-        result = await session.run(query, params)
-        
         nodes = []
         relationships = []
         node_ids = set()
-        
-        async for record in result:
-            # Add channel node
-            channel_id = f"ch_{record['channel_id']}"
-            if channel_id not in node_ids:
-                nodes.append({
-                    "id": channel_id,
-                    "label": record["channel_name"] or record["channel_title"],
-                    "type": "Channel",
-                    "properties": {
-                        "username": record["channel_name"],
-                        "title": record["channel_title"]
-                    }
-                })
-                node_ids.add(channel_id)
-            
-            # Add user node
-            user_name = record["username"] or f"{record['first_name'] or ''} {record['last_name'] or ''}".strip() or "Unknown"
-            user_id = f"u_{record['user_id']}"
-            if user_id not in node_ids:
-                nodes.append({
-                    "id": user_id,
-                    "label": user_name,
-                    "type": "User",
-                    "properties": {
-                        "username": record["username"],
-                        "first_name": record["first_name"],
-                        "last_name": record["last_name"]
-                    }
-                })
-                node_ids.add(user_id)
-            
-            # Add relationship: User -> Channel
-            relationships.append({
-                "id": f"{user_id}_posts_in_{channel_id}",
-                "from": user_id,
-                "to": channel_id,
-                "type": "POSTS_IN",
-                "properties": {
-                    "message_count": record["message_count"]
-                }
-            })
-            
-            # Add reply relationships
-            for replied_user_id in record["replied_to_users"]:
-                if replied_user_id:
-                    replied_user_node_id = f"u_{replied_user_id}"
-                    relationships.append({
-                        "id": f"{user_id}_replies_to_{replied_user_node_id}",
-                        "from": user_id,
-                        "to": replied_user_node_id,
-                        "type": "REPLIES_TO",
-                        "properties": {}
+
+        if type_mode == "user" and viz_request.user:
+            params["username"] = viz_request.user
+
+            query = """
+            MATCH (u:User {username: $username})-[:SENT]->(m:Message)
+            RETURN u, m
+            LIMIT $limit
+            """
+            result = await session.run(query, params)
+
+            async for record in result:
+                user = record["u"]
+                message = record["m"]
+
+                user_id = f"u_{user.id}"
+                message_id = f"m_{message.id}"
+
+                if user_id not in node_ids:
+                    nodes.append({
+                        "id": user_id,
+                        "label": user.get("username") or "Unknown User",
+                        "type": "User",
+                        "properties": dict(user)
                     })
-        
+                    node_ids.add(user_id)
+
+                if message_id not in node_ids:
+                    nodes.append({
+                        "id": message_id,
+                        "label": message.get("text", "")[:30] + "...",
+                        "type": "Message",
+                        "properties": dict(message)
+                    })
+                    node_ids.add(message_id)
+
+                relationships.append({
+                    "id": f"{user_id}_created_{message_id}",
+                    "from": user_id,
+                    "to": message_id,
+                    "type": "CREATED",
+                    "properties": {}
+                })
+
+        elif type_mode == "channel" and viz_request.user:
+            params["channel_ids"] = [viz_request.user]
+
+            query = """
+            MATCH (c1:Channel)-[r:RECOMMENDS]->(c2:Channel)
+            WHERE c1.channel_id IN $channel_ids
+            RETURN c1, c2, r
+            LIMIT $limit
+            """
+            result = await session.run(query, params)
+
+            async for record in result:
+                c1 = record["c1"]
+                c2 = record["c2"]
+                r = record["r"]
+
+                c1_id = f"ch_{c1['channel_id']}"
+                c2_id = f"ch_{c2['channel_id']}"
+
+                if c1_id not in node_ids:
+                    nodes.append({
+                        "id": c1_id,
+                        "label": c1.get("username") or c1.get("title") or "Channel",
+                        "type": "Channel",
+                        "properties": dict(c1)
+                    })
+                    node_ids.add(c1_id)
+
+                if c2_id not in node_ids:
+                    nodes.append({
+                        "id": c2_id,
+                        "label": c2.get("username") or c2.get("title") or "Channel",
+                        "type": "Channel",
+                        "properties": dict(c2)
+                    })
+                    node_ids.add(c2_id)
+
+                relationships.append({
+                    "id": f"{c1_id}_recommends_{c2_id}",
+                    "from": c1_id,
+                    "to": c2_id,
+                    "type": "RECOMMENDS",
+                    "properties": dict(r)
+                })
+
+        else:
+            return {
+                "nodes": [],
+                "relationships": [],
+                "summary": {
+                    "node_count": 0,
+                    "relationship_count": 0,
+                    "error": "Invalid or missing 'type', 'user', or 'channel_ids'."
+                }
+            }
+
         return {
             "nodes": nodes,
             "relationships": relationships,
             "summary": {
                 "node_count": len(nodes),
                 "relationship_count": len(relationships)
-            }
-        }
-
-async def get_timeline_visualization(viz_request: GraphVisualizationRequest):
-    """Generate timeline visualization data"""
-    async with driver.session() as session:
-        where_clauses = []
-        params = {"limit": viz_request.limit}
-        
-        if viz_request.channel_ids:
-            where_clauses.append("ch.channel_id IN $channel_ids")
-            params["channel_ids"] = viz_request.channel_ids
-        
-        if viz_request.search_query:
-            where_clauses.append("toLower(m.text) CONTAINS toLower($search_query)")
-            params["search_query"] = viz_request.search_query
-        
-        where_clause = "WHERE " + " AND ".join(where_clauses) if where_clauses else ""
-        
-        query = f"""
-        MATCH (ch:Channel)-[:HAS_MESSAGE]->(m:Message)<-[:SENT]-(u:User)
-        {where_clause}
-        RETURN 
-            m.date as date,
-            m.text as text,
-            m.mid as message_id,
-            ch.username as channel,
-            u.username as author,
-            u.first_name as first_name,
-            u.last_name as last_name
-        ORDER BY m.date DESC
-        LIMIT $limit
-        """
-        
-        result = await session.run(query, params)
-        
-        timeline_data = []
-        async for record in result:
-            author_name = record["author"] or f"{record['first_name'] or ''} {record['last_name'] or ''}".strip() or "Unknown"
-            timeline_data.append({
-                "date": record["date"],
-                "message_id": record["message_id"],
-                "text": record["text"][:200] + "..." if len(record["text"]) > 200 else record["text"],
-                "channel": record["channel"],
-                "author": author_name
-            })
-        
-        return {
-            "timeline": timeline_data,
-            "summary": {
-                "message_count": len(timeline_data)
             }
         }
 

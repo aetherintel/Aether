@@ -12,9 +12,10 @@ interface MessagesTabProps {
   selectedTgChannelIds: string[];
   searchQuery: string;
   setSearchQuery: React.Dispatch<React.SetStateAction<string>>;
+  onUpdateGraph: (type: string, name: string) => void;
 }
 
-const MessagesTab : React.FC<MessagesTabProps> = ({ selectedTgChannelIds, searchQuery, setSearchQuery }) => {
+const MessagesTab : React.FC<MessagesTabProps> = ({ selectedTgChannelIds, searchQuery, setSearchQuery, onUpdateGraph }) => {
     const LIMIT = 10;
     const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -306,8 +307,9 @@ const MessagesTab : React.FC<MessagesTabProps> = ({ selectedTgChannelIds, search
                 <Box>
                     <div className={classes.authorRow}>
                         <Text size="sm" fw={500} className={classes.authorName}>
-                            {message.author.name} <span className={classes.channelName}>
-                                [{message.channel.username}]
+                            <Anchor onClick={() => onUpdateGraph('user', message.author.name)}>{message.author.name}</Anchor> 
+                            <span className={classes.channelName} style={{ marginLeft: '0.25rem' }}>
+                                [<Anchor onClick={() => onUpdateGraph('channel', message.channel.username)} className={classes.channelName}>{message.channel.username}</Anchor>]
                             </span>
                         </Text>
                         <Text size="xs" className={classes.timestamp}>
