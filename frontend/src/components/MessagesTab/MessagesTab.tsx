@@ -1,4 +1,4 @@
-import { Text, Box, Button, Checkbox, Input, Loader, ScrollArea, Table, ActionIcon, Group, Tooltip } from "@mantine/core";
+import { Text, Box, Button, Checkbox, Input, Loader, ScrollArea, Table, ActionIcon, Group, Tooltip, Anchor } from "@mantine/core";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import classes from './MessagesTab.module.css';
 import { IconSearch, IconRefresh } from "@tabler/icons-react";
@@ -83,14 +83,54 @@ const MessagesTab : React.FC<MessagesTabProps> = ({ selectedTgChannelIds, search
     };
 
     function highlightText(text: string, query: string) {
-        if (!query) { return text; }
+        const urlRegex = /https?:\/\/[^\s]+/gi;
+        const queryRegex = query ? new RegExp(`(${escapeRegExp(query)})`, 'gi') : null;
 
-        const regex = new RegExp(`(${query})`, 'gi');
-        const parts = text.split(regex);
+        // Split by URLs
+        const urlParts = text.split(urlRegex);
+        const urls = text.match(urlRegex);
 
-        return parts.map((part, index) =>
-            regex.test(part) ? <mark key={index}>{part}</mark> : part
-        );
+        const result: React.ReactNode[] = [];
+
+        urlParts.forEach((part, i) => {
+            // Highlight regular text part (if query is present)
+            if (queryRegex) {
+                const highlighted = part.split(queryRegex).map((p, idx) =>
+                    queryRegex.test(p) ? <mark key={`highlight-${i}-${idx}`}>{p}</mark> : p
+                );
+                result.push(...highlighted);
+            } else {
+                result.push(part);
+            }
+
+            // If there's a corresponding URL, render it with optional highlighting
+            if (urls && urls[i]) {
+                const url = urls[i];
+                if (queryRegex) {
+                    const highlightedLink = url.split(queryRegex).map((p, idx) =>
+                        queryRegex.test(p) ? <mark key={`link-highlight-${i}-${idx}`}>{p}</mark> : p
+                    );
+                    result.push(
+                        <Anchor key={`link-${i}`} href={url} fz="xs" target="_blank" rel="noopener noreferrer" style={{ lineHeight: 1 }}>
+                            {highlightedLink}
+                        </Anchor>
+                    );
+                } else {
+                    result.push(
+                        <Anchor key={`link-${i}`} href={url} fz="sm" target="_blank" rel="noopener noreferrer" style={{ lineHeight: 1 }}>
+                            {url}
+                        </Anchor>
+                    );
+                }
+            }
+        });
+
+        return result;
+    }
+
+    // Utility to escape RegExp special characters from the query string
+    function escapeRegExp(str: string) {
+        return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     }
 
     const isVideoFile = (path: string): boolean => {
