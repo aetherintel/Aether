@@ -51,6 +51,15 @@
   padding: 0 2px;
 }
 
+.messagesAccordionItem {
+  border-bottom: none;
+}
+
+.configAccordionItem {
+  border-bottom: 1px solid var(--mantine-color-gray-5);
+  margin-bottom: var(--mantine-spacing-sm);
+}
+
 .noResults {
   color: var(--mantine-color-gray-5);
   font-style: italic;

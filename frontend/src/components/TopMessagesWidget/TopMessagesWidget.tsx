@@ -38,10 +38,12 @@ export function TopMessagesWidget() {
   });
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(false);
-  const [configOpen, setConfigOpen] = useState(true);
+  // Array for Accordion-Items
+  const [openItems, setOpenItems] = useState<string[]>(['config']);
 
-//load Config
+  //load Config
   useEffect(() => {
+    // load config
     const savedConfig = localStorage.getItem('topMessagesConfig');
     if (savedConfig) {
       try {
@@ -52,7 +54,7 @@ export function TopMessagesWidget() {
       }
     }
 
-  // load messages
+    // load messages
     const savedMessages = localStorage.getItem('topMessagesResults');
     if (savedMessages) {
       try {
@@ -61,7 +63,8 @@ export function TopMessagesWidget() {
       // check if messages are available
         if (msgData.length > 0) {
           setSearchParams(prev => ({ ...prev, isActive: true }));
-          setConfigOpen(false);
+          // open Messages-Accordion
+          setOpenItems(['messages']);
         }
       } catch (e) {
         console.error('Error loading saved messages:', e);
@@ -77,9 +80,9 @@ export function TopMessagesWidget() {
       isActive: false
     });
     setMessages([]);
-    setConfigOpen(true);
+    setOpenItems(['config']);
     
-    // delte saved data
+    // delete saved data
     localStorage.removeItem('topMessagesConfig');
     localStorage.removeItem('topMessagesResults');
   };
@@ -91,10 +94,12 @@ export function TopMessagesWidget() {
 
     setLoading(true);
     try {
+      // get channelInfo
       const base = apiUrl ?? 'http://localhost:8000/api';
       const channelInfoMap = new Map();
       
       try {
+        // load & save channels
         const channelsRes = await authFetch(`${base}/messages/channels`);
         const channelsData = await channelsRes.json();
         
@@ -107,49 +112,124 @@ export function TopMessagesWidget() {
         console.error("Error fetching channel information:", error);
       }
 
-      // get messages for every channeö
-      const results = await Promise.all(
+      // sort results per channel
+      const resultsPerChannel = await Promise.all(
         searchParams.channelIds.map(async (channelId) => {
           try {
             const url = new URL(`${base}/messages/channels/${channelId}/messages`);
-            url.searchParams.set('limit', '5');
-            url.searchParams.set('q', searchParams.keywords);
+            // more messages to sort after
+            url.searchParams.set('limit', '10');
+            url.searchParams.set('q', searchParams.keywords.trim());
+            
+            console.log(`API-Anfrage für Channel ${channelId}:`, url.toString());
             
             const res = await authFetch(url.toString());
             const data = await res.json();
             
-            return data.map((msg: any) => ({
-              ...msg,
-              channel_id: channelId,
-              channel_title: channelInfoMap.get(channelId)?.title || channelId
-            }));
+            console.log(`Ergebnis für Channel ${channelId}:`, data.length, "Nachrichten gefunden");
+            
+            return {
+              channelId,
+              messages: data.map((msg: any) => ({
+                ...msg,
+                channel_id: channelId,
+                channel_title: channelInfoMap.get(channelId)?.title || channelId
+              }))
+            };
           } catch (error) {
             console.error(`Error fetching messages for channel ${channelId}:`, error);
-            return [];
+            return { channelId, messages: [] };
           }
         })
       );
-
-      // Alle Nachrichten kombinieren, sortieren und auf die Top 5 begrenzen
-      const allMessages = results.flat();
-      const sortedMessages = allMessages
-        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-        .slice(0, 5);
-
-      setMessages(sortedMessages);
-
-      // Widget als aktiv markieren, wenn Nachrichten gefunden wurden
-      if (sortedMessages.length > 0) {
+      
+      // equality of messages
+      let allMessages: Message[] = [];
+      
+      // case for one channel
+      if (resultsPerChannel.length === 1) {
+        allMessages = resultsPerChannel[0].messages
+          .sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime())
+          .slice(0, 5);
+      } 
+      // case for more channels
+      else if (resultsPerChannel.length > 1) {
+        // sorting channels
+        const sortedChannels = [...resultsPerChannel]
+          .sort((a, b) => b.messages.length - a.messages.length);
+        
+        // how many messages per channel
+        const totalChannels = sortedChannels.length;
+        const totalMessages = 5;
+        
+        // messages for channel
+        const messagesPerChannel: Record<string, number> = {};
+        let remainingMessages = totalMessages;
+        
+        // only one message per channel
+        sortedChannels.forEach(channel => {
+          if (channel.messages.length > 0 && remainingMessages > 0) {
+            messagesPerChannel[channel.channelId] = 1;
+            remainingMessages--;
+          } else {
+            messagesPerChannel[channel.channelId] = 0;
+          }
+        });
+        
+        // sort messages for the rest
+        while (remainingMessages > 0) {
+          for (const channel of sortedChannels) {
+            if (channel.messages.length > messagesPerChannel[channel.channelId] && remainingMessages > 0) {
+              messagesPerChannel[channel.channelId]++;
+              remainingMessages--;
+            }
+            if (remainingMessages === 0) {
+              break;
+            }
+          }
+          // no messages remaining
+          if (remainingMessages === totalMessages) {
+            break;
+          }
+        }
+        
+        console.log("Verteilung der Nachrichten pro Kanal:", messagesPerChannel);
+        
+        // final messages
+        for (const channel of sortedChannels) {
+          const count = messagesPerChannel[channel.channelId];
+          if (count > 0) {
+            // Nachrichten für diesen Kanal nach Datum sortieren
+            const sortedMessages = channel.messages
+              .sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime())
+              .slice(0, count);
+            
+            allMessages = [...allMessages, ...sortedMessages];
+          }
+        }
+        
+        // sort
+        allMessages = allMessages.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      }
+      
+      console.log("Insgesamt ausgewählte Nachrichten:", allMessages.length);
+      setMessages(allMessages);
+      
+      // mark widget as active
+      if (allMessages.length > 0) {
         setSearchParams(prev => ({ ...prev, isActive: true }));
         
-        // Konfiguration und Ergebnisse speichern
+        // save config
         localStorage.setItem('topMessagesConfig', JSON.stringify({
           ...searchParams,
           isActive: true
         }));
-        localStorage.setItem('topMessagesResults', JSON.stringify(sortedMessages));
+        localStorage.setItem('topMessagesResults', JSON.stringify(allMessages));
         
-        setConfigOpen(false); // Konfigurationsbereich schließen
+        // switch to messages-view
+        setOpenItems(['messages']);
+      } else {
+        console.log("Keine Nachrichten gefunden. Widget bleibt inaktiv.");
       }
     } catch (error) {
       console.error('Error fetching top messages:', error);
@@ -192,53 +272,54 @@ export function TopMessagesWidget() {
     );
   };
 
+  // Handler for AccordionChange
+  const handleAccordionChange = (value: string[]) => {
+    setOpenItems(value);
+  };
+
+  // Button Klick-Handler
+  const handleConfigureClick = (e: React.MouseEvent) => {
+    e.stopPropagation(); // stop
+    
+    // if config is open
+    if (openItems.includes('config')) {
+      return;
+    }
+    // else
+    setOpenItems([...openItems, 'config']);
+  };
+
   return (
     <Box className={classes.widget}>
-      {!searchParams.isActive ? (
-        <div>
-          <Title order={3} className={classes.title}>Top 5 Messages</Title>
-          <TopMessagesForm
-            searchParams={searchParams}
-            setSearchParams={setSearchParams}
-            onSearch={fetchTopMessages}
-            onReset={resetWidget}
-          />
-        </div>
-      ) : (
-        <Accordion
-          value={configOpen ? 'config' : 'messages'}
-          onChange={(value) => {
-            if (value === 'config') {
-              setConfigOpen(true);
-            }
-          }}
-        >
-          <Accordion.Item value="config">
-            <Group justify="apart" className={classes.widgetHeader}>
-              <Accordion.Control>
-                <Title order={3} className={classes.title}>Top 5 Messages</Title>
-              </Accordion.Control>
-            </Group>
-            <Accordion.Panel>
-              <TopMessagesForm
-                searchParams={searchParams}
-                setSearchParams={setSearchParams}
-                onSearch={fetchTopMessages}
-                onReset={resetWidget}
-              />
-            </Accordion.Panel>
-          </Accordion.Item>
+      <Accordion 
+        multiple 
+        value={openItems} 
+        onChange={handleAccordionChange}
+      >
+        <Accordion.Item value="config" className={searchParams.isActive ? classes.configAccordionItem : ''}>
+          <Group justify="apart" className={classes.widgetHeader}>
+            <Accordion.Control>
+              <Title order={3} className={classes.title}>Top 5 Messages</Title>
+            </Accordion.Control>
+          </Group>
+          <Accordion.Panel>
+            <TopMessagesForm
+              searchParams={searchParams}
+              setSearchParams={setSearchParams}
+              onSearch={fetchTopMessages}
+              onReset={resetWidget}
+            />
+          </Accordion.Panel>
+        </Accordion.Item>
 
-          <Accordion.Item value="messages">
+        {searchParams.isActive && (
+          <Accordion.Item value="messages" className={classes.messagesAccordionItem}>
             <Group justify="apart" className={classes.widgetHeader}>
               <Accordion.Control>
                 <Title order={3} className={classes.title}>{searchParams.label}</Title>
               </Accordion.Control>
               <Button
-                onClick={(e) => {
-                  e.stopPropagation(); // stop
-                  setConfigOpen(true);
-                }}
+                onClick={handleConfigureClick}
                 variant="subtle"
                 size="xs"
                 className={classes.configButton}
@@ -268,8 +349,8 @@ export function TopMessagesWidget() {
               )}
             </Accordion.Panel>
           </Accordion.Item>
-        </Accordion>
-      )}
+        )}
+      </Accordion>
     </Box>
   );
 }
