@@ -11,8 +11,8 @@
 }
 
 .title {
-  font-size: rem(13);
-  font-weight: 700;
+  font-weight: 600;
+  font-size: 1.1rem;
   letter-spacing: rem(-0.3);
   color: light-dark(var(--mantine-color-black), var(--mantine-color-white));
 }

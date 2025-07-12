@@ -8,13 +8,13 @@ import classes from './DashboardCaseWidget.module.css';
 export function DashboardCaseWidget() {
   return (
     <Box className={classes.widget}>
-      <Group position="apart" className={classes.widgetHeader}>
+      <Group justify="apart" className={classes.widgetHeader}>
         <Title order={3} className={classes.title}>Recent Cases</Title>
         <Button
           component={Link}
           to="/cases"
           variant="subtle"
-          rightIcon={<IconChevronRight size={16} />}
+         /* rightIcon={<IconChevronRight size={16} />}*/
           className={classes.viewAllButton}
           size="sm"
         >
@@ -26,7 +26,7 @@ export function DashboardCaseWidget() {
         <CaseFileList
           archived={false}
           limit={3}
-          compact={true}
+          compact
         />
       </div>
     </Box>
