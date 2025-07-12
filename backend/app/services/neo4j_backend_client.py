@@ -469,6 +469,84 @@ async def get_user_messages(
             )
         return messages
     
+async def get_messages_with_media(
+    owner_id: str | None,
+    limit: int = 100,
+    before: datetime | None = None,
+    query: str | None = None,
+):
+    # Define common image file extensions
+    IMAGE_EXTENSIONS = {
+        '.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tiff', '.tif', 
+        '.webp', '.svg', '.ico', '.heic', '.heif', '.avif'
+    }
+    
+    async with get_session(owner_id) as session:
+        cypher = """
+        MATCH (u:User {owner_id:$ownerId})-[:SENT]->(m:Message)
+        MATCH (ch:Channel)-[:HAS_MESSAGE]->(m)
+        WHERE m.media_path IS NOT NULL
+        AND (
+            $query IS NULL OR $query = '' OR
+            (m.text IS NOT NULL AND toLower(m.text) CONTAINS toLower($query))
+        )
+        AND ($before IS NULL OR m.date < $before)
+        OPTIONAL MATCH (m)-[:REPLY_TO]->(reply:Message)
+        RETURN m.text        AS text,
+               m.date        AS date,
+               m.media_type  AS media_type,
+               m.media_path  AS media_path,
+               m.mid         AS message_id,
+               u.user_id     AS user_id,
+               u.username    AS username,
+               u.first_name  AS first_name,
+               u.last_name   AS last_name,
+               ch.channel_id AS channel_id,
+               ch.username   AS channel_username,
+               reply.mid     AS reply_to_id
+        ORDER BY m.date DESC
+        LIMIT $limit
+        """
+
+        params = {
+            "limit": limit,
+            "query": query,
+            "before": before.isoformat() if before else None,
+            "ownerId": owner_id,
+        }
+
+        result = await session.run(cypher, params)
+        messages = []
+        async for r in result:
+            author_name = (
+                r["username"]
+                or f"{r['first_name'] or ''} {r['last_name'] or ''}".strip()
+                or "Unknown"
+            )
+            
+            # Check if media_path ends with an image extension
+            media_path = r["media_path"]
+            is_image = False
+            if media_path:
+                # Extract file extension and check if it's an image
+                file_extension = media_path.lower().split('.')[-1] if '.' in media_path else ''
+                is_image = f'.{file_extension}' in IMAGE_EXTENSIONS
+            
+            messages.append(
+                {
+                    "message_id": r["message_id"],
+                    "text": r["text"],
+                    "date": r["date"],
+                    "media_type": r["media_type"],
+                    "media_path": media_path,
+                    "is_image": is_image,  # New field indicating if it's an image
+                    "reply_to_id": r["reply_to_id"],
+                    "author": {"id": r["user_id"], "name": author_name},
+                    "channel": {"id": r["channel_id"], "username": r["channel_username"]},
+                }
+            )
+        return messages
+
 async def get_case_channels_with_recommendations(channel_usernames: List[str], owner_id: str = None) -> Dict[str, List[str]]:
     """
     Get channels and their recommendations from Neo4j

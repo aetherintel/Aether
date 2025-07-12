@@ -1,24 +1,8 @@
 import { IconArchive, IconEdit, IconTrash } from '@tabler/icons-react';
-import { Link } from 'react-router-dom';
-import { LineChart } from '@mantine/charts';
-import { ActionIcon, Box, Divider, Flex, Group, Menu, rem, Text } from '@mantine/core';
-import { CaseFile } from '../CaseFileList/CaseFileList';
+import { ActionIcon, Badge, Button, Card, Group, Image, Menu, rem, SimpleGrid, Text } from '@mantine/core';
 import classes from './CaseCard.module.css';
-
-const exampleChartData = [
-  {
-    date: 'Mar 22',
-    posts: 2890,
-  },
-  {
-    date: 'Mar 23',
-    posts: 2756,
-  },
-  {
-    date: 'Mar 24',
-    posts: 5322,
-  },
-];
+import { CaseFile } from '../CaseFileList/CaseFileList';
+import { Link } from 'react-router-dom';
 
 interface CaseCardProps {
   caseFile: CaseFile;
@@ -26,7 +10,7 @@ interface CaseCardProps {
   onArchive: (id: number, archive: boolean) => void;
 }
 
-export default function CaseCard({ caseFile, onDelete, onArchive }: CaseCardProps) {
+export default function CaseCardTwo({ caseFile, onDelete, onArchive }: CaseCardProps) {
   const handleDeleteCaseClick = () => {
     onDelete(caseFile.id);
   };
@@ -34,39 +18,43 @@ export default function CaseCard({ caseFile, onDelete, onArchive }: CaseCardProp
     onArchive(caseFile.id, !caseFile.archived);
   };
 
+  const features = [...new Set(caseFile.tgchannels)].map((badge) => (
+    <Badge variant="light" key={badge}>
+      {badge}
+    </Badge>
+  ));
+
+  const thumbnails = [...new Set(caseFile.thumbnails)]
+  .slice(0, 4)  // Limit to first 4 items
+  .map((thumbnail) => (
+    <Image 
+      src={thumbnail} 
+      alt={thumbnail} 
+      height={90} 
+      fallbackSrc="https://placehold.co/600x360?text=Not downloaded yet" 
+    />
+  ));
+
   return (
-    <Box className={classes.root} opacity={caseFile.archived ? 0.5 : 1}>
-      <Box className={classes.imageSection}>
-        <Group w="100%" align="center" justify="space-between">
-          <Flex direction="column" align="start" gap={3} component={Link} to={`/cases/${caseFile.id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
-            <Text lh={1} className={classes.title}>
-              {caseFile.title}
-            </Text>
-            <Flex align="center" gap={10}>
-              <Text fz={12}>{caseFile.category}</Text>
+    <Card withBorder radius="md" p="md" className={classes.card} opacity={caseFile.archived ? 0.5 : 1}>
+      <Card.Section>
+        <SimpleGrid cols={2} spacing="0" verticalSpacing="0">
+          {thumbnails}
+        </SimpleGrid>
+      </Card.Section>
 
-              <Divider component="span" orientation="vertical" />
-              <Text fz={12} component="span">
-                {caseFile.postCount} messages
-              </Text>
-            </Flex>
-          </Flex>
+      <Card.Section className={classes.section} mt="md">
+        <Group justify="apart">
+          <Text fz="lg" fw={500}>
+            {caseFile.title}
+          </Text>
+          <Badge size="sm" variant="light">
+            {caseFile.postCount} messages
+          </Badge>
         </Group>
-
-        <LineChart
-          h={110}
-          data={exampleChartData}
-          dataKey="date"
-          series={[{ name: 'posts', label: 'Posts', color: 'blue' }]}
-          curveType="natural"
-          tickLine="none"
-          gridAxis="none"
-          withXAxis={false}
-          withYAxis={false}
-          withDots={false}
-          withTooltip={false}
-          mx={rem(-21)}
-        />
+        <Text fz="sm" mt="xs">
+          {caseFile.description}
+        </Text>
 
         <Menu shadow="md" width={200}>
           <Menu.Target>
@@ -128,7 +116,25 @@ export default function CaseCard({ caseFile, onDelete, onArchive }: CaseCardProp
             </Menu.Item>
           </Menu.Dropdown>
         </Menu>
-      </Box>
-    </Box>
+      </Card.Section>
+
+      <Card.Section className={classes.section}>
+        <Text mt="md" className={classes.label} c="dimmed">
+          Channels
+        </Text>
+        <Group gap={7} mt={5}>
+          {features}
+        </Group>
+      </Card.Section>
+
+      <Group mt="xs">
+        <Button radius="md" component={Link} to={`/cases/${caseFile.id}`} style={{ flex: 1 }}>
+          Show details
+        </Button>
+        <ActionIcon variant="default" radius="md" size={36} onClick={handleArchiveCaseClick}>
+          <IconArchive className={classes.like} stroke={1.5} />
+        </ActionIcon>
+      </Group>
+    </Card>
   );
 }

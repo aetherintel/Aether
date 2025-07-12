@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Grid, Loader, Text } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
-import CaseCard from '../CaseCard/CaseCard';
+import CaseCard from '@/components/CaseCard/CaseCard';
 import { authFetch } from '@/utils/authFetch';
 
 const apiUrl = import.meta.env.VITE_API_URL;
@@ -9,10 +9,13 @@ const apiUrl = import.meta.env.VITE_API_URL;
 export interface CaseFile {
   id: number;
   title: string;
+  description: string;
   postCount: number;
   category: string;
   chartData: ChartDataPoint[];
   archived: boolean;
+  tgchannels: string[];
+  thumbnails: string[];
 }
 
 export interface ChartDataPoint {
@@ -110,7 +113,9 @@ export function CaseFileList({ archived, refreshTrigger, onRefresh }: CaseFileLi
       <Grid columns={3} gutter={20}>
         {caseFiles.map((caseFile) => (
           <Grid.Col key={caseFile.id} span={{ base: 3, md: 1 }}>
-            <CaseCard caseFile={caseFile} onArchive={handleArchive} onDelete={handleDelete} />
+            <CaseCard
+              caseFile={caseFile} onArchive={handleArchive} onDelete={handleDelete}
+            />
           </Grid.Col>
         ))}
       </Grid>
