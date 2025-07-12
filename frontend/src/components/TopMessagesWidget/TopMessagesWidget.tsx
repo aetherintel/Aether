@@ -1,7 +1,5 @@
 import { useState, useEffect } from 'react';
 import { Box, Title, Accordion, Text, Group, Button, Badge, Loader } from '@mantine/core';
-import { IconChevronRight, IconMessage } from '@tabler/icons-react';
-import { Link } from 'react-router-dom';
 import { authFetch } from '@/utils/authFetch';
 import { TopMessagesForm } from './TopMessagesForm';
 import classes from './TopMessagesWidget.module.css';
@@ -14,6 +12,14 @@ interface Message {
   text: string;
   date: string;
   channel_title?: string;
+}
+
+interface Channel {
+  channel_id: string;
+  title: string;
+  username: string;
+  is_scraped: boolean | null;
+  message_count: number;
 }
 
 interface SearchParams {
@@ -34,6 +40,50 @@ export function TopMessagesWidget() {
   const [loading, setLoading] = useState(false);
   const [configOpen, setConfigOpen] = useState(true);
 
+//load Config
+  useEffect(() => {
+    const savedConfig = localStorage.getItem('topMessagesConfig');
+    if (savedConfig) {
+      try {
+        const config = JSON.parse(savedConfig);
+        setSearchParams(config);
+      } catch (e) {
+        console.error('Error loading saved config:', e);
+      }
+    }
+
+  // load messages
+    const savedMessages = localStorage.getItem('topMessagesResults');
+    if (savedMessages) {
+      try {
+        const msgData = JSON.parse(savedMessages);
+        setMessages(msgData);
+      // check if messages are available
+        if (msgData.length > 0) {
+          setSearchParams(prev => ({ ...prev, isActive: true }));
+          setConfigOpen(false);
+        }
+      } catch (e) {
+        console.error('Error loading saved messages:', e);
+      }
+    }
+  }, []);
+
+  const resetWidget = () => {
+    setSearchParams({
+      label: 'Top 5 Messages',
+      channelIds: [],
+      keywords: '',
+      isActive: false
+    });
+    setMessages([]);
+    setConfigOpen(true);
+    
+    // delte saved data
+    localStorage.removeItem('topMessagesConfig');
+    localStorage.removeItem('topMessagesResults');
+  };
+
   const fetchTopMessages = async () => {
     if (!searchParams.channelIds.length || !searchParams.keywords) {
       return;
@@ -41,19 +91,42 @@ export function TopMessagesWidget() {
 
     setLoading(true);
     try {
+      const base = apiUrl ?? 'http://localhost:8000/api';
+      const channelInfoMap = new Map();
+      
+      try {
+        const channelsRes = await authFetch(`${base}/messages/channels`);
+        const channelsData = await channelsRes.json();
+        
+        channelsData.forEach((channel: any) => {
+          channelInfoMap.set(channel.channel_id, {
+            title: channel.title || channel.username || channel.channel_id
+          });
+        });
+      } catch (error) {
+        console.error("Error fetching channel information:", error);
+      }
+
+      // get messages for every channeö
       const results = await Promise.all(
         searchParams.channelIds.map(async (channelId) => {
-          const base = apiUrl ?? 'http://localhost:8000/api';
-          const url = new URL(`${base}/messages/channels/${channelId}/messages`);
-          url.searchParams.set('limit', '5');
-          url.searchParams.set('q', searchParams.keywords);
-
-          const res = await authFetch(url.toString());
-          const data = await res.json();
-          return data.map((msg: any) => ({
-            ...msg,
-            channel_id: channelId
-          }));
+          try {
+            const url = new URL(`${base}/messages/channels/${channelId}/messages`);
+            url.searchParams.set('limit', '5');
+            url.searchParams.set('q', searchParams.keywords);
+            
+            const res = await authFetch(url.toString());
+            const data = await res.json();
+            
+            return data.map((msg: any) => ({
+              ...msg,
+              channel_id: channelId,
+              channel_title: channelInfoMap.get(channelId)?.title || channelId
+            }));
+          } catch (error) {
+            console.error(`Error fetching messages for channel ${channelId}:`, error);
+            return [];
+          }
         })
       );
 
@@ -68,6 +141,14 @@ export function TopMessagesWidget() {
       // Widget als aktiv markieren, wenn Nachrichten gefunden wurden
       if (sortedMessages.length > 0) {
         setSearchParams(prev => ({ ...prev, isActive: true }));
+        
+        // Konfiguration und Ergebnisse speichern
+        localStorage.setItem('topMessagesConfig', JSON.stringify({
+          ...searchParams,
+          isActive: true
+        }));
+        localStorage.setItem('topMessagesResults', JSON.stringify(sortedMessages));
+        
         setConfigOpen(false); // Konfigurationsbereich schließen
       }
     } catch (error) {
@@ -113,45 +194,63 @@ export function TopMessagesWidget() {
 
   return (
     <Box className={classes.widget}>
-      <Accordion
-        value={configOpen ? 'config' : 'messages'}
-        onChange={(value) => setConfigOpen(value === 'config')}
-      >
-        <Accordion.Item value="config">
-          <Group justify="apart" className={classes.widgetHeader}>
-            <Accordion.Control>
-              <Title order={3} className={classes.title}>Nachrichten-Suche konfigurieren</Title>
-            </Accordion.Control>
-          </Group>
-          <Accordion.Panel>
-            <TopMessagesForm
-              searchParams={searchParams}
-              setSearchParams={setSearchParams}
-              onSearch={fetchTopMessages}
-            />
-          </Accordion.Panel>
-        </Accordion.Item>
+      {!searchParams.isActive ? (
+        <div>
+          <Title order={3} className={classes.title}>Top 5 Messages</Title>
+          <TopMessagesForm
+            searchParams={searchParams}
+            setSearchParams={setSearchParams}
+            onSearch={fetchTopMessages}
+            onReset={resetWidget}
+          />
+        </div>
+      ) : (
+        <Accordion
+          value={configOpen ? 'config' : 'messages'}
+          onChange={(value) => {
+            if (value === 'config') {
+              setConfigOpen(true);
+            }
+          }}
+        >
+          <Accordion.Item value="config">
+            <Group justify="apart" className={classes.widgetHeader}>
+              <Accordion.Control>
+                <Title order={3} className={classes.title}>Top 5 Messages</Title>
+              </Accordion.Control>
+            </Group>
+            <Accordion.Panel>
+              <TopMessagesForm
+                searchParams={searchParams}
+                setSearchParams={setSearchParams}
+                onSearch={fetchTopMessages}
+                onReset={resetWidget}
+              />
+            </Accordion.Panel>
+          </Accordion.Item>
 
-        {searchParams.isActive && (
           <Accordion.Item value="messages">
             <Group justify="apart" className={classes.widgetHeader}>
               <Accordion.Control>
                 <Title order={3} className={classes.title}>{searchParams.label}</Title>
               </Accordion.Control>
               <Button
-                onClick={() => setConfigOpen(true)}
+                onClick={(e) => {
+                  e.stopPropagation(); // stop
+                  setConfigOpen(true);
+                }}
                 variant="subtle"
                 size="xs"
                 className={classes.configButton}
               >
-                Konfigurieren
+                Settings
               </Button>
             </Group>
             <Accordion.Panel>
               {loading ? (
                 <Loader size="sm" />
               ) : messages.length === 0 ? (
-                <Text className={classes.noResults}>Keine Nachrichten gefunden</Text>
+                <Text className={classes.noResults}>No messages found</Text>
               ) : (
                 <div className={classes.messagesList}>
                   {messages.map((message) => (
@@ -169,8 +268,8 @@ export function TopMessagesWidget() {
               )}
             </Accordion.Panel>
           </Accordion.Item>
-        )}
-      </Accordion>
+        </Accordion>
+      )}
     </Box>
   );
 }

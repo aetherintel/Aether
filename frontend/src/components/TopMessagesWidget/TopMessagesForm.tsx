@@ -22,9 +22,10 @@ interface TopMessagesFormProps {
   searchParams: SearchParams;
   setSearchParams: React.Dispatch<React.SetStateAction<SearchParams>>;
   onSearch: () => void;
+  onReset: () => void;
 }
 
-export function TopMessagesForm({ searchParams, setSearchParams, onSearch }: TopMessagesFormProps) {
+export function TopMessagesForm({ searchParams, setSearchParams, onSearch, onReset }: TopMessagesFormProps) {
   const [channels, setChannels] = useState<Channel[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -37,8 +38,16 @@ export function TopMessagesForm({ searchParams, setSearchParams, onSearch }: Top
         const res = await authFetch(`${base}/messages/channels`);
         const data = await res.json();
 
+        console.log("all available channels:", data);
+
         // Nur bereits gescrapte Channels anzeigen
-        const scrapedChannels = data.filter((channel: any) => channel.is_scraped);
+        const scrapedChannels = data.filter((channel: any) => {
+        // Debug für jeden Channel
+        console.log(`Channel ${channel.username}: is_scraped=${channel.is_scraped}, message_count=${channel.message_count}`);
+        return channel.is_scraped === true || channel.message_count > 0;
+      });
+
+        console.log("scraped Channels:", scrapedChannels);
         setChannels(scrapedChannels);
       } catch (error) {
         console.error('Error fetching channels:', error);
@@ -59,8 +68,8 @@ export function TopMessagesForm({ searchParams, setSearchParams, onSearch }: Top
     <form onSubmit={handleSubmit}>
       <Stack gap="md">
         <TextInput
-          label="Widget Name"
-          placeholder="e.g. Top 5 news about climate protection"
+          label="Topic Name"
+          placeholder="Top 5 news about climate protection"
           value={searchParams.label}
           onChange={(e) => setSearchParams((prev) => ({ ...prev, label: e.target.value }))}
           required
@@ -90,8 +99,20 @@ export function TopMessagesForm({ searchParams, setSearchParams, onSearch }: Top
         />
 
         <Group justify="right">
-          <Button type="submit" disabled={!searchParams.keywords || searchParams.channelIds.length === 0}>
-            Suchen
+          {searchParams.isActive && (
+            <Button 
+              onClick={onReset} 
+              variant="outline" 
+              color="red"
+            >
+              Reset
+            </Button>
+          )}
+          <Button 
+            type="submit" 
+            disabled={!searchParams.keywords || searchParams.channelIds.length === 0}
+          >
+            Search
           </Button>
         </Group>
       </Stack>
