@@ -4,6 +4,8 @@ import classes from './MessagesTab.module.css';
 import { IconSearch, IconRefresh } from "@tabler/icons-react";
 import { authFetch } from '@/utils/authFetch';
 
+import { ImageLightbox } from '@/components/ImageLightbox';
+
 const apiUrl = import.meta.env.VITE_API_URL;
 
 interface MessagesTabProps {
@@ -216,7 +218,7 @@ const MessagesTab : React.FC<MessagesTabProps> = ({ selectedTgChannelIds, search
 
     // Simple full refresh function - moved after loadMessages declaration
     const handleRefresh = useCallback(() => {
-        if (isRefreshing || selectedTgChannelIds.length === 0) return;
+        if (isRefreshing || selectedTgChannelIds.length === 0) {return;}
         
         setIsRefreshing(true);
         setMessages([]);
@@ -272,29 +274,32 @@ const MessagesTab : React.FC<MessagesTabProps> = ({ selectedTgChannelIds, search
                             {formatRelativeTime(message.date)}
                         </Text>
                     </div>
-                    <MessageContent
-                        message={message}
-                        isExpanded={isExpanded}
-                        onToggleExpand={() => toggleMessageExpansion(message.message_id)}
-                    />
-                    {message.media_path && (
-                        isVideoFile(message.media_path) ? (
-                        // eslint-disable-next-line jsx-a11y/media-has-caption
-                        <video
-                            src={message.media_path} 
-                            className={classes.messageVideo}
-                            controls
-                        >
-                            Your browser does not support the video tag.
-                        </video>
-                        ) : (
-                        <img 
-                            src={message.media_path} 
-                            alt={message.media_path} 
-                            className={classes.messageImage} 
+                    <Group wrap="nowrap" align="flex-start" justify="space-between">
+                        <MessageContent
+                            message={message}
+                            isExpanded={isExpanded}
+                            onToggleExpand={() => toggleMessageExpansion(message.message_id)}
                         />
-                        )
-                    )}
+                        {message.media_path && (
+                            isVideoFile(message.media_path) ? (
+                            // eslint-disable-next-line jsx-a11y/media-has-caption
+                            <video
+                                src={message.media_path} 
+                                className={classes.messageVideo}
+                                controls
+                            >
+                                Your browser does not support the video tag.
+                            </video>
+                            ) : (
+                                <ImageLightbox
+                                    key={message.media_path}
+                                    image={message.media_path}
+                                    thumbnailWidth={200}
+                                    thumbnailHeight={120}
+                                />
+                            )
+                        )}
+                    </Group>
                 </Box>
             </Table.Td>
             </Table.Tr>
@@ -339,7 +344,7 @@ const MessagesTab : React.FC<MessagesTabProps> = ({ selectedTgChannelIds, search
                 }
             }}
             >
-            <Table>
+            <Table layout="fixed">
                 <Table.Thead>
                 <Table.Tr>
                     <Table.Th className={classes.checkboxColumn}>
