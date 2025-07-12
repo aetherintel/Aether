@@ -189,14 +189,15 @@ def read_casefiles(
     user: UserCtx = Depends(user_ctx),                    # NEW
 ):
     q = db.query(CaseFileModel)
+
     if not is_admin(user):                                # NEW
         q = q.filter_by(owner_id=user["id"])
 
-    if limit is not None:
-        q = q.limit(limit)
-
     if archived is not None:
         q = q.filter_by(archived=archived)
+
+    if limit is not None:
+        q = q.limit(limit)
 
     return q.all()
 

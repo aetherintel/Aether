@@ -34,6 +34,9 @@ export function CaseFileList({ archived, refreshTrigger, onRefresh, limit, compa
 
   const fetchCaseFiles = async () => {
     const fetchUrl = new URL(`${apiUrl ?? 'http://localhost:8000/api'}/casefiles/`);
+
+    console.log("Fetching casefiles from:", fetchUrl.toString());
+
     fetchUrl.searchParams.set('archived', archived ? 'true' : 'false');
 
     if (limit) {
@@ -44,9 +47,12 @@ export function CaseFileList({ archived, refreshTrigger, onRefresh, limit, compa
     
     try {
       const res = await authFetch(fetchUrl.toString());
+       console.log("API response status:", res.status);
       const data = await res.json();
+      console.log("API response data:", data);
       setCaseFiles(data);
     } catch (err: any) {
+      console.error("Error fetching casefiles:", err);
       notifications.show({
         title: 'Error fetching casefiles',
         message: err.message || 'Unknown error',
@@ -58,6 +64,7 @@ export function CaseFileList({ archived, refreshTrigger, onRefresh, limit, compa
   };
 
   useEffect(() => {
+    console.log("Auth token present:", !!localStorage.getItem('token'));
     fetchCaseFiles();
   }, [archived, refreshTrigger]);
 
