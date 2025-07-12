@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import { Card, Button, Select, Stack, Group, Text, Loader } from '@mantine/core';
+import { Card, Stack, Group, Text, Loader, Alert, Slider } from '@mantine/core';
 import { authFetch } from '@/utils/authFetch';
+import { IconInfoCircle } from '@tabler/icons-react';
 
 interface GraphVisualizationProps {
   selectedChannelIds: string[];
@@ -18,8 +19,9 @@ const GraphVisualization: React.FC<GraphVisualizationProps> = ({
   const vizRef = useRef<HTMLDivElement>(null);
   const networkRef = useRef<any>(null);
   const [loading, setLoading] = useState(false);
-  const [visualizationType, setVisualizationType] = useState<string>('network');
+  const [visualizationType] = useState<string>('network');
   const [visLoaded, setVisLoaded] = useState(false);
+  const [limit, setLimit] = useState(100);
   
   // Load vis.js from CDN 
   // TODO: install npm packages vis-network and vis-data
@@ -123,9 +125,28 @@ const GraphVisualization: React.FC<GraphVisualizationProps> = ({
       smooth: { type: 'continuous' }
     }));
 
-    // Create datasets
-    const nodeDataset = new (window as any).vis.DataSet(nodes);
-    const edgeDataset = new (window as any).vis.DataSet(edges);
+    // Deduplicate nodes
+    const seenNodeIds = new Set();
+    const uniqueNodes = [];
+    for (const node of nodes) {
+      if (!seenNodeIds.has(node.id)) {
+        seenNodeIds.add(node.id);
+        uniqueNodes.push(node);
+      }
+    }
+
+    // Deduplicate edges
+    const seenEdgeIds = new Set();
+    const uniqueEdges = [];
+    for (const edge of edges) {
+      if (!seenEdgeIds.has(edge.id)) {
+        seenEdgeIds.add(edge.id);
+        uniqueEdges.push(edge);
+      }
+    }
+
+    const nodeDataset = new (window as any).vis.DataSet(uniqueNodes);
+    const edgeDataset = new (window as any).vis.DataSet(uniqueEdges);
 
     // Network options
     const options = {
@@ -150,7 +171,7 @@ const GraphVisualization: React.FC<GraphVisualizationProps> = ({
       physics: {
         enabled: true,
         barnesHut: {
-          gravitationalConstant: -8000,
+          gravitationalConstant: -30000,
           centralGravity: 0.3,
           springLength: 95,
           springConstant: 0.04,
@@ -204,7 +225,7 @@ const GraphVisualization: React.FC<GraphVisualizationProps> = ({
           search_query: searchQuery,
           user: user || null,
           type: type || null,
-          limit: 100,
+          limit,
           visualization_type: visualizationType
         })
       });
@@ -251,24 +272,31 @@ const GraphVisualization: React.FC<GraphVisualizationProps> = ({
   return (
     <Card withBorder p="md">
       <Stack>
-        <Group>
-          <Select
-            label="Visualization Type"
-            value={visualizationType}
-            onChange={(value) => setVisualizationType(value || 'network')}
-            data={[
-              { value: 'network', label: 'Network Graph' }
+        <Stack>
+          <Alert variant="light" color="blue" title="Graph Visualization" icon={<IconInfoCircle />}>
+            In the "Messages"-Tab: Click on a username or the channel/group next to it, to update the graph.
+          </Alert>
+          <Text size="sm">Limit</Text>
+          <Slider
+            color="blue"
+            mb="lg"
+            labelAlwaysOn
+            min={0}
+            max={1000}
+            value={limit}
+            onChange={setLimit}
+            onChangeEnd={() => {
+              if (selectedChannelIds.length > 0) {
+                renderVisualization();
+              }
+            }}
+            marks={[
+              { value: 100, label: '100' },
+              { value: 500, label: '500' },
+              { value: 1000, label: '1000' },
             ]}
-            style={{ minWidth: 200 }}
           />
-          <Button 
-            onClick={renderVisualization}
-            loading={loading}
-            disabled={selectedChannelIds.length === 0}
-          >
-            Refresh Visualization
-          </Button>
-        </Group>
+        </Stack>
 
         {loading && (
           <Group>

@@ -88,8 +88,8 @@ async def get_network_visualization(viz_request: GraphVisualizationRequest):
             params["username"] = viz_request.user
 
             query = """
-            MATCH (u:User {username: $username})-[:SENT]->(m:Message)
-            RETURN u, m
+            MATCH (u:User {username: $username})-[:SENT]->(m:Message)<-[:HAS_MESSAGE]-(c:Channel)
+            RETURN u, m, c
             LIMIT $limit
             """
             result = await session.run(query, params)
@@ -97,10 +97,13 @@ async def get_network_visualization(viz_request: GraphVisualizationRequest):
             async for record in result:
                 user = record["u"]
                 message = record["m"]
+                channel = record["c"]
 
                 user_id = f"u_{user.id}"
                 message_id = f"m_{message.id}"
+                channel_id = f"ch_{channel['channel_id']}"
 
+                # Add user node
                 if user_id not in node_ids:
                     nodes.append({
                         "id": user_id,
@@ -110,6 +113,17 @@ async def get_network_visualization(viz_request: GraphVisualizationRequest):
                     })
                     node_ids.add(user_id)
 
+                # Add channel node
+                if channel_id not in node_ids:
+                    nodes.append({
+                        "id": channel_id,
+                        "label": channel.get("username") or channel.get("title") or "Channel",
+                        "type": "Channel",
+                        "properties": dict(channel)
+                    })
+                    node_ids.add(channel_id)
+
+                # Add message node
                 if message_id not in node_ids:
                     nodes.append({
                         "id": message_id,
@@ -119,11 +133,21 @@ async def get_network_visualization(viz_request: GraphVisualizationRequest):
                     })
                     node_ids.add(message_id)
 
+                # Relationship: User → Channel (indirectly via post)
                 relationships.append({
-                    "id": f"{user_id}_created_{message_id}",
+                    "id": f"{user_id}_posts_in_{channel_id}",
                     "from": user_id,
+                    "to": channel_id,
+                    "type": "POSTS_IN",
+                    "properties": {}
+                })
+
+                # Relationship: Channel → Message
+                relationships.append({
+                    "id": f"{channel_id}_has_{message_id}",
+                    "from": channel_id,
                     "to": message_id,
-                    "type": "CREATED",
+                    "type": "HAS_MESSAGE",
                     "properties": {}
                 })
 
