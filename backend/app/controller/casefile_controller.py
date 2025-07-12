@@ -14,6 +14,7 @@ from controller.message_controller import (
     list_channels
 )
 from services.neo4j_backend_client import (
+    get_case_channels_with_recommendations,
     get_total_message_count_for_channels
 )
 # ⬇︎ NEW:  bring in the user-context helper
@@ -208,9 +209,15 @@ async def read_casefile(
 
     # TODO: Updating postCount while reading the casefile is only temporary. Needs to be moved to a better place.
 
-    # Get channel usernames from tgchannels and convert to comma-separated string
+    owner = None if is_admin(user) else user["id"]
     channel_usernames = obj.tgchannels if obj.tgchannels else []
-    usernames_str = ','.join(channel_usernames) if channel_usernames else None
+    expanded_channels = await get_case_channels_with_recommendations(channel_usernames, owner)
+    flattened = [item for sublist in expanded_channels.values() for item in sublist]
+
+    print(f"read_casefile: expanded_channels={flattened}")
+
+    # Get channel usernames from tgchannels and convert to comma-separated string
+    usernames_str = ','.join(flattened) if flattened else None
     
     # Get channel details using the existing list_channels function
     channels = await list_channels(usernames=usernames_str, user=user)
@@ -218,12 +225,13 @@ async def read_casefile(
     # Extract channel IDs from the channels
     channel_ids = [ch['channel_id'] for ch in channels if ch.get('channel_id')]
     
-    # Get total message count for all channels
-    owner = None if is_admin(user) else user["id"]
+    print(f"read_casefile: tgchannels={obj.tgchannels}, expanded_channels={flattened}, channel_ids={channel_ids}")
+
     total_message_count = await get_total_message_count_for_channels(
         channel_ids=channel_ids,
         owner_id=owner
     )
+    print(f"read_casefile: total_message_count={total_message_count}")
 
     obj.postCount = total_message_count
     db.commit()

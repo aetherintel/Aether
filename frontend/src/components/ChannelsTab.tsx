@@ -80,23 +80,17 @@ const ChannelsTab : React.FC<ChannelsTabProps> = ({ caseId, caseFile, structured
         }
     };
 
+    function formatDate(dateString: string | null): string {
+        if (!dateString) {
+            return "No valid date provided";
+        }
+        const date = new Date(dateString);
+        return date.toLocaleString();
+    }
+
     return (
         <div>
             <Stack gap="md">
-                <Card withBorder p="md">
-                    <Stack gap="xs">
-                    <Title order={4}>Channel Discovery</Title>
-                    <Text size="sm" c="dimmed">
-                        Check for new channels discovered through scraping
-                    </Text>
-                    <Button 
-                        onClick={updateCaseWithDiscoveredChannels}
-                        variant="outline"
-                    >
-                        Check for New Channels
-                    </Button>
-                    </Stack>
-                </Card>
                 <Card withBorder p="md">
                     <Stack gap="xs">
                     <Title order={4}>Channels</Title>
@@ -110,7 +104,7 @@ const ChannelsTab : React.FC<ChannelsTabProps> = ({ caseId, caseFile, structured
                                 <Box>
                                     <Text fw={500}>{groupValue.channel!.username}</Text>
                                     <Text size="sm" c="dimmed">
-                                    Last message: {groupValue.channel!.last_message_date}
+                                    Last message: {formatDate(groupValue.channel!.last_message_date)}
                                     </Text>
                                     <Text size="xs" c="dimmed">
                                     ID: {groupValue.channel!.channel_id}
