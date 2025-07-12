@@ -7,6 +7,7 @@
   -webkit-box-orient: vertical;
   overflow: hidden;
   line-height: 1.4;
+  word-break: break-word;
 }
 
 .messageTextExpanded {
@@ -57,7 +58,8 @@
 }
 
 .messageImage, .messageVideo {
-  width: 100px;
-  height: auto;
+  width: 200px;
+  height: 120px;
   margin-top: 10px;
+  border-radius: 8px;
 }
