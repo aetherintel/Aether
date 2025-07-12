@@ -35,7 +35,7 @@ services:
       
       # Hostname Config für Email Links
       KC_HTTP_RELATIVE_PATH: /keycloak
-      KC_HOSTNAME: æther.tech
+      KC_HOSTNAME: xn--ther-uoa.tech
       KC_PROXY: edge
       
     volumes:
@@ -49,9 +49,9 @@ services:
       DB_USER: ${DB_USER}
       DB_PASSWORD: ${DB_PASSWORD}
       DB_URL: postgresql://${DB_USER}:${DB_PASSWORD}@postgres:5432/aether
-      SWAGGER_TOKEN_URL: https://æther.tech/keycloak/realms/HotTopics/protocol/openid-connect/token
-      KEYCLOAK_BASE_URL: https://æther.tech/keycloak
-      KEYCLOAK_URL: https://æther.tech/keycloak/realms/HotTopics
+      SWAGGER_TOKEN_URL: https://xn--ther-uoa.tech/keycloak/realms/HotTopics/protocol/openid-connect/token
+      KEYCLOAK_BASE_URL: https://xn--ther-uoa.tech/keycloak
+      KEYCLOAK_URL: https://xn--ther-uoa.tech/keycloak/realms/HotTopics
       KEYCLOAK_INTERNAL_URL: http://keycloak:8080/realms/HotTopics
       KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN}
       KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
@@ -91,7 +91,7 @@ services:
       - "443:443"
     environment:
       PROD_DOMAIN: ${PROD_DOMAIN}
-      VITE_API_URL: https://æther.tech/api
+      VITE_API_URL: https://xn--ther-uoa.tech/api
     volumes:
       - ./frontend:/app
       - ./certbot/www:/var/www/certbot
