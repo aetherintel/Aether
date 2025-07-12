@@ -24,6 +24,10 @@ export function CaseFileDetail() {
   const [loading, setLoading] = useState(true);
 
   const [searchQuery, setSearchQuery] = useState('');
+  const [activeTab, setActiveTab] = useState<string | null>('messages'); // Add tab state
+
+  const [graphUser, setGraphUser] = useState<string | null>(null);
+  const [graphType, setGraphType] = useState<string | null>(null);
 
   const [tgChannels, setTgChannels] = useState<any>([]);
   const [selectedTgChannelIds, setSelectedTgChannelIds] = useState<string[]>([]);
@@ -153,6 +157,12 @@ export function CaseFileDetail() {
     fetchData();
   }, [id]);
 
+  function updateGraph(type: string | null, user: string | null) {
+    setGraphType(type);
+    setGraphUser(user);
+    setActiveTab('visuals');
+  }
+
   function formatDate(dateString: string | null): string {
     if (!dateString) {
       return "No valid date provided";
@@ -176,6 +186,11 @@ export function CaseFileDetail() {
       const groupChannel = channelMap.get(groupKey.toLowerCase()) || null;
 
       const recommended: Record<string, { channel: Channel }> = {};
+
+      if (groupChannel) {
+        recommended[groupChannel.username] = { channel: groupChannel };
+      }
+
       for (const recUsername of recommendedUsernames) {
         const recChannel = channelMap.get(recUsername.toLowerCase());
         if (recChannel) {
@@ -224,7 +239,7 @@ export function CaseFileDetail() {
         <Grid.Col span={9}>
           <Card withBorder radius="md" className={classes.card}>
             <div className={classes.inner}>
-              <Tabs defaultValue="messages" w="100%">
+              <Tabs value={activeTab} onChange={setActiveTab} w="100%">
                 <Tabs.List>
                   <Tabs.Tab value="messages" leftSection={<IconMessage size={16} />}>
                     Messages
@@ -241,7 +256,7 @@ export function CaseFileDetail() {
                 </Tabs.List>
 
                 <Tabs.Panel value="messages" mt="md">
-                  <MessagesTab selectedTgChannelIds={selectedTgChannelIds} searchQuery={searchQuery} setSearchQuery={setSearchQuery} />
+                  <MessagesTab selectedTgChannelIds={selectedTgChannelIds} searchQuery={searchQuery} setSearchQuery={setSearchQuery} onUpdateGraph={updateGraph} />
                 </Tabs.Panel>
 
                 <Tabs.Panel value="scraper" mt="md">
@@ -252,6 +267,8 @@ export function CaseFileDetail() {
                   <GraphVisualization 
                     selectedChannelIds={selectedTgChannelIds}
                     searchQuery={searchQuery}
+                    user={graphUser}
+                    type={graphType}
                   />
                 </Tabs.Panel>
 

@@ -98,7 +98,7 @@ interface ScrapePayload {
 }
 
 
-type ScraperMode = 'scrape' | 'full' | 'live' | 'similar';
+type ScraperMode = 'full' | 'live';
 interface TelegramScraperProps {
   case_id?: number;
 }
@@ -113,7 +113,7 @@ const TelegramScraper: React.FC<TelegramScraperProps> = ({ case_id }) => {
   
   // Form state
   const [channel, setChannel] = useState<string>('');
-  const [mode, setMode] = useState<ScraperMode>('scrape');
+  const [mode, setMode] = useState<ScraperMode>('full');
   const [recursive, setRecursive] = useState<boolean>(true);
   const [neo4j, setNeo4j] = useState<boolean>(true);
   const [selectedSession, setSelectedSession] = useState<string>('');
@@ -470,11 +470,6 @@ const TelegramScraper: React.FC<TelegramScraperProps> = ({ case_id }) => {
               <Group align="center" gap="xs">
                 <IconActivity size="1.2rem" />
                 <Title order={3}>Scrape Containers</Title>
-                {case_id && (
-                  <Alert color="blue">
-                    🎯 Scraping for Case {case_id}. Use "Check for New Channels" button after scraping to discover related channels.
-                  </Alert>
-                )}
               </Group>
               
               <Stack gap="sm">
