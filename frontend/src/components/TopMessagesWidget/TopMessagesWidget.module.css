@@ -28,7 +28,7 @@
 }
 
 .messageItem {
-  background-color: var(--mantine-color-dark-8);
+  background-color: light-dark(var(--mantine-color-white), #1d1d1d);
   border-radius: var(--mantine-radius-sm);
   padding: var(--mantine-spacing-xs);
   border: 1px solid var(--mantine-color-dark-6);
