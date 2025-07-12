@@ -79,18 +79,6 @@ export default function CaseCardTwo({ caseFile, onDelete, onArchive }: CaseCardP
           </Menu.Target>
 
           <Menu.Dropdown>
-            <Menu.Item
-              leftSection={
-                <IconEdit
-                  style={{
-                    width: rem(14),
-                    height: rem(14),
-                  }}
-                />
-              }
-            >
-              Edit case
-            </Menu.Item>
             {!caseFile.archived ? (
               <Menu.Item
                 leftSection={<IconArchive style={{ width: rem(14), height: rem(14) }} />}
