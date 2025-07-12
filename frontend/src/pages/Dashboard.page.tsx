@@ -1,4 +1,5 @@
 import BreadcrumbsBar from '@/components/BreadcrumbsBar/BreadcrumbsBar';
+import { CaseFileList } from '@/components/CaseFileList/CaseFileList';
 import { useEffect } from 'react';
 
 export function Dashboard() {
@@ -9,6 +10,7 @@ export function Dashboard() {
   return (
     <>
       <BreadcrumbsBar />
+      <CaseFileList archived={false} />
     </>
   );
 }
