@@ -28,6 +28,7 @@ export default function CaseCardTwo({ caseFile, onDelete, onArchive }: CaseCardP
   .slice(0, 4)  // Limit to first 4 items
   .map((thumbnail) => (
     <Image 
+      key={thumbnail} 
       src={thumbnail} 
       alt={thumbnail} 
       height={90} 
