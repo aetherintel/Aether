@@ -14,7 +14,9 @@ from controller.message_controller import (
     list_channels
 )
 from services.neo4j_backend_client import (
-    get_total_message_count_for_channels
+    get_case_channels_with_recommendations,
+    get_total_message_count_for_channels,
+    get_messages_with_media
 )
 # ⬇︎ NEW:  bring in the user-context helper
 from services.auth_ctx import user_ctx, is_admin, UserCtx
@@ -39,6 +41,7 @@ class CaseFileModel(Base):
     tgchannels = Column(ARRAY(String))
     topics     = Column(ARRAY(String))
     terms      = Column(ARRAY(String))
+    thumbnails = Column(ARRAY(String))
     duration   = Column(Integer)
     created_at  = Column(DateTime(timezone=True), server_default=func.now())
     archived   = Column(Boolean, default=False)
@@ -52,6 +55,7 @@ class CaseFileCreate(BaseModel):
     tgchannels: List[str] = []
     topics: List[str] = []
     terms: List[str] = []
+    thumbnails: List[str] = []
     duration: Optional[int] = None
     tg_session: Optional[str] = None  # NEW: From frontend
     scraper_mode: Optional[str] = "full"
@@ -88,6 +92,7 @@ class CaseFileCreate(BaseModel):
     tgchannels: List[str] = []
     topics: List[str] = []
     terms: List[str] = []
+    thumbnails: List[str] = []
     duration: Optional[int] = None
     tg_session: Optional[str] = None  # NEW: From frontend
     scraper_mode: Optional[str] = "full"  # NEW: Always "full" from frontend
@@ -208,9 +213,15 @@ async def read_casefile(
 
     # TODO: Updating postCount while reading the casefile is only temporary. Needs to be moved to a better place.
 
-    # Get channel usernames from tgchannels and convert to comma-separated string
+    owner = None if is_admin(user) else user["id"]
     channel_usernames = obj.tgchannels if obj.tgchannels else []
-    usernames_str = ','.join(channel_usernames) if channel_usernames else None
+    expanded_channels = await get_case_channels_with_recommendations(channel_usernames, owner)
+    flattened = [item for sublist in expanded_channels.values() for item in sublist]
+
+    print(f"read_casefile: expanded_channels={flattened}")
+
+    # Get channel usernames from tgchannels and convert to comma-separated string
+    usernames_str = ','.join(flattened) if flattened else None
     
     # Get channel details using the existing list_channels function
     channels = await list_channels(usernames=usernames_str, user=user)
@@ -218,14 +229,34 @@ async def read_casefile(
     # Extract channel IDs from the channels
     channel_ids = [ch['channel_id'] for ch in channels if ch.get('channel_id')]
     
-    # Get total message count for all channels
-    owner = None if is_admin(user) else user["id"]
+    print(f"read_casefile: tgchannels={obj.tgchannels}, expanded_channels={flattened}, channel_ids={channel_ids}")
+
     total_message_count = await get_total_message_count_for_channels(
         channel_ids=channel_ids,
         owner_id=owner
     )
+    print(f"read_casefile: total_message_count={total_message_count}")
 
     obj.postCount = total_message_count
+    obj.tgchannels = channel_usernames
+
+    try:
+        messages = await get_messages_with_media(
+            owner_id=owner,
+            limit=20,
+        )
+
+        messages_with_media = []
+        for message in messages:
+            if message.get('media_path'):
+                messages_with_media.append(message.get('media_path'))
+
+        print(f"read_casefile: messages_with_media={messages_with_media}")
+
+        obj.thumbnails = messages_with_media
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Fehler beim Abrufen der Nachrichten für Benutzer {owner}: {str(e)}")
+
     db.commit()
 
     # TODO: End of temporary postCount update...

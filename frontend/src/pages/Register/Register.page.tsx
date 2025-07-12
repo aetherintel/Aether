@@ -46,14 +46,14 @@ export function Register() {
       const response = await keycloakRegister({ username, email, firstname, lastname, password });
 
       notifications.show({
-        title: 'Login erfolgreich',
-        message: response.token_type || 'Welcone back!',
+        title: 'Register successful',
+        message: response.token_type || 'Check your inbox!',
         color: 'green',
       });
       navigate('/login');
     } catch (err: any) {
       notifications.show({
-        title: 'Login fehlgeschlagen',
+        title: 'Register failed',
         message: err.message || 'Unknown error',
         color: 'red',
       });

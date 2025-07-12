@@ -52,10 +52,6 @@ const marks = [
   { value: 100, label: '1 year' },
 ];
 
-const scraperModeOptions = [
-  { value: 'full', label: 'Full Scrape - Recursive with similar channels' },
-];
-
 export function CreateCaseFileForm() {
   const [active, setActive] = useState(0);
   const nextStep = () => setActive((current) => (current < 4 ? current + 1 : current));
@@ -64,7 +60,7 @@ export function CreateCaseFileForm() {
   const navigate = useNavigate();
 
   // Session management
-  const [sessions, setSessions] = useState<SessionInfo[]>([]);
+  const [, setSessions] = useState<SessionInfo[]>([]);
   const [activeSessions, setActiveSessions] = useState<SessionInfo[]>([]);
   const [sessionLoading, setSessionLoading] = useState(true);
 
