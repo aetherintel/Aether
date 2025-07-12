@@ -105,7 +105,7 @@ export function CaseFileList({ archived, refreshTrigger, onRefresh }: CaseFileLi
   return (
     <>
     {caseFiles.length === 0 ? (
-      <Text>No cases found</Text>
+      <Text>{archived ? "No archived cases found" : "No active cases found"}</Text>
     ) : (
       <Grid columns={3} gutter={20}>
         {caseFiles.map((caseFile) => (
