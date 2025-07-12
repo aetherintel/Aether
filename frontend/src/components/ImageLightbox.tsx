@@ -69,7 +69,7 @@ const ImageLightbox: React.FC<ImageLightboxProps> = ({
         <Image
           src={image}
           alt={image}
-          fallbackSrc="https://placehold.co/600x400?text=Not downloaded yet"
+          fallbackSrc="https://placehold.co/600x360?text=Not downloaded yet"
           fit="cover"
           style={{
             width: '100%',

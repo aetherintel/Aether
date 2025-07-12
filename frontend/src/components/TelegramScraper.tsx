@@ -470,11 +470,6 @@ const TelegramScraper: React.FC<TelegramScraperProps> = ({ case_id }) => {
               <Group align="center" gap="xs">
                 <IconActivity size="1.2rem" />
                 <Title order={3}>Scrape Containers</Title>
-                {case_id && (
-                  <Alert color="blue">
-                    🎯 Scraping for Case {case_id}. Use "Check for New Channels" button after scraping to discover related channels.
-                  </Alert>
-                )}
               </Group>
               
               <Stack gap="sm">
