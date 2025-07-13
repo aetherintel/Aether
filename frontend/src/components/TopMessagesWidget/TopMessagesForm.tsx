@@ -29,7 +29,7 @@ export function TopMessagesForm({ searchParams, setSearchParams, onSearch, onRes
   const [channels, setChannels] = useState<Channel[]>([]);
   const [loading, setLoading] = useState(false);
 
-  // Laden der verfügbaren Channels beim ersten Rendern
+  // load channels
   useEffect(() => {
     const fetchChannels = async () => {
       setLoading(true);
@@ -40,9 +40,9 @@ export function TopMessagesForm({ searchParams, setSearchParams, onSearch, onRes
 
         console.log("all available channels:", data);
 
-        // Nur bereits gescrapte Channels anzeigen
+        // get only channels that have been scraped or have messages
         const scrapedChannels = data.filter((channel: any) => {
-        // Debug für jeden Channel
+        // Debug for every channel
         console.log(`Channel ${channel.username}: is_scraped=${channel.is_scraped}, message_count=${channel.message_count}`);
         return channel.is_scraped === true || channel.message_count > 0;
       });
@@ -92,7 +92,7 @@ export function TopMessagesForm({ searchParams, setSearchParams, onSearch, onRes
 
         <TextInput
           label="Keywords"
-          placeholder="Devide keywords with space"
+          placeholder="eg. climate, corona, news, ..."
           value={searchParams.keywords}
           onChange={(e) => setSearchParams((prev) => ({ ...prev, keywords: e.target.value }))}
           required
