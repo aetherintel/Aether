@@ -1,4 +1,4 @@
-![Æther Logo](/frontend/src/assets/images/ReadmeLogo.png){height=100}
+![Æther Logo](/frontend/src/assets/images/ReadmeLogo.svg)
 
 # Æther
 
