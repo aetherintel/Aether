@@ -22,10 +22,7 @@
   color: var(--mantine-color-gray-6);
 }
 
-.configAccordionItem {
-  border: none;
-}
-
+.configAccordionItem,
 .messagesAccordionItem {
   border: none;
 }
@@ -44,7 +41,6 @@
 
 .messageItem {
   padding: var(--mantine-spacing-xs);
-  border-radius: 0;
   background-color: transparent;
 }
 

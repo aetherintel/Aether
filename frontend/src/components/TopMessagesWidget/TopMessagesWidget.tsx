@@ -109,12 +109,10 @@ export function TopMessagesWidget() {
 
     setLoading(true);
     try {
-      // get channelInfo
       const base = apiUrl ?? 'http://localhost:8000/api';
       const channelInfoMap = new Map();
       
       try {
-        // load & save channels
         const channelsRes = await authFetch(`${base}/messages/channels`);
         const channelsData = await channelsRes.json();
         
@@ -127,21 +125,15 @@ export function TopMessagesWidget() {
         console.error("Error fetching channel information:", error);
       }
 
-      // sort results per channel
       const resultsPerChannel = await Promise.all(
         searchParams.channelIds.map(async (channelId) => {
           try {
             const url = new URL(`${base}/messages/channels/${channelId}/messages`);
-            // more messages to sort after
             url.searchParams.set('limit', '10');
             url.searchParams.set('q', searchParams.keywords.trim());
             
-            console.log(`API-Anfrage für Channel ${channelId}:`, url.toString());
-            
             const res = await authFetch(url.toString());
             const data = await res.json();
-            
-            console.log(`Ergebnis für Channel ${channelId}:`, data.length, "Nachrichten gefunden");
             
             return {
               channelId,
@@ -158,7 +150,6 @@ export function TopMessagesWidget() {
         })
       );
       
-      // equality of messages
       let allMessages: Message[] = [];
       
       // case for one channel
@@ -169,19 +160,14 @@ export function TopMessagesWidget() {
       } 
       // case for more channels
       else if (resultsPerChannel.length > 1) {
-        // sorting channels
         const sortedChannels = [...resultsPerChannel]
           .sort((a, b) => b.messages.length - a.messages.length);
         
-        // how many messages per channel
-        const totalChannels = sortedChannels.length;
         const totalMessages = 5;
-        
-        // messages for channel
         const messagesPerChannel: Record<string, number> = {};
         let remainingMessages = totalMessages;
         
-        // only one message per channel
+        // one message for each channel
         sortedChannels.forEach(channel => {
           if (channel.messages.length > 0 && remainingMessages > 0) {
             messagesPerChannel[channel.channelId] = 1;
@@ -193,28 +179,22 @@ export function TopMessagesWidget() {
         
         // sort messages for the rest
         while (remainingMessages > 0) {
+          let distributed = false;
           for (const channel of sortedChannels) {
             if (channel.messages.length > messagesPerChannel[channel.channelId] && remainingMessages > 0) {
               messagesPerChannel[channel.channelId]++;
               remainingMessages--;
-            }
-            if (remainingMessages === 0) {
-              break;
+              distributed = true;
             }
           }
-          // no messages remaining
-          if (remainingMessages === totalMessages) {
-            break;
-          }
+          // no more messages to distribute
+          if (!distributed) {break;}
         }
-        
-        console.log("Verteilung der Nachrichten pro Kanal:", messagesPerChannel);
         
         // final messages
         for (const channel of sortedChannels) {
           const count = messagesPerChannel[channel.channelId];
           if (count > 0) {
-            // Nachrichten für diesen Kanal nach Datum sortieren
             const sortedMessages = channel.messages
               .sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime())
               .slice(0, count);
@@ -227,25 +207,20 @@ export function TopMessagesWidget() {
         allMessages = allMessages.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
       }
       
-      console.log("Insgesamt ausgewählte Nachrichten:", allMessages.length);
       setMessages(allMessages);
-      setExpandedMessages([]); // Reset expanded messages
+      setExpandedMessages([]);
       
       // mark widget as active
       if (allMessages.length > 0) {
         setSearchParams(prev => ({ ...prev, isActive: true }));
         
-        // save config
         localStorage.setItem('topMessagesConfig', JSON.stringify({
           ...searchParams,
           isActive: true
         }));
         localStorage.setItem('topMessagesResults', JSON.stringify(allMessages));
         
-        // switch to messages-view
         setOpenItems(['messages']);
-      } else {
-        console.log("Keine Nachrichten gefunden. Widget bleibt inaktiv.");
       }
     } catch (error) {
       console.error('Error fetching top messages:', error);
@@ -254,7 +229,6 @@ export function TopMessagesWidget() {
     }
   };
 
-  // Formatierung des relativen Zeitstempels
   const formatRelativeTime = (dateString: string) => {
     const now = new Date();
     const messageDate = new Date(dateString);
@@ -275,7 +249,7 @@ export function TopMessagesWidget() {
     return messageDate.toLocaleDateString();
   };
 
-  // Hervorhebung der Suchbegriffe im Text
+  // mark keywords in text
   const highlightText = (text: string, query: string) => {
     if (!query) {return text;}
 
@@ -288,16 +262,11 @@ export function TopMessagesWidget() {
     );
   };
 
-  // Handler for AccordionChange
-  const handleAccordionChange = (value: string[]) => {
-    setOpenItems(value);
-  };
-
-  // toggle config
+  // toggle-function for config
   const toggleConfig = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-
+    
     if (openItems.includes('config')) {
       setOpenItems(openItems.filter(item => item !== 'config'));
     } else {
@@ -324,7 +293,7 @@ export function TopMessagesWidget() {
       <Accordion 
         multiple 
         value={openItems} 
-        onChange={handleAccordionChange}
+        onChange={setOpenItems}
       >
         <Accordion.Item value="config" className={classes.configAccordionItem}>
           <Accordion.Control className={classes.hiddenControl}>
