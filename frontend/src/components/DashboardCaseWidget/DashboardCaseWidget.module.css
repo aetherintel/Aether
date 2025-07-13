@@ -1,0 +1,28 @@
+.widget {
+  background-color: light-dark(var(--mantine-color-white), #1d1d1d);
+  border-radius: rem(8);
+  padding: var(--mantine-spacing-md);
+  margin-bottom: var(--mantine-spacing-md);
+  border: rem(0.1) solid var(--mantine-color-gray-3);
+}
+
+.widgetHeader {
+  margin-bottom: var(--mantine-spacing-md);
+}
+
+.title {
+  font-weight: 600;
+  font-size: 1.1rem;
+  letter-spacing: rem(-0.3);
+  color: light-dark(var(--mantine-color-black), var(--mantine-color-white));
+}
+
+.viewAllButton {
+  color: var(--mantine-color-blue-4);
+  font-weight: 500;
+}
+
+.compactList {
+  margin-top: var(--mantine-spacing-xs);
+}
+
