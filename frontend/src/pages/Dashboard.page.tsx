@@ -2,6 +2,7 @@ import BreadcrumbsBar from '@/components/BreadcrumbsBar/BreadcrumbsBar';
 import { useEffect } from 'react';
 import { DashboardCaseWidget } from '@/components/DashboardCaseWidget/DashboardCaseWidget';
 import { TopMessagesWidget } from '@/components/TopMessagesWidget/TopMessagesWidget';
+import { TopUserWidget } from '@/components/TopUserWidget/TopUserWidget';
 import { Stack, Grid } from '@mantine/core';
 
 export function Dashboard() {
@@ -25,6 +26,7 @@ export function Dashboard() {
         <Grid.Col span={{ base: 12, md: 4 }}>
           <Stack gap="lg">
             <TopMessagesWidget />
+            <TopUserWidget />
             {/* Kleinere Widgets hier */}
           </Stack>
         </Grid.Col>
