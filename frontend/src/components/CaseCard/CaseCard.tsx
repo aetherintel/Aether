@@ -12,7 +12,6 @@ interface CaseCardProps {
 }
 
 export default function CaseCard({ caseFile, onDelete, onArchive, compact = false }: CaseCardProps) {
-
   const handleDeleteCaseClick = () => {
     onDelete(caseFile.id);
   };
@@ -39,52 +38,16 @@ export default function CaseCard({ caseFile, onDelete, onArchive, compact = fals
   ));
 
   return (
-    <Box 
-      className={compact ? `${classes.root} ${classes.compact}` : classes.root} 
-      opacity={caseFile.archived ? 0.5 : 1}
-    >
-      {/* Kompakte Ansicht */}
-      {compact ? (
-        <Box p="xs">
-          <Flex direction="column" align="start" gap={3} component={Link} to={`/cases/${caseFile.id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
-            <Text className={classes.compactTitle}>
-              {caseFile.title}
-            </Text>
-            <Flex align="center" gap={10} className={classes.compactMeta}>
-              <Text fz="xs">{caseFile.category}</Text>
-              <Divider component="span" orientation="vertical" size="xs" />
-              <Text component="span">
-                {caseFile.postCount} messages
-              </Text>
-            </Flex>
-          </Flex>
-        </Box>
-      ) : (
-        // normale Ansicht
-        <Box className={classes.imageSection}>
-          <Group w="100%" align="center" justify="space-between">
-            <Flex direction="column" align="start" gap={3} component={Link} to={`/cases/${caseFile.id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
-              <Text lh={1} className={classes.title}>
-                {caseFile.title}
-              </Text>
-              <Flex align="center" gap={10}>
-                <Text fz={12}>{caseFile.category}</Text>
-
-                <Divider component="span" orientation="vertical" />
-                <Text fz={12} component="span">
-                  {caseFile.postCount} messages
-                </Text>
-              </Flex>
-            </Flex>
-          </Group>
     <Card withBorder radius="md" p="md" className={classes.card} opacity={caseFile.archived ? 0.5 : 1}>
-      <Card.Section>
-        <SimpleGrid cols={2} spacing="0" verticalSpacing="0">
-          {thumbnails}
-        </SimpleGrid>
-      </Card.Section>
+      {compact ? null : (
+        <Card.Section>
+          <SimpleGrid cols={2} spacing="0" verticalSpacing="0">
+            {thumbnails}
+          </SimpleGrid>
+        </Card.Section>
+      )}
 
-      <Card.Section className={classes.section} mt="md">
+      <Card.Section className={classes.section} mt={compact ? 0 : 'md'}>
         <Group justify="apart">
           <Text fz="lg" fw={500}>
             {caseFile.title}
@@ -97,86 +60,44 @@ export default function CaseCard({ caseFile, onDelete, onArchive, compact = fals
           {caseFile.description}
         </Text>
 
-          <LineChart
-            h={110}
-            data={exampleChartData}
-            dataKey="date"
-            series={[{ name: 'posts', label: 'Posts', color: 'blue' }]}
-            curveType="natural"
-            tickLine="none"
-            gridAxis="none"
-            withXAxis={false}
-            withYAxis={false}
-            withDots={false}
-            withTooltip={false}
-            mx={rem(-21)}
-          />
+        <Menu shadow="md" width={200}>
+          <Menu.Target>
+            <ActionIcon className={classes.actionIcon} variant="subtle">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                strokeWidth="1.5"
+                stroke="gray"
+                fill="none"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+                <path d="M12 12m-1 0a1 1 0 1 0 2 0a1 1 0 1 0 -2 0" />
+                <path d="M12 19m-1 0a1 1 0 1 0 2 0a1 1 0 1 0 -2 0" />
+                <path d="M12 5m-1 0a1 1 0 1 0 2 0a1 1 0 1 0 -2 0" />
+              </svg>
+            </ActionIcon>
+          </Menu.Target>
 
-          <Menu shadow="md" width={200}>
-            <Menu.Target>
-              <ActionIcon className={classes.actionIcon} variant="subtle">
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  strokeWidth="1.5"
-                  stroke="gray"
-                  fill="none"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <path stroke="none" d="M0 0h24v24H0z" fill="none" />
-                  <path d="M12 12m-1 0a1 1 0 1 0 2 0a1 1 0 1 0 -2 0" />
-                  <path d="M12 19m-1 0a1 1 0 1 0 2 0a1 1 0 1 0 -2 0" />
-                  <path d="M12 5m-1 0a1 1 0 1 0 2 0a1 1 0 1 0 -2 0" />
-                </svg>
-              </ActionIcon>
-            </Menu.Target>
-
-            <Menu.Dropdown>
           <Menu.Dropdown>
             {!caseFile.archived ? (
               <Menu.Item
-                leftSection={
-                  <IconEdit
-                    style={{
-                      width: rem(14),
-                      height: rem(14),
-                    }}
-                  />
-                }
+                leftSection={<IconArchive style={{ width: rem(14), height: rem(14) }} />}
+                onClick={handleArchiveCaseClick}
               >
-                Edit case
+                Archive case
               </Menu.Item>
-              {!caseFile.archived ? (
-                <Menu.Item
-                  leftSection={<IconArchive style={{ width: rem(14), height: rem(14) }} />}
-                  onClick={handleArchiveCaseClick}
-                >
-                  Archive case
-                </Menu.Item>
-              ) : null}
-              {caseFile.archived ? (
-                <Menu.Item
-                  leftSection={<IconArchive style={{ width: rem(14), height: rem(14) }} />}
-                  onClick={handleArchiveCaseClick}
-                >
-                  Unarchive case
-                </Menu.Item>
-              ) : null}
+            ) : null}
+            {caseFile.archived ? (
               <Menu.Item
-                  color="red"
-                  leftSection={<IconTrash style={{ width: rem(14), height: rem(14) }} />}
-                  onClick={handleDeleteCaseClick}
-                >
-                  Delete case
+                leftSection={<IconArchive style={{ width: rem(14), height: rem(14) }} />}
+                onClick={handleArchiveCaseClick}
+              >
+                Unarchive case
               </Menu.Item>
-            </Menu.Dropdown>
-          </Menu>
-        </Box>
-      )}
-    </Box>
             ) : null}
             <Menu.Item
                 color="red"
@@ -202,7 +123,7 @@ export default function CaseCard({ caseFile, onDelete, onArchive, compact = fals
         <Button radius="md" component={Link} to={`/cases/${caseFile.id}`} style={{ flex: 1 }}>
           Show details
         </Button>
-        <ActionIcon variant="default" radius="md" size={36} onClick={handleArchiveCaseClick}>
+        <ActionIcon variant="default" radius="md" size={36} onClick={handleArchiveCaseClick} display={compact ? 'none' : 'block'}>
           <IconArchive className={classes.like} stroke={1.5} />
         </ActionIcon>
       </Group>

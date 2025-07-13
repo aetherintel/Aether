@@ -1,5 +1,4 @@
 import { Box, Title, Group, Button } from '@mantine/core';
-import { IconChevronRight } from '@tabler/icons-react';
 import { Link } from 'react-router-dom';
 import { CaseFileList } from '../CaseFileList/CaseFileList';
 import classes from './DashboardCaseWidget.module.css';

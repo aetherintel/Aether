@@ -125,12 +125,9 @@ export function CaseFileList({ archived, refreshTrigger, onRefresh, limit, compa
     ) : (
       <Grid columns={compact ? 1 : 3} gutter={compact ? 10 : 20}>
         {caseFiles.map((caseFile) => (
-          <Grid.Col key={caseFile.id} span={compact ? 1 : { base: 3, md: 1 }}>
-            <CaseCard caseFile={caseFile} onArchive={handleArchive} onDelete={handleDelete} compact={compact} />
-          </Grid.Col>
-          <Grid.Col key={caseFile.id} span={{ base: 3, md: 1 }}>
+          <Grid.Col key={caseFile.id} span={{ base: 3, sm: 1 }}>
             <CaseCard
-              caseFile={caseFile} onArchive={handleArchive} onDelete={handleDelete}
+              caseFile={caseFile} onArchive={handleArchive} onDelete={handleDelete} compact={compact}
             />
           </Grid.Col>
         ))}
