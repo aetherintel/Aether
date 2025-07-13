@@ -18,7 +18,8 @@ app.include_router(telegram_auth_controller.router)
 origins = [
     "http://localhost",
     "http://localhost:5173",
-    "https://htit-monitor.marvin-carstensen.com",
+    "https://æther.tech",
+    "https://xn--ther-uoa.tech"
     "http://localhost:8080",
     "http://localhost:9001",   # job launcher
     "http://keycloak:8080",   # keycloak
