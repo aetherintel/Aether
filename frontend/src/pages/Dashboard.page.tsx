@@ -1,8 +1,6 @@
 import BreadcrumbsBar from '@/components/BreadcrumbsBar/BreadcrumbsBar';
-import { CaseFileList } from '@/components/CaseFileList/CaseFileList';
 import { useEffect } from 'react';
 import { Grid } from '@mantine/core';
-import BreadcrumbsBar from '@/components/BreadcrumbsBar/BreadcrumbsBar';
 import { DashboardCaseWidget } from '@/components/DashboardCaseWidget/DashboardCaseWidget';
 import { TopMessagesWidget } from '@/components/TopMessagesWidget/TopMessagesWidget';
 import { TopUserWidget } from '@/components/TopUserWidget/TopUserWidget';
@@ -26,7 +24,6 @@ export function Dashboard() {
           <TopUserWidget />
         </Grid.Col>
       </Grid>
-      <CaseFileList archived={false} />
     </>
   );
 }
