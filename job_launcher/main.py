@@ -64,6 +64,12 @@ def launch_similarity(req: SimilarRequest, request: Request):
         else "telegram-job:latest"
     )
 
+    network = (
+        f"app_default"
+        if os.getenv("ENVIRONMENT") == "prod"
+        else "aether_default"
+    )
+
     session_string, user_info = load_string_session(req.tg_session)
     container = docker_client.containers.run(
         image=image_name,
@@ -92,7 +98,7 @@ def launch_similarity(req: SimilarRequest, request: Request):
                 'mode': 'rw',
             },
         },
-        network="aether_default",
+        network=network,
         labels={
             "MODE": "similar",
             "CHANNELS": req.channel,
@@ -159,6 +165,12 @@ def launch_scraper(req: ScrapeRequest, request: Request):
         else "telegram-job:latest"
     )
 
+    network = (
+        f"app_default"
+        if os.getenv("ENVIRONMENT") == "prod"
+        else "aether_default"
+    )
+
     print(f"[INFO] ENV: {os.getenv('ENVIRONMENT')}, Using image: {image_name}")
 
     container = docker_client.containers.run(
@@ -172,7 +184,7 @@ def launch_scraper(req: ScrapeRequest, request: Request):
                 'mode': 'rw',
             },
         },
-        network="aether_default",
+        network=network,
         labels=labels
     )
     
