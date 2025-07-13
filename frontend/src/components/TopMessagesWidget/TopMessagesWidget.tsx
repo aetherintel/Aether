@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { Box, Title, Accordion, Text, Group, Button, Badge, Loader } from '@mantine/core';
+import { Box, Title, Accordion, Text, Group, Button, Badge, Loader, Divider, ActionIcon } from '@mantine/core';
+import { IconSettings, IconBrandTelegram } from '@tabler/icons-react';
 import { authFetch } from '@/utils/authFetch';
 import { TopMessagesForm } from './TopMessagesForm';
 import classes from './TopMessagesWidget.module.css';
@@ -12,14 +13,6 @@ interface Message {
   text: string;
   date: string;
   channel_title?: string;
-}
-
-interface Channel {
-  channel_id: string;
-  title: string;
-  username: string;
-  is_scraped: boolean | null;
-  message_count: number;
 }
 
 interface SearchParams {
@@ -38,8 +31,30 @@ export function TopMessagesWidget() {
   });
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(false);
-  // Array for Accordion-Items
   const [openItems, setOpenItems] = useState<string[]>(['config']);
+  const [expandedMessages, setExpandedMessages] = useState<string[]>([]);
+
+  const MAX_TEXT_LENGTH = 150;
+
+  // check text length
+  const shouldTruncateText = (text: string) => text.length > MAX_TEXT_LENGTH;
+
+  // trim text
+  const truncateText = (text: string) => {
+    if (!shouldTruncateText(text)) {
+      return text;
+    }
+    return `${text.substring(0, MAX_TEXT_LENGTH)  }...`;
+  };
+
+  // toggle message
+  const toggleMessageExpansion = (messageId: string) => {
+    setExpandedMessages(prev => 
+      prev.includes(messageId) 
+        ? prev.filter(id => id !== messageId) 
+        : [...prev, messageId]
+    );
+  };
 
   //load Config
   useEffect(() => {
@@ -81,6 +96,7 @@ export function TopMessagesWidget() {
     });
     setMessages([]);
     setOpenItems(['config']);
+    setExpandedMessages([]);
     
     // delete saved data
     localStorage.removeItem('topMessagesConfig');
@@ -214,6 +230,7 @@ export function TopMessagesWidget() {
       
       console.log("Insgesamt ausgewählte Nachrichten:", allMessages.length);
       setMessages(allMessages);
+      setExpandedMessages([]); // Reset expanded messages
       
       // mark widget as active
       if (allMessages.length > 0) {
@@ -277,31 +294,38 @@ export function TopMessagesWidget() {
     setOpenItems(value);
   };
 
-  // Button Klick-Handler
-  const handleConfigureClick = (e: React.MouseEvent) => {
-    e.stopPropagation(); // stop
-    
-    // if config is open
-    if (openItems.includes('config')) {
-      return;
+  // Kopen config
+  const openConfig = () => {
+    if (!openItems.includes('config')) {
+      setOpenItems([...openItems, 'config']);
     }
-    // else
-    setOpenItems([...openItems, 'config']);
   };
 
   return (
     <Box className={classes.widget}>
+      <Group justify="apart" className={classes.widgetHeader}>
+        <Title order={3} className={classes.title}>
+          {searchParams.isActive ? searchParams.label : 'Top Messages'}
+        </Title>
+        <ActionIcon 
+          variant="subtle" 
+          color="gray" 
+          onClick={openConfig}
+          className={classes.settingsButton}
+        >
+          <IconSettings size={18} />
+        </ActionIcon>
+      </Group>
+
       <Accordion 
         multiple 
         value={openItems} 
         onChange={handleAccordionChange}
       >
-        <Accordion.Item value="config" className={searchParams.isActive ? classes.configAccordionItem : ''}>
-          <Group justify="apart" className={classes.widgetHeader}>
-            <Accordion.Control>
-              <Title order={3} className={classes.title}>Top 5 Messages</Title>
-            </Accordion.Control>
-          </Group>
+        <Accordion.Item value="config" className={classes.configAccordionItem}>
+          <Accordion.Control className={classes.hiddenControl}>
+            <span style={{ display: 'none' }}>Configuration</span>
+          </Accordion.Control>
           <Accordion.Panel>
             <TopMessagesForm
               searchParams={searchParams}
@@ -314,19 +338,9 @@ export function TopMessagesWidget() {
 
         {searchParams.isActive && (
           <Accordion.Item value="messages" className={classes.messagesAccordionItem}>
-            <Group justify="apart" className={classes.widgetHeader}>
-              <Accordion.Control>
-                <Title order={3} className={classes.title}>{searchParams.label}</Title>
-              </Accordion.Control>
-              <Button
-                onClick={handleConfigureClick}
-                variant="subtle"
-                size="xs"
-                className={classes.configButton}
-              >
-                Settings
-              </Button>
-            </Group>
+            <Accordion.Control className={classes.hiddenControl}>
+              <span style={{ display: 'none' }}>Messages</span>
+            </Accordion.Control>
             <Accordion.Panel>
               {loading ? (
                 <Loader size="sm" />
@@ -334,15 +348,34 @@ export function TopMessagesWidget() {
                 <Text className={classes.noResults}>No messages found</Text>
               ) : (
                 <div className={classes.messagesList}>
-                  {messages.map((message) => (
-                    <div key={message.message_id} className={classes.messageItem}>
-                      <Group justify="apart" className={classes.messageHeader}>
-                        <Badge color="blue" radius="sm">{message.channel_title || message.channel_id}</Badge>
-                        <Text size="xs" color="dimmed">{formatRelativeTime(message.date)}</Text>
-                      </Group>
-                      <Text className={classes.messageText}>
-                        {highlightText(message.text, searchParams.keywords)}
-                      </Text>
+                  {messages.map((message, index) => (
+                    <div key={message.message_id}>
+                      <div className={classes.messageItem}>
+                        <Group justify="apart" className={classes.messageHeader}>
+                          <Badge color="blue" radius="sm">{message.channel_title || message.channel_id}</Badge>
+                          <Group gap="xs">
+                            <Text size="xs" color="dimmed">{formatRelativeTime(message.date)}</Text>
+                            <IconBrandTelegram size={16} className={classes.telegramIcon} />
+                          </Group>
+                        </Group>
+                        <div className={classes.messageContent}>
+                          <Text className={classes.messageText}>
+                            {expandedMessages.includes(message.message_id) 
+                              ? highlightText(message.text, searchParams.keywords)
+                              : highlightText(truncateText(message.text), searchParams.keywords)}
+                          </Text>
+                          {shouldTruncateText(message.text) && (
+                            <Button 
+                              variant="subtle"
+                              onClick={() => toggleMessageExpansion(message.message_id)}
+                              className={classes.showMoreButton}
+                            >
+                              {expandedMessages.includes(message.message_id) ? "Show less" : "Show more"}
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                      {index < messages.length - 1 && <Divider my="sm" />}
                     </div>
                   ))}
                 </div>

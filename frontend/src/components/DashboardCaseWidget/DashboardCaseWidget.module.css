@@ -3,7 +3,7 @@
   border-radius: rem(8);
   padding: var(--mantine-spacing-md);
   margin-bottom: var(--mantine-spacing-md);
-  border: 1px solid var(--mantine-color-dark-6);
+  border: rem(0.1) solid var(--mantine-color-gray-3);
 }
 
 .widgetHeader {
