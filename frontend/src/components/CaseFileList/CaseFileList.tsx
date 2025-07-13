@@ -27,23 +27,35 @@ interface CaseFileListProps {
   archived: boolean;
   refreshTrigger?: number;
   onRefresh?: () => void;
+  limit?: number;
+  compact?: boolean;
 }
 
-export function CaseFileList({ archived, refreshTrigger, onRefresh }: CaseFileListProps) {
+export function CaseFileList({ archived, refreshTrigger, onRefresh, limit, compact = false }: CaseFileListProps) {
   const [caseFiles, setCaseFiles] = useState<CaseFile[]>([]);
   const [loading, setLoading] = useState(true);
 
   const fetchCaseFiles = async () => {
     const fetchUrl = new URL(`${apiUrl ?? 'http://localhost:8000/api'}/casefiles/`);
+
+    console.log("Fetching casefiles from:", fetchUrl.toString());
+
     fetchUrl.searchParams.set('archived', archived ? 'true' : 'false');
+
+    if (limit) {
+      fetchUrl.searchParams.set('limit', limit.toString());
+    }
 
     setLoading(true);
     
     try {
       const res = await authFetch(fetchUrl.toString());
+       console.log("API response status:", res.status);
       const data = await res.json();
+      console.log("API response data:", data);
       setCaseFiles(data);
     } catch (err: any) {
+      console.error("Error fetching casefiles:", err);
       notifications.show({
         title: 'Error fetching casefiles',
         message: err.message || 'Unknown error',
@@ -55,6 +67,7 @@ export function CaseFileList({ archived, refreshTrigger, onRefresh }: CaseFileLi
   };
 
   useEffect(() => {
+    console.log("Auth token present:", !!localStorage.getItem('token'));
     fetchCaseFiles();
   }, [archived, refreshTrigger]);
 
@@ -110,8 +123,11 @@ export function CaseFileList({ archived, refreshTrigger, onRefresh }: CaseFileLi
     {caseFiles.length === 0 ? (
       <Text>{archived ? "No archived cases found" : "No active cases found"}</Text>
     ) : (
-      <Grid columns={3} gutter={20}>
+      <Grid columns={compact ? 1 : 3} gutter={compact ? 10 : 20}>
         {caseFiles.map((caseFile) => (
+          <Grid.Col key={caseFile.id} span={compact ? 1 : { base: 3, md: 1 }}>
+            <CaseCard caseFile={caseFile} onArchive={handleArchive} onDelete={handleDelete} compact={compact} />
+          </Grid.Col>
           <Grid.Col key={caseFile.id} span={{ base: 3, md: 1 }}>
             <CaseCard
               caseFile={caseFile} onArchive={handleArchive} onDelete={handleDelete}
