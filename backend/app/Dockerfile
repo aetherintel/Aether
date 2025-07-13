@@ -13,5 +13,5 @@ RUN chmod +x /wait-for.sh
 
 EXPOSE 8000
 
-CMD ["/wait-for.sh", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["/wait-for.sh", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", " --proxy-headers"]
 
