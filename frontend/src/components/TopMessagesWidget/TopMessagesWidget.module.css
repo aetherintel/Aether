@@ -8,6 +8,7 @@
 
 .widgetHeader {
   margin-bottom: var(--mantine-spacing-xs);
+  padding: 0 var(--mantine-spacing-xs);
 }
 
 .title {
@@ -31,6 +32,9 @@
 
 .hiddenControl {
   display: none;
+  height: 0;
+  padding: 0;
+  margin: 0;
 }
 
 .messagesList {
@@ -46,6 +50,15 @@
 
 .messageHeader {
   margin-bottom: var(--mantine-spacing-xs);
+  width: 100%;
+}
+
+.dateGroup {
+  flex-shrink: 0;
+}
+
+.dateText {
+  white-space: nowrap;
 }
 
 .messageContent {
@@ -58,6 +71,13 @@
   line-height: 1.4;
 }
 
+.highlight {
+  background-color: #ffee58;
+  color: #000;
+  padding: 0 2px;
+  border-radius: 2px;
+}
+
 .showMoreButton {
   align-self: flex-start;
   margin-top: var(--mantine-spacing-xs);
@@ -67,7 +87,8 @@
 }
 
 .telegramIcon {
-  color: #24A1DE
+  color: #24A1DE;
+  flex-shrink: 0;
 }
 
 .noResults {
