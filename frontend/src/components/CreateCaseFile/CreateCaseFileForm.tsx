@@ -7,7 +7,6 @@ import { TgChannelMultiSelect } from '../TgChannelMultiSelect';
 import { authFetch } from '@/utils/authFetch';
 
 const apiUrl = import.meta.env.VITE_API_URL;
-const API_BASE = apiUrl || 'http://localhost:8000/api';
 
 interface CaseFileFormValues {
   title: string;
@@ -87,7 +86,7 @@ export function CreateCaseFileForm() {
 
   const fetchSessions = async (): Promise<void> => {
     try {
-      const response = await authFetch(`${API_BASE}/telegram-auth/sessions`, {
+      const response = await authFetch(`${apiUrl ? apiUrl : 'http://localhost:8000/api'}/telegram-auth/sessions`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token') || ''}`
         }

@@ -26,7 +26,7 @@ import {
 } from '@tabler/icons-react';
 import { authFetch } from '@/utils/authFetch';
 
-const API_BASE = 'http://localhost:8000';
+const apiUrl = import.meta.env.VITE_API_URL;
 
 // Types
 interface UserInfo {
@@ -131,7 +131,8 @@ const TelegramScraper: React.FC<TelegramScraperProps> = ({ case_id }) => {
 
   const fetchSessions = async (): Promise<void> => {
     try {
-      const response = await authFetch(`${API_BASE}/telegram-auth/sessions`, {
+      const base = apiUrl ?? 'http://localhost:8000/api';
+      const response = await authFetch(`${base}/telegram-auth/sessions`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token') || ''}`
         }
@@ -169,7 +170,8 @@ const TelegramScraper: React.FC<TelegramScraperProps> = ({ case_id }) => {
     setControlLoading((prev: any) => ({ ...prev, [containerId]: true }));
     
     try {
-      const endpoint = `${API_BASE}/auth/telegram/container/${containerId}/${action}`;
+      const base = apiUrl ?? 'http://localhost:8000/api';
+      const endpoint = `${base}/auth/telegram/container/${containerId}/${action}`;
       const method = action === 'remove' ? 'DELETE' : 'POST';
       
       const response = await authFetch(endpoint, {
@@ -225,7 +227,8 @@ const TelegramScraper: React.FC<TelegramScraperProps> = ({ case_id }) => {
 
   const fetchStatus = async (): Promise<void> => {
     try {
-      const response = await authFetch(`${API_BASE}/auth/telegram/status`, {
+      const base = apiUrl ?? 'http://localhost:8000/api';
+      const response = await authFetch(`${base}/auth/telegram/status`, {
         method: 'POST', // Changed from GET to POST
         headers: {
           'Content-Type': 'application/json',
@@ -270,10 +273,11 @@ const TelegramScraper: React.FC<TelegramScraperProps> = ({ case_id }) => {
     try {
       let endpoint = '';
       let payload: ScrapePayload = { tg_session: selectedSession };
+      const base = apiUrl ?? 'http://localhost:8000/api';
 
       switch (mode) {
         case 'full':
-          endpoint = `${API_BASE}/auth/telegram/full`;
+          endpoint = `${base}/auth/telegram/full`;
           payload = {
             channel: channel.trim(),
             tg_session: selectedSession,
@@ -283,7 +287,7 @@ const TelegramScraper: React.FC<TelegramScraperProps> = ({ case_id }) => {
           };
           break;
         case 'live':
-          endpoint = `${API_BASE}/auth/telegram/live`;
+          endpoint = `${base}/auth/telegram/live`;
           payload = {
             channels: [channel.trim()],
             tg_session: selectedSession,
@@ -293,7 +297,8 @@ const TelegramScraper: React.FC<TelegramScraperProps> = ({ case_id }) => {
       }
       const addChannelToCase = async (caseId: number, channelUsername: string) => {
         try {
-          const response = await authFetch(`${API_BASE}/api/casefiles/${caseId}/add-channels`, {
+          const base = apiUrl ?? 'http://localhost:8000/api';
+          const response = await authFetch(`${base}/api/casefiles/${caseId}/add-channels`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
