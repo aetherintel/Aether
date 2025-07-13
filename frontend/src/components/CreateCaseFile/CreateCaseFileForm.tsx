@@ -7,7 +7,6 @@ import { TgChannelMultiSelect } from '../TgChannelMultiSelect';
 import { authFetch } from '@/utils/authFetch';
 
 const apiUrl = import.meta.env.VITE_API_URL;
-const API_BASE = apiUrl || 'http://localhost:8000/api';
 
 interface CaseFileFormValues {
   title: string;
@@ -52,10 +51,6 @@ const marks = [
   { value: 100, label: '1 year' },
 ];
 
-const scraperModeOptions = [
-  { value: 'full', label: 'Full Scrape - Recursive with similar channels' },
-];
-
 export function CreateCaseFileForm() {
   const [active, setActive] = useState(0);
   const nextStep = () => setActive((current) => (current < 4 ? current + 1 : current));
@@ -64,7 +59,7 @@ export function CreateCaseFileForm() {
   const navigate = useNavigate();
 
   // Session management
-  const [sessions, setSessions] = useState<SessionInfo[]>([]);
+  const [, setSessions] = useState<SessionInfo[]>([]);
   const [activeSessions, setActiveSessions] = useState<SessionInfo[]>([]);
   const [sessionLoading, setSessionLoading] = useState(true);
 
@@ -91,7 +86,7 @@ export function CreateCaseFileForm() {
 
   const fetchSessions = async (): Promise<void> => {
     try {
-      const response = await authFetch(`${API_BASE}/telegram-auth/sessions`, {
+      const response = await authFetch(`${apiUrl ? apiUrl : 'http://localhost:8000/api'}/telegram-auth/sessions`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token') || ''}`
         }

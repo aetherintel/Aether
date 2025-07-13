@@ -9,7 +9,6 @@ import {
   PasswordInput,
   Text,
   TextInput,
-  Title,
 } from '@mantine/core';
 import { useForm } from '@mantine/form';
 import { notifications } from '@mantine/notifications';
@@ -17,10 +16,18 @@ import { keycloakLogin, type LoginCredentials } from '../../context/auth';
 import { useAuthStore } from '../../store/client/authStore';
 import classes from './Login.module.css';
 import { useEffect } from 'react';
+import Logo from '@/components/Logo';
 
 export function Login() {
   useEffect(() => {
     document.title = 'Login - Æther';
+
+    // Force a custom background color for the login page
+    document.body.style.backgroundColor = '#238be6';
+
+    return () => {
+      document.body.style.backgroundColor = '';
+    };
   }, []);
 
   const { login } = useAuthStore();
@@ -47,14 +54,14 @@ export function Login() {
       navigate('/'); // Redirect after successful login
 
       notifications.show({
-        title: 'Login erfolgreich',
-        message: 'Willkommen zurück!',
+        title: 'Login successful',
+        message: 'Welcome back!',
         color: 'green',
       });
     } catch (err) {
       notifications.show({
-        title: 'Login fehlgeschlagen',
-        message: 'E-Mail oder Passwort ist falsch',
+        title: 'Login failed',
+        message: 'E-mail or password is wrong',
         color: 'red',
       });
     }
@@ -62,13 +69,11 @@ export function Login() {
 
   return (
     <Container size={420} my={40}>
-      <Title ta="center" className={classes.title}>
-        Æther
-      </Title>
+      <Logo />
 
-      <Text className={classes.subtitle}>
+      <Text className={classes.subtitle} c="white">
         Do not have an account yet?{' '}
-        <Anchor component={Link} to="/register">
+        <Anchor component={Link} to="/register" c="white" td="underline">
           Create account
         </Anchor>
       </Text>
@@ -76,8 +81,8 @@ export function Login() {
       <Paper withBorder shadow="sm" p={22} mt={30} radius="md">
         <form onSubmit={form.onSubmit(handleLogin)}>
           <TextInput
-            label="Email"
-            placeholder="you@example.com"
+            label="Username"
+            placeholder="Your username"
             required
             radius="md"
             {...form.getInputProps('username')}
@@ -92,9 +97,6 @@ export function Login() {
           />
           <Group justify="space-between" mt="lg">
             <Checkbox label="Remember me" />
-            <Anchor component="button" size="sm">
-              Forgot password?
-            </Anchor>
           </Group>
           <Button fullWidth mt="xl" radius="md" type="submit">
             Sign in

@@ -3,6 +3,21 @@ from pydantic import BaseModel
 import docker, os, uuid, json
 from pathlib import Path
 from typing import Optional
+import docker
+import os
+
+docker_client = docker.from_env()
+
+def docker_login_if_needed():
+    if os.getenv("ENVIRONMENT") == "prod":
+        try:
+            docker_client.login(
+                username=os.getenv("DOCKER_USERNAME"),
+                password=os.getenv("DOCKER_PASSWORD")
+            )
+            print("✅ Docker login successful.")
+        except docker.errors.APIError as e:
+            print("❌ Docker login failed:", e)
 
 app = FastAPI()
 docker_client = docker.from_env()
@@ -41,9 +56,23 @@ def _check_auth(request: Request):
 def launch_similarity(req: SimilarRequest, request: Request):
     _check_auth(request)
 
+    docker_login_if_needed()
+
+    image_name = (
+        f"{os.getenv('DOCKER_USERNAME')}/aether-telegram_scraper:latest"
+        if os.getenv("ENVIRONMENT") == "prod"
+        else "telegram-job:latest"
+    )
+
+    network = (
+        f"app_default"
+        if os.getenv("ENVIRONMENT") == "prod"
+        else "aether_default"
+    )
+
     session_string, user_info = load_string_session(req.tg_session)
     container = docker_client.containers.run(
-        image="telegram-job:latest",
+        image=image_name,
         name=f"similar_{uuid.uuid4().hex[:6]}",
         remove=True,
         detach=False,
@@ -69,7 +98,7 @@ def launch_similarity(req: SimilarRequest, request: Request):
                 'mode': 'rw',
             },
         },
-        network="aether_default",
+        network=network,
         labels={
             "MODE": "similar",
             "CHANNELS": req.channel,
@@ -128,8 +157,24 @@ def launch_scraper(req: ScrapeRequest, request: Request):
     if req.parent_container_id:
         labels["PARENT_CONTAINER_ID"] = req.parent_container_id
     
+    docker_login_if_needed()
+
+    image_name = (
+        f"{os.getenv('DOCKER_USERNAME')}/aether-telegram_scraper:latest"
+        if os.getenv("ENVIRONMENT") == "prod"
+        else "telegram-job:latest"
+    )
+
+    network = (
+        f"app_default"
+        if os.getenv("ENVIRONMENT") == "prod"
+        else "aether_default"
+    )
+
+    print(f"[INFO] ENV: {os.getenv('ENVIRONMENT')}, Using image: {image_name}")
+
     container = docker_client.containers.run(
-        image="telegram-job:latest",
+        image=image_name,
         name=container_id,
         detach=True,
         environment=env_vars,
@@ -139,7 +184,7 @@ def launch_scraper(req: ScrapeRequest, request: Request):
                 'mode': 'rw',
             },
         },
-        network="aether_default",
+        network=network,
         labels=labels
     )
     
@@ -180,6 +225,12 @@ def start_container(container_id: str, req: ContainerControlRequest, request: Re
     """Start a specific container"""
     _check_auth(request)
     
+    image_name = (
+        f"{os.getenv('DOCKER_USERNAME')}/aether-telegram_scraper"
+        if os.getenv("ENVIRONMENT") == "prod"
+        else "telegram-job"
+    )
+
     try:
         container = docker_client.containers.get(container_id)
         
@@ -190,8 +241,8 @@ def start_container(container_id: str, req: ContainerControlRequest, request: Re
         
         # Verify it's a telegram job
         image_tags = container.image.tags if container.image and container.image.tags else []
-        is_telegram_job = any("telegram-job" in tag for tag in image_tags) if image_tags else any("telegram-job" in value for value in container.labels.values())
-        if not is_telegram_job and container.labels.get("telegram-job:latest") != "true":
+        is_telegram_job = any(image_name in tag for tag in image_tags) if image_tags else any(image_name in value for value in container.labels.values())
+        if not is_telegram_job and container.labels.get(f"{image_name}:latest") != "true":
             print(f"[DEBUG] Container {container.name} is not a telegram job (tags: {container.image.tags} {container.labels})")
             raise HTTPException(status_code=400, detail="Container is not a telegram job")
         
@@ -224,6 +275,12 @@ def stop_container(container_id: str, req: ContainerControlRequest, request: Req
     """Stop a specific container"""
     _check_auth(request)
     
+    image_name = (
+        f"{os.getenv('DOCKER_USERNAME')}/aether-telegram_scraper"
+        if os.getenv("ENVIRONMENT") == "prod"
+        else "telegram-job"
+    )
+
     try:
         container = docker_client.containers.get(container_id)
         
@@ -234,8 +291,8 @@ def stop_container(container_id: str, req: ContainerControlRequest, request: Req
         
         # Verify it's a telegram job
         image_tags = container.image.tags if container.image and container.image.tags else []
-        is_telegram_job = any("telegram-job" in tag for tag in image_tags) if image_tags else False
-        if not is_telegram_job and container.labels.get("telegram-job:latest") != "true":
+        is_telegram_job = any(image_name in tag for tag in image_tags) if image_tags else False
+        if not is_telegram_job and container.labels.get(f"{image_name}:latest") != "true":
             raise HTTPException(status_code=400, detail="Container is not a telegram job")
         
         # Check current status
@@ -267,6 +324,12 @@ def restart_container(container_id: str, req: ContainerControlRequest, request: 
     """Restart a specific container"""
     _check_auth(request)
     
+    image_name = (
+        f"{os.getenv('DOCKER_USERNAME')}/aether-telegram_scraper"
+        if os.getenv("ENVIRONMENT") == "prod"
+        else "telegram-job"
+    )
+
     try:
         container = docker_client.containers.get(container_id)
         
@@ -277,8 +340,8 @@ def restart_container(container_id: str, req: ContainerControlRequest, request: 
         
         # Verify it's a telegram job
         image_tags = container.image.tags if container.image and container.image.tags else []
-        is_telegram_job = any("telegram-job" in tag for tag in image_tags) if image_tags else False
-        if not is_telegram_job and container.labels.get("telegram-job:latest") != "true":
+        is_telegram_job = any(image_name in tag for tag in image_tags) if image_tags else False
+        if not is_telegram_job and container.labels.get(f"{image_name}:latest") != "true":
             raise HTTPException(status_code=400, detail="Container is not a telegram job")
         
         # Restart the container
@@ -302,6 +365,12 @@ def remove_container(container_id: str, req: ContainerControlRequest, request: R
     """Remove a specific container"""
     _check_auth(request)
     
+    image_name = (
+        f"{os.getenv('DOCKER_USERNAME')}/aether-telegram_scraper"
+        if os.getenv("ENVIRONMENT") == "prod"
+        else "telegram-job"
+    )
+
     try:
         # Try to get running container first
         try:
@@ -325,7 +394,7 @@ def remove_container(container_id: str, req: ContainerControlRequest, request: R
         
         # Verify it's a telegram job
         image_tags = container.image.tags if container.image and container.image.tags else []
-        is_telegram_job = (any("telegram-job" in tag for tag in image_tags) if image_tags else False) or container.labels.get("com.docker.compose.service") == "telegram-job"
+        is_telegram_job = (any(image_name in tag for tag in image_tags) if image_tags else False) or container.labels.get("com.docker.compose.service") == image_name
         
         if not is_telegram_job:
             raise HTTPException(status_code=400, detail="Container is not a telegram job")

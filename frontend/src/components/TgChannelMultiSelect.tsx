@@ -14,7 +14,7 @@ interface TgChannelMultiSelectProps {
   placeholder?: string;
 }
 
-const defaultChannel= ['insider_nachrichten'];
+const defaultChannel= ['freiesachsen', 'freiesHusum25813', 'jungenationalisten'];
 
 export function TgChannelMultiSelect({
   value,

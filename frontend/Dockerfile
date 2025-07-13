@@ -4,7 +4,9 @@ WORKDIR /app
 
 COPY package.json .
 
-#ENV VITE_API_URL=https://htit-monitor.marvin-carstensen.com/api
+ARG VITE_API_URL
+
+ENV VITE_API_URL=${VITE_API_URL}
 
 RUN npm install
 

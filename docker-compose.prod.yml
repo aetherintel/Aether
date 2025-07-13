@@ -16,34 +16,43 @@ services:
     container_name: keycloak
     depends_on:
       - postgres
-    command: start-dev --import-realm
-
+    command: 
+      - start-dev 
+      - --import-realm
     ports:
       - "8080:8080"
     restart: always
     environment:
+      # Database
       KC_DB: postgres
       KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
       KC_DB_USERNAME: ${DB_USER}
       KC_DB_PASSWORD: ${DB_PASSWORD}
+      
+      # Admin
       KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN}
       KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
-      KC_HTTP_RELATIVE_PATH: /keycloak
-      KC_HOSTNAME: htit-monitor.marvin-carstensen.com
-      KC_PROXY: edge
-    volumes:
-      - ./keycloak/exports:/opt/keycloak/data/export
       
+      # Hostname Config für Email Links
+      KC_HTTP_RELATIVE_PATH: /keycloak
+      KC_HOSTNAME: xn--ther-uoa.tech
+      KC_PROXY: edge
+      
+    volumes:
+      - keycloak_data:/opt/keycloak/data
+      - ./keycloak/exports:/opt/keycloak/data/import
   backend:
     image: ${DOCKER_USERNAME}/aether-backend:latest
     container_name: backend
+    restart: on-failure
     environment:
       DB_USER: ${DB_USER}
       DB_PASSWORD: ${DB_PASSWORD}
       DB_URL: postgresql://${DB_USER}:${DB_PASSWORD}@postgres:5432/aether
-      SWAGGER_TOKEN_URL: https://htit-.marvin-carstensen.com/keycloak/realms/HotTopics/protocol/openid-connect/token
-      KEYCLOAK_BASE_URL: https://htit-monitor.marvin-carstensen.com/keycloak
-      KEYCLOAK_URL: https://htit-monitor.marvin-carstensen.com/keycloak/realms/HotTopics
+      SWAGGER_TOKEN_URL: https://xn--ther-uoa.tech/keycloak/realms/HotTopics/protocol/openid-connect/token
+      KEYCLOAK_BASE_URL: https://xn--ther-uoa.tech/keycloak
+      KEYCLOAK_URL: https://xn--ther-uoa.tech/keycloak/realms/HotTopics
+      KEYCLOAK_INTERNAL_URL: https://xn--ther-uoa.tech/keycloak/realms/HotTopics
       KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN}
       KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
       KEYCLOAK_HOSTNAME: keycloak
@@ -56,7 +65,7 @@ services:
       POSTGRES_DB: telegramdb
       POSTGRES_USER: telegramuser
       NEO4J_USER: neo4j
-      NEO4J_URI: bolt://localhost:7687
+      NEO4J_URI: bolt://neo4j:7687
       JOB_LAUNCHER_URL: http://job-launcher:9001
       TG_API_ID: ${TG_API_ID}
       TG_API_HASH: ${TG_API_HASH}
@@ -64,15 +73,19 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       NEO4J_PASSWORD: ${NEO4J_PASSWORD}
       JOB_SECRET_TOKEN: ${JOB_SECRET_TOKEN}
-    ports:
-      - "8000:8000"
+      MEDIA_PATH: ${PWD}/shared/media
+      ENVIRONMENT: prod
+      DOCKER_USERNAME: ${DOCKER_USERNAME}
+      DOCKER_PASSWORD: ${DOCKER_PASSWORD}
     volumes:
-      - ./backend:/app
-    restart: always
+      - /var/run/docker.sock:/var/run/docker.sock
+      - tg_sessions:/app/sessions
+      - ${PWD}/shared/media:/shared/media
     depends_on:
       - postgres
       - keycloak
-      
+    ports:
+      - "8000:8000"
   frontend:
     image: ${DOCKER_USERNAME}/aether-frontend:latest
     container_name: frontend
@@ -81,13 +94,13 @@ services:
       - "443:443"
     environment:
       PROD_DOMAIN: ${PROD_DOMAIN}
-      VITE_API_URL: https://htit-monitor.marvin-carstensen.com/api
     volumes:
       - ./frontend:/app
       - ./certbot/www:/var/www/certbot
       - ./certbot/conf:/etc/letsencrypt
+      - ./shared/media:/usr/share/nginx/html/app/public/media
     restart: always
-    depends_on: 
+    depends_on:
       - backend
 
   certbot:
@@ -112,17 +125,20 @@ services:
       - neo4j_data:/data
       - neo4j_logs:/logs
     healthcheck:
-      test: ["CMD", "cypher-shell", "-u", "neo4j", "-p", "${NEO4J_PASSWORD}", "RETURN 1"]
+      test: ["CMD", "cypher-shell", "-u", "${NEO4J_USER}", "-p", "${NEO4J_PASSWORD}", "RETURN 1"]
       interval: 10s
       retries: 10
     
   telegram-job:
     image: ${DOCKER_USERNAME}/aether-telegram_scraper:latest
     container_name: telegram_scraper
-    entrypoint: ["sleep", "infinity"]  # Keeps image warm but does nothing unless called
+    environment:
+      ENVIRONMENT: prod
+    #entrypoint: ["sleep", "infinity"]  # Keeps image warm but does nothing unless called
     volumes:
-      - tg_default:/app/session        # ⬅️ Session volume (Telegram auth)
-    profiles: ["scraper"] 
+      - tg_sessions:/app/sessions    # ⬅️ Session volume (Telegram auth)
+      - ./shared/media:/shared/media
+    # profiles: ["scraper"] 
   job-launcher:
     image: ${DOCKER_USERNAME}/aether-job_launcher:latest
     container_name: job_launcher
@@ -135,13 +151,16 @@ services:
       NEO4J_PASSWORD: ${NEO4J_PASSWORD}
       TG_API_ID: ${TG_API_ID}
       TG_API_HASH: ${TG_API_HASH}
+      MEDIA_PATH: ${PWD}/shared/media
+      ENVIRONMENT: prod
+      DOCKER_USERNAME: ${DOCKER_USERNAME}
+      DOCKER_PASSWORD: ${DOCKER_PASSWORD}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-      - tg_default:/app/session
-
+      - tg_sessions:/app/sessions
 volumes:
   pgdata:
-  tg_default:
   neo4j_data:
   neo4j_logs:
   keycloak_data:
+  tg_sessions:
