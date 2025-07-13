@@ -56,9 +56,8 @@ export function TopMessagesWidget() {
     );
   };
 
-  //load Config
+  // load Config
   useEffect(() => {
-    // load config
     const savedConfig = localStorage.getItem('topMessagesConfig');
     if (savedConfig) {
       try {
@@ -75,7 +74,7 @@ export function TopMessagesWidget() {
       try {
         const msgData = JSON.parse(savedMessages);
         setMessages(msgData);
-      // check if messages are available
+        // check if messages are available
         if (msgData.length > 0) {
           setSearchParams(prev => ({ ...prev, isActive: true }));
           // open Messages-Accordion
@@ -285,7 +284,7 @@ export function TopMessagesWidget() {
     const parts = text.split(regex);
 
     return parts.map((part, index) =>
-      regex.test(part) ? <mark key={index}>{part}</mark> : part
+      regex.test(part) ? <mark key={index} className={classes.highlight}>{part}</mark> : part
     );
   };
 
@@ -294,23 +293,28 @@ export function TopMessagesWidget() {
     setOpenItems(value);
   };
 
-  // Kopen config
-  const openConfig = () => {
-    if (!openItems.includes('config')) {
+  // toggle config
+  const toggleConfig = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    if (openItems.includes('config')) {
+      setOpenItems(openItems.filter(item => item !== 'config'));
+    } else {
       setOpenItems([...openItems, 'config']);
     }
   };
 
   return (
     <Box className={classes.widget}>
-      <Group justify="apart" className={classes.widgetHeader}>
+      <Group justify="space-between" className={classes.widgetHeader}>
         <Title order={3} className={classes.title}>
           {searchParams.isActive ? searchParams.label : 'Top Messages'}
         </Title>
         <ActionIcon 
           variant="subtle" 
           color="gray" 
-          onClick={openConfig}
+          onClick={toggleConfig}
           className={classes.settingsButton}
         >
           <IconSettings size={18} />
@@ -351,10 +355,10 @@ export function TopMessagesWidget() {
                   {messages.map((message, index) => (
                     <div key={message.message_id}>
                       <div className={classes.messageItem}>
-                        <Group justify="apart" className={classes.messageHeader}>
+                        <Group justify="space-between" className={classes.messageHeader} wrap="nowrap">
                           <Badge color="blue" radius="sm">{message.channel_title || message.channel_id}</Badge>
-                          <Group gap="xs">
-                            <Text size="xs" color="dimmed">{formatRelativeTime(message.date)}</Text>
+                          <Group gap="xs" className={classes.dateGroup} wrap="nowrap">
+                            <Text size="xs" color="dimmed" className={classes.dateText}>{formatRelativeTime(message.date)}</Text>
                             <IconBrandTelegram size={16} className={classes.telegramIcon} />
                           </Group>
                         </Group>
