@@ -52,7 +52,7 @@ services:
       SWAGGER_TOKEN_URL: https://xn--ther-uoa.tech/keycloak/realms/HotTopics/protocol/openid-connect/token
       KEYCLOAK_BASE_URL: https://xn--ther-uoa.tech/keycloak
       KEYCLOAK_URL: https://xn--ther-uoa.tech/keycloak/realms/HotTopics
-      KEYCLOAK_INTERNAL_URL: http://keycloak:8080/realms/HotTopics
+      KEYCLOAK_INTERNAL_URL: https://xn--ther-uoa.tech/keycloak/realms/HotTopics
       KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN}
       KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
       KEYCLOAK_HOSTNAME: keycloak
