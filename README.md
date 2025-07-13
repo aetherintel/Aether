@@ -2,6 +2,10 @@
 
 # Æther
 
+### Architecture
+
+![Architecture diagram](/frontend/src/assets/images/architecture_diagram.svg#gh-light-mode-only)
+![Architecture diagram](/frontend/src/assets/images/architecture_diagram_dark.svg#gh-dark-mode-only)
 
 ### Installation
 
