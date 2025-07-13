@@ -49,6 +49,10 @@
   width: 100%;
 }
 
+.messageHeaderInner {
+  width: 100%;
+}
+
 .dateGroup {
   flex-shrink: 0;
 }
@@ -91,4 +95,12 @@
   padding: var(--mantine-spacing-md);
   text-align: center;
   color: var(--mantine-color-dimmed);
+}
+
+.authorName {
+  font-weight: normal;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100px;
 }
