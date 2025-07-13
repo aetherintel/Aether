@@ -74,6 +74,9 @@ services:
       NEO4J_PASSWORD: ${NEO4J_PASSWORD}
       JOB_SECRET_TOKEN: ${JOB_SECRET_TOKEN}
       MEDIA_PATH: ${PWD}/shared/media
+      ENVIRONMENT: prod
+      DOCKER_USERNAME: ${DOCKER_USERNAME}
+      DOCKER_PASSWORD: ${DOCKER_PASSWORD}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - tg_sessions:/app/sessions
@@ -129,6 +132,8 @@ services:
   telegram-job:
     image: ${DOCKER_USERNAME}/aether-telegram_scraper:latest
     container_name: telegram_scraper
+    environment:
+      ENVIRONMENT: prod
     #entrypoint: ["sleep", "infinity"]  # Keeps image warm but does nothing unless called
     volumes:
       - tg_sessions:/app/sessions    # ⬅️ Session volume (Telegram auth)
@@ -147,6 +152,9 @@ services:
       TG_API_ID: ${TG_API_ID}
       TG_API_HASH: ${TG_API_HASH}
       MEDIA_PATH: ${PWD}/shared/media
+      ENVIRONMENT: prod
+      DOCKER_USERNAME: ${DOCKER_USERNAME}
+      DOCKER_PASSWORD: ${DOCKER_PASSWORD}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - tg_sessions:/app/sessions
