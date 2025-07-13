@@ -7,12 +7,18 @@ import classes from './TopMessagesWidget.module.css';
 
 const apiUrl = import.meta.env.VITE_API_URL;
 
+interface Author {
+  id: string;
+  name: string;
+}
+
 interface Message {
   message_id: string;
   channel_id: string;
   text: string;
   date: string;
   channel_title?: string;
+  author?: Author;
 }
 
 interface SearchParams {
@@ -324,13 +330,22 @@ export function TopMessagesWidget() {
                   {messages.map((message, index) => (
                     <div key={message.message_id}>
                       <div className={classes.messageItem}>
-                        <Group justify="space-between" className={classes.messageHeader} wrap="nowrap">
-                          <Badge color="blue" radius="sm">{message.channel_title || message.channel_id}</Badge>
-                          <Group gap="xs" className={classes.dateGroup} wrap="nowrap">
-                            <Text size="xs" color="dimmed" className={classes.dateText}>{formatRelativeTime(message.date)}</Text>
-                            <IconBrandTelegram size={16} className={classes.telegramIcon} />
+                        <div className={classes.messageHeader}>
+                          <Group justify="space-between" className={classes.messageHeaderInner} wrap="nowrap">
+                            <Group gap="xs" wrap="nowrap">
+                              <Badge color="blue" radius="sm">{message.channel_title || message.channel_id}</Badge>
+                              {message.author && (
+                                <Text size="xs" color="dimmed" className={classes.authorName}>
+                                  {message.author.name}
+                                </Text>
+                              )}
+                            </Group>
+                            <Group gap="xs" className={classes.dateGroup} wrap="nowrap">
+                              <Text size="xs" color="dimmed" className={classes.dateText}>{formatRelativeTime(message.date)}</Text>
+                              <IconBrandTelegram size={16} className={classes.telegramIcon} />
+                            </Group>
                           </Group>
-                        </Group>
+                        </div>
                         <div className={classes.messageContent}>
                           <Text className={classes.messageText}>
                             {expandedMessages.includes(message.message_id) 
