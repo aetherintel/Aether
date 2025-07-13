@@ -91,7 +91,6 @@ services:
       - "443:443"
     environment:
       PROD_DOMAIN: ${PROD_DOMAIN}
-      VITE_API_URL: https://xn--ther-uoa.tech/api
     volumes:
       - ./frontend:/app
       - ./certbot/www:/var/www/certbot
