@@ -7,17 +7,24 @@ import {
   PasswordInput,
   Text,
   TextInput,
-  Title,
 } from '@mantine/core';
 import { useForm } from '@mantine/form';
 import { notifications } from '@mantine/notifications';
 import { keycloakRegister } from '../../context/auth';
 import classes from './Register.module.css';
 import { useEffect } from 'react';
+import Logo from '@/components/Logo';
 
 export function Register() {
   useEffect(() => {
     document.title = 'Register - Æther';
+
+    // Force a custom background color for the register page
+    document.body.style.backgroundColor = '#238be6';
+
+    return () => {
+      document.body.style.backgroundColor = '';
+    };
   }, []);
 
   const navigate = useNavigate();
@@ -62,13 +69,11 @@ export function Register() {
 
   return (
     <Container size={420} my={40}>
-      <Title ta="center" className={classes.title}>
-        Æther
-      </Title>
+      <Logo />
 
-      <Text className={classes.subtitle}>
+      <Text className={classes.subtitle} c="white">
         Already have an account?{' '}
-        <Anchor component={Link} to="/login">
+        <Anchor component={Link} to="/login" c="white" td="underline">
           Sign in
         </Anchor>
       </Text>
