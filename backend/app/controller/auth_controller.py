@@ -249,6 +249,12 @@ def telegram_status(
     """
     containers = docker_client.containers.list(all=True)
     container_list = []
+
+    image_name = (
+        f"{os.getenv('DOCKER_USERNAME')}/aether-telegram_scraper:latest"
+        if os.getenv("ENVIRONMENT") == "prod"
+        else "telegram-job:latest"
+    )
     
     for c in containers:
         try:
@@ -256,7 +262,7 @@ def telegram_status(
             
             is_telegram_job = False
             if image_tags:
-                is_telegram_job = any("telegram-job:latest" in tag for tag in image_tags)
+                is_telegram_job = any(image_name in tag for tag in image_tags)
             
             if is_telegram_job:
                 # Check if container belongs to the current user
@@ -295,7 +301,7 @@ def telegram_status(
             print(f"Warning: Container {c.id} references a missing image: {e}")
             
             # For containers with missing images, still check if they're telegram jobs
-            if (c.labels and "telegram-job" in str(c.labels).lower()) or \
+            if (c.labels and "telegram" in str(c.labels).lower()) or \
                (c.name and "telegram" in c.name.lower()):
                 
                 # Apply same filtering logic
