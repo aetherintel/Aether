@@ -9,7 +9,7 @@ import type {
   ApiErrorResponse
 } from '../types/sessionSetup';
 
-const API_BASE = 'http://localhost:8000/telegram-auth';
+const apiUrl = import.meta.env.VITE_API_URL;
 
 /**
  * Service class for handling Telegram session setup API calls
@@ -39,7 +39,8 @@ export class SessionSetupService {
    * Fetch all available sessions
    */
   static async listSessions(): Promise<ListSessionsResponse> {
-    const response = await authFetch(`${API_BASE}/sessions`);
+    const base = apiUrl ?? 'http://localhost:8000/api';
+    const response = await authFetch(`${base}/telegram-auth/sessions`);
     return this.handleResponse<ListSessionsResponse>(response);
   }
 
@@ -50,7 +51,8 @@ export class SessionSetupService {
     phone: string, 
     sessionName: string = 'default'
   ): Promise<StartSetupResponse> {
-    const response = await authFetch(`${API_BASE}/setup/start`, {
+    const base = apiUrl ?? 'http://localhost:8000/api';
+    const response = await authFetch(`${base}/telegram-auth/setup/start`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ 
@@ -69,7 +71,8 @@ export class SessionSetupService {
     setupId: string, 
     code: string
   ): Promise<VerifyCodeResponse> {
-    const response = await authFetch(`${API_BASE}/setup/verify-code`, {
+    const base = apiUrl ?? 'http://localhost:8000/api';
+    const response = await authFetch(`${base}/telegram-auth/setup/verify-code`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ 
@@ -88,7 +91,8 @@ export class SessionSetupService {
     setupId: string, 
     password: string
   ): Promise<VerifyPasswordResponse> {
-    const response = await authFetch(`${API_BASE}/setup/verify-password`, {
+    const base = apiUrl ?? 'http://localhost:8000/api';
+    const response = await authFetch(`${base}/telegram-auth/setup/verify-password`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ 
@@ -104,7 +108,8 @@ export class SessionSetupService {
    * Delete an existing session
    */
   static async deleteSession(sessionName: string): Promise<DeleteSessionResponse> {
-    const response = await authFetch(`${API_BASE}/sessions/${encodeURIComponent(sessionName)}`, {
+    const base = apiUrl ?? 'http://localhost:8000/api';
+    const response = await authFetch(`${base}/telegram-auth/sessions/${encodeURIComponent(sessionName)}`, {
       method: 'DELETE'
     });
     
@@ -115,7 +120,8 @@ export class SessionSetupService {
    * Cancel an ongoing setup process
    */
   static async cancelSetup(setupId: string): Promise<CancelSetupResponse> {
-    const response = await authFetch(`${API_BASE}/setup/cancel/${encodeURIComponent(setupId)}`, {
+    const base = apiUrl ?? 'http://localhost:8000/api';
+    const response = await authFetch(`${base}/telegram-auth/setup/cancel/${encodeURIComponent(setupId)}`, {
       method: 'POST'
     });
     
