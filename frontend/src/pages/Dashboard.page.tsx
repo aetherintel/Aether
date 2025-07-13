@@ -1,34 +1,27 @@
-import BreadcrumbsBar from '@/components/BreadcrumbsBar/BreadcrumbsBar';
 import { useEffect } from 'react';
+import { Grid } from '@mantine/core';
+import BreadcrumbsBar from '@/components/BreadcrumbsBar/BreadcrumbsBar';
 import { DashboardCaseWidget } from '@/components/DashboardCaseWidget/DashboardCaseWidget';
 import { TopMessagesWidget } from '@/components/TopMessagesWidget/TopMessagesWidget';
 import { TopUserWidget } from '@/components/TopUserWidget/TopUserWidget';
-import { Stack, Grid } from '@mantine/core';
 
 export function Dashboard() {
   useEffect(() => {
     document.title = 'Dashboard - Æther';
   }, []);
-  
+
   return (
     <>
       <BreadcrumbsBar />
       <Grid gutter="md">
-        {/* Linke Spalte für Hauptwidgets */}
-        <Grid.Col span={{ base: 12, md: 8 }}>
-          <Stack gap="lg">
-            <DashboardCaseWidget />
-            {/* Weitere Hauptwidgets hier */}
-          </Stack>
+        <Grid.Col span={{ base: 12, sm: 4, lg: 3 }}>
+          <DashboardCaseWidget />
         </Grid.Col>
-
-        {/* Rechte Spalte für kleinere Widgets */}
-        <Grid.Col span={{ base: 12, md: 4 }}>
-          <Stack gap="lg">
-            <TopMessagesWidget />
-            <TopUserWidget />
-            {/* Kleinere Widgets hier */}
-          </Stack>
+        <Grid.Col span={{ base: 12, sm: 4, lg: 4.5 }}>
+          <TopMessagesWidget />
+        </Grid.Col>
+        <Grid.Col span={{ base: 12, sm: 4, lg: 4.5 }}>
+          <TopUserWidget />
         </Grid.Col>
       </Grid>
     </>
