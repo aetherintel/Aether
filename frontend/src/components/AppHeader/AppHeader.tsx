@@ -1,9 +1,10 @@
-import { IconSettings, IconTrash, IconUser } from '@tabler/icons-react';
-import { Link } from 'react-router-dom';
-import { Avatar, Burger, Flex, Group, Menu, rem } from '@mantine/core';
+import { IconLogout, IconSettings, IconUser } from '@tabler/icons-react';
+import { Link, useNavigate } from 'react-router-dom';
+import { Avatar, Burger, Flex, Group, Menu, rem, Text } from '@mantine/core';
 import { useMediaQuery } from '@mantine/hooks';
 import { useStore } from '../../store/client/useStore';
 import ThemeSwitch from '../ThemeSwitch/ThemeSwitch';
+import { useAuthStore } from '@/store/client/authStore';
 
 interface Props {
   opened: boolean;
@@ -12,6 +13,13 @@ interface Props {
 
 export default function AppHeader({ opened, toggle }: Props) {
   const { isNavbarCollapse, toggleNavbar } = useStore();
+  const { logout } = useAuthStore();
+  const navigate = useNavigate();
+
+  const handleLogout = () => {
+    logout();
+    navigate('/login');
+  };
 
   const smallScreen = useMediaQuery('(max-width: 48em)');
 
@@ -30,6 +38,8 @@ export default function AppHeader({ opened, toggle }: Props) {
             onClick={toggleNavbar}
           />
         )}
+
+        <Text fw={500}>Æther</Text>
       </Flex>
 
       <Flex align="center" gap={24}>
@@ -38,7 +48,7 @@ export default function AppHeader({ opened, toggle }: Props) {
         <Menu shadow="md" width={200}>
           <Menu.Target>
             <Avatar radius="xl">
-              <IconUser color="black" />
+              <IconUser />
             </Avatar>
           </Menu.Target>
 
@@ -56,9 +66,10 @@ export default function AppHeader({ opened, toggle }: Props) {
 
             <Menu.Item
               color="red"
-              leftSection={<IconTrash style={{ width: rem(14), height: rem(14) }} />}
+              leftSection={<IconLogout style={{ width: rem(14), height: rem(14) }} />}
+              onClick={handleLogout}
             >
-              Delete my account
+              Logout
             </Menu.Item>
           </Menu.Dropdown>
         </Menu>

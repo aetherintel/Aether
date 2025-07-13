@@ -56,6 +56,7 @@ services:
       DB_URL: postgresql://${DB_USER}:${DB_PASSWORD}@postgres:5432/aether
       KEYCLOAK_URL: http://${KEYCLOAK_HOSTNAME}:8080/realms/HotTopics
       SWAGGER_TOKEN_URL: http://localhost:8080/realms/HotTopics/protocol/openid-connect/token
+      ENVIRONMENT: ${ENVIRONMENT}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - tg_sessions:/app/sessions
@@ -66,12 +67,13 @@ services:
     ports:
       - "8000:8000"
   frontend:
-    build: ./frontend
+    build:
+      context: ./frontend
+      args:
+        VITE_API_URL: http://localhost:8000/api
     ports:
       - "80:80"
       - "443:443"
-    environment:
-      VITE_API_URL: http://localhost:8000/api
     volumes:
       - ./frontend:/app
       - ./frontend/nginx-dev.conf:/etc/nginx/conf.d/default.conf:ro
@@ -110,6 +112,8 @@ services:
     build: ./job_launcher
     ports:
       - "9001:9001"
+    env_file:
+      - .env.dev
     environment:
       JOB_SECRET_TOKEN: ${JOB_SECRET_TOKEN}
       NEO4J_URI: bolt://neo4j:7687
@@ -118,6 +122,7 @@ services:
       TG_API_ID: ${TG_API_ID}
       TG_API_HASH: ${TG_API_HASH}
       MEDIA_PATH: ${MEDIA_PATH}
+      ENVIRONMENT: ${ENVIRONMENT}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - tg_sessions:/app/sessions

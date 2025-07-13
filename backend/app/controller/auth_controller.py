@@ -92,6 +92,7 @@ def get_admin_token():
 def login(form_data: OAuth2PasswordRequestForm = Depends()):
     # FIX: Container-interne URL für Login
     token_url = f"{os.getenv('KEYCLOAK_INTERNAL_URL')}/protocol/openid-connect/token"
+    print(f"Using token URL: {token_url}")
     payload = {
         "grant_type": "password",
         "client_id": form_data.client_id or os.getenv("KEYCLOAK_CLIENT_ID"),
@@ -99,8 +100,10 @@ def login(form_data: OAuth2PasswordRequestForm = Depends()):
         "username": form_data.username,
         "password": form_data.password,
     }
+    print(f"Login payload: {payload}")
     headers = { "Content-Type": "application/x-www-form-urlencoded" }
     response = requests.post(token_url, data=payload, headers=headers)
+    print(f"Login response: {response.status_code} - {response.text} - {response.text}")
     if response.status_code != 200:
         raise HTTPException(status_code=401, detail="Login failed")
     return response.json()
@@ -246,6 +249,12 @@ def telegram_status(
     """
     containers = docker_client.containers.list(all=True)
     container_list = []
+
+    image_name = (
+        f"{os.getenv('DOCKER_USERNAME')}/aether-telegram_scraper:latest"
+        if os.getenv("ENVIRONMENT") == "prod"
+        else "telegram-job:latest"
+    )
     
     for c in containers:
         try:
@@ -253,7 +262,7 @@ def telegram_status(
             
             is_telegram_job = False
             if image_tags:
-                is_telegram_job = any("telegram-job:latest" in tag for tag in image_tags)
+                is_telegram_job = any(image_name in tag for tag in image_tags)
             
             if is_telegram_job:
                 # Check if container belongs to the current user
@@ -292,7 +301,7 @@ def telegram_status(
             print(f"Warning: Container {c.id} references a missing image: {e}")
             
             # For containers with missing images, still check if they're telegram jobs
-            if (c.labels and "telegram-job" in str(c.labels).lower()) or \
+            if (c.labels and "telegram" in str(c.labels).lower()) or \
                (c.name and "telegram" in c.name.lower()):
                 
                 # Apply same filtering logic

@@ -1,0 +1,17 @@
+.circle{
+    border-radius: 50%;
+    overflow: hidden;
+    position: relative;
+} 
+
+.innerTitle{
+    position: absolute;
+    top: calc(50%);
+    left: 60px;
+    transform: translate(-50%, -50%);
+    color: var(--mantine-color-blue-text);
+}
+
+.outerTitle{
+    margin-left: -57px;
+}

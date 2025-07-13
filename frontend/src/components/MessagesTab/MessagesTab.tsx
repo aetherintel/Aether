@@ -1,8 +1,10 @@
-import { Text, Box, Button, Checkbox, Input, Loader, ScrollArea, Table, ActionIcon, Group, Tooltip } from "@mantine/core";
+import { Text, Box, Button, Checkbox, Input, Loader, ScrollArea, Table, ActionIcon, Group, Tooltip, Anchor } from "@mantine/core";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import classes from './MessagesTab.module.css';
 import { IconSearch, IconRefresh } from "@tabler/icons-react";
 import { authFetch } from '@/utils/authFetch';
+
+import { ImageLightbox } from '@/components/ImageLightbox';
 
 const apiUrl = import.meta.env.VITE_API_URL;
 
@@ -10,9 +12,10 @@ interface MessagesTabProps {
   selectedTgChannelIds: string[];
   searchQuery: string;
   setSearchQuery: React.Dispatch<React.SetStateAction<string>>;
+  onUpdateGraph: (type: string, name: string) => void;
 }
 
-const MessagesTab : React.FC<MessagesTabProps> = ({ selectedTgChannelIds, searchQuery, setSearchQuery }) => {
+const MessagesTab : React.FC<MessagesTabProps> = ({ selectedTgChannelIds, searchQuery, setSearchQuery, onUpdateGraph }) => {
     const LIMIT = 10;
     const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -81,14 +84,54 @@ const MessagesTab : React.FC<MessagesTabProps> = ({ selectedTgChannelIds, search
     };
 
     function highlightText(text: string, query: string) {
-        if (!query) { return text; }
+        const urlRegex = /https?:\/\/[^\s]+/gi;
+        const queryRegex = query ? new RegExp(`(${escapeRegExp(query)})`, 'gi') : null;
 
-        const regex = new RegExp(`(${query})`, 'gi');
-        const parts = text.split(regex);
+        // Split by URLs
+        const urlParts = text.split(urlRegex);
+        const urls = text.match(urlRegex);
 
-        return parts.map((part, index) =>
-            regex.test(part) ? <mark key={index}>{part}</mark> : part
-        );
+        const result: React.ReactNode[] = [];
+
+        urlParts.forEach((part, i) => {
+            // Highlight regular text part (if query is present)
+            if (queryRegex) {
+                const highlighted = part.split(queryRegex).map((p, idx) =>
+                    queryRegex.test(p) ? <mark key={`highlight-${i}-${idx}`}>{p}</mark> : p
+                );
+                result.push(...highlighted);
+            } else {
+                result.push(part);
+            }
+
+            // If there's a corresponding URL, render it with optional highlighting
+            if (urls && urls[i]) {
+                const url = urls[i];
+                if (queryRegex) {
+                    const highlightedLink = url.split(queryRegex).map((p, idx) =>
+                        queryRegex.test(p) ? <mark key={`link-highlight-${i}-${idx}`}>{p}</mark> : p
+                    );
+                    result.push(
+                        <Anchor key={`link-${i}`} href={url} fz="xs" target="_blank" rel="noopener noreferrer" style={{ lineHeight: 1 }}>
+                            {highlightedLink}
+                        </Anchor>
+                    );
+                } else {
+                    result.push(
+                        <Anchor key={`link-${i}`} href={url} fz="sm" target="_blank" rel="noopener noreferrer" style={{ lineHeight: 1 }}>
+                            {url}
+                        </Anchor>
+                    );
+                }
+            }
+        });
+
+        return result;
+    }
+
+    // Utility to escape RegExp special characters from the query string
+    function escapeRegExp(str: string) {
+        return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     }
 
     const isVideoFile = (path: string): boolean => {
@@ -216,7 +259,7 @@ const MessagesTab : React.FC<MessagesTabProps> = ({ selectedTgChannelIds, search
 
     // Simple full refresh function - moved after loadMessages declaration
     const handleRefresh = useCallback(() => {
-        if (isRefreshing || selectedTgChannelIds.length === 0) return;
+        if (isRefreshing || selectedTgChannelIds.length === 0) {return;}
         
         setIsRefreshing(true);
         setMessages([]);
@@ -264,37 +307,41 @@ const MessagesTab : React.FC<MessagesTabProps> = ({ selectedTgChannelIds, search
                 <Box>
                     <div className={classes.authorRow}>
                         <Text size="sm" fw={500} className={classes.authorName}>
-                            {message.author.name} <span className={classes.channelName}>
-                                [{message.channel.username}]
+                            <Anchor onClick={() => onUpdateGraph('user', message.author.name)}>{message.author.name}</Anchor> 
+                            <span className={classes.channelName} style={{ marginLeft: '0.25rem' }}>
+                                [<Anchor onClick={() => onUpdateGraph('channel', message.channel.username)} className={classes.channelName}>{message.channel.username}</Anchor>]
                             </span>
                         </Text>
                         <Text size="xs" className={classes.timestamp}>
                             {formatRelativeTime(message.date)}
                         </Text>
                     </div>
-                    <MessageContent
-                        message={message}
-                        isExpanded={isExpanded}
-                        onToggleExpand={() => toggleMessageExpansion(message.message_id)}
-                    />
-                    {message.media_path && (
-                        isVideoFile(message.media_path) ? (
-                        // eslint-disable-next-line jsx-a11y/media-has-caption
-                        <video
-                            src={message.media_path} 
-                            className={classes.messageVideo}
-                            controls
-                        >
-                            Your browser does not support the video tag.
-                        </video>
-                        ) : (
-                        <img 
-                            src={message.media_path} 
-                            alt={message.media_path} 
-                            className={classes.messageImage} 
+                    <Group wrap="nowrap" align="flex-start" justify="space-between">
+                        <MessageContent
+                            message={message}
+                            isExpanded={isExpanded}
+                            onToggleExpand={() => toggleMessageExpansion(message.message_id)}
                         />
-                        )
-                    )}
+                        {message.media_path && (
+                            isVideoFile(message.media_path) ? (
+                            // eslint-disable-next-line jsx-a11y/media-has-caption
+                            <video
+                                src={message.media_path} 
+                                className={classes.messageVideo}
+                                controls
+                            >
+                                Your browser does not support the video tag.
+                            </video>
+                            ) : (
+                                <ImageLightbox
+                                    key={message.media_path}
+                                    image={message.media_path}
+                                    thumbnailWidth={200}
+                                    thumbnailHeight={120}
+                                />
+                            )
+                        )}
+                    </Group>
                 </Box>
             </Table.Td>
             </Table.Tr>
@@ -339,7 +386,7 @@ const MessagesTab : React.FC<MessagesTabProps> = ({ selectedTgChannelIds, search
                 }
             }}
             >
-            <Table>
+            <Table layout="fixed">
                 <Table.Thead>
                 <Table.Tr>
                     <Table.Th className={classes.checkboxColumn}>

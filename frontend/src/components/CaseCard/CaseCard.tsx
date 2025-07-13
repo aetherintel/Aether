@@ -1,24 +1,8 @@
-import { IconArchive, IconEdit, IconTrash } from '@tabler/icons-react';
-import { Link } from 'react-router-dom';
-import { LineChart } from '@mantine/charts';
-import { ActionIcon, Box, Divider, Flex, Group, Menu, rem, Text } from '@mantine/core';
-import { CaseFile } from '../CaseFileList/CaseFileList';
+import { IconArchive, IconTrash } from '@tabler/icons-react';
+import { ActionIcon, Badge, Button, Card, Group, Image, Menu, rem, SimpleGrid, Text } from '@mantine/core';
 import classes from './CaseCard.module.css';
-
-const exampleChartData = [
-  {
-    date: 'Mar 22',
-    posts: 2890,
-  },
-  {
-    date: 'Mar 23',
-    posts: 2756,
-  },
-  {
-    date: 'Mar 24',
-    posts: 5322,
-  },
-];
+import { CaseFile } from '../CaseFileList/CaseFileList';
+import { Link } from 'react-router-dom';
 
 interface CaseCardProps {
   caseFile: CaseFile;
@@ -35,6 +19,24 @@ export default function CaseCard({ caseFile, onDelete, onArchive, compact = fals
   const handleArchiveCaseClick = () => {
     onArchive(caseFile.id, !caseFile.archived);
   };
+
+  const features = [...new Set(caseFile.tgchannels)].map((badge) => (
+    <Badge variant="light" key={badge}>
+      {badge}
+    </Badge>
+  ));
+
+  const thumbnails = [...new Set(caseFile.thumbnails)]
+  .slice(0, 4)  // Limit to first 4 items
+  .map((thumbnail) => (
+    <Image 
+      key={thumbnail} 
+      src={thumbnail} 
+      alt={thumbnail} 
+      height={90} 
+      fallbackSrc="https://placehold.co/600x360?text=Not downloaded yet" 
+    />
+  ));
 
   return (
     <Box 
@@ -75,6 +77,25 @@ export default function CaseCard({ caseFile, onDelete, onArchive, compact = fals
               </Flex>
             </Flex>
           </Group>
+    <Card withBorder radius="md" p="md" className={classes.card} opacity={caseFile.archived ? 0.5 : 1}>
+      <Card.Section>
+        <SimpleGrid cols={2} spacing="0" verticalSpacing="0">
+          {thumbnails}
+        </SimpleGrid>
+      </Card.Section>
+
+      <Card.Section className={classes.section} mt="md">
+        <Group justify="apart">
+          <Text fz="lg" fw={500}>
+            {caseFile.title}
+          </Text>
+          <Badge size="sm" variant="light">
+            {caseFile.postCount} messages
+          </Badge>
+        </Group>
+        <Text fz="sm" mt="xs">
+          {caseFile.description}
+        </Text>
 
           <LineChart
             h={110}
@@ -114,6 +135,8 @@ export default function CaseCard({ caseFile, onDelete, onArchive, compact = fals
             </Menu.Target>
 
             <Menu.Dropdown>
+          <Menu.Dropdown>
+            {!caseFile.archived ? (
               <Menu.Item
                 leftSection={
                   <IconEdit
@@ -154,5 +177,35 @@ export default function CaseCard({ caseFile, onDelete, onArchive, compact = fals
         </Box>
       )}
     </Box>
+            ) : null}
+            <Menu.Item
+                color="red"
+                leftSection={<IconTrash style={{ width: rem(14), height: rem(14) }} />}
+                onClick={handleDeleteCaseClick}
+              >
+                Delete case
+            </Menu.Item>
+          </Menu.Dropdown>
+        </Menu>
+      </Card.Section>
+
+      <Card.Section className={classes.section}>
+        <Text mt="md" className={classes.label} c="dimmed">
+          Channels
+        </Text>
+        <Group gap={7} mt={5}>
+          {features}
+        </Group>
+      </Card.Section>
+
+      <Group mt="xs">
+        <Button radius="md" component={Link} to={`/cases/${caseFile.id}`} style={{ flex: 1 }}>
+          Show details
+        </Button>
+        <ActionIcon variant="default" radius="md" size={36} onClick={handleArchiveCaseClick}>
+          <IconArchive className={classes.like} stroke={1.5} />
+        </ActionIcon>
+      </Group>
+    </Card>
   );
 }
