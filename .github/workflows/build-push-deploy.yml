@@ -36,7 +36,7 @@ jobs:
           labels: ${{ steps.meta_frontend.outputs.labels }}
           no-cache: true
           build-args: |
-            VITE_API_URL="https://xn--ther-uoa.tech/api"
+            VITE_API_URL=https://xn--ther-uoa.tech/api
 
   build-push-backend:
     needs: build-push-frontend
