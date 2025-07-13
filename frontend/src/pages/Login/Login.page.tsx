@@ -76,8 +76,8 @@ export function Login() {
       <Paper withBorder shadow="sm" p={22} mt={30} radius="md">
         <form onSubmit={form.onSubmit(handleLogin)}>
           <TextInput
-            label="Email"
-            placeholder="you@example.com"
+            label="Username"
+            placeholder="Your username"
             required
             radius="md"
             {...form.getInputProps('username')}
@@ -92,9 +92,6 @@ export function Login() {
           />
           <Group justify="space-between" mt="lg">
             <Checkbox label="Remember me" />
-            <Anchor component="button" size="sm">
-              Forgot password?
-            </Anchor>
           </Group>
           <Button fullWidth mt="xl" radius="md" type="submit">
             Sign in
