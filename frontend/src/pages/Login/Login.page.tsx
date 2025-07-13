@@ -9,7 +9,6 @@ import {
   PasswordInput,
   Text,
   TextInput,
-  Title,
 } from '@mantine/core';
 import { useForm } from '@mantine/form';
 import { notifications } from '@mantine/notifications';
@@ -17,10 +16,18 @@ import { keycloakLogin, type LoginCredentials } from '../../context/auth';
 import { useAuthStore } from '../../store/client/authStore';
 import classes from './Login.module.css';
 import { useEffect } from 'react';
+import Logo from '@/components/Logo';
 
 export function Login() {
   useEffect(() => {
     document.title = 'Login - Æther';
+
+    // Force a custom background color for the login page
+    document.body.style.backgroundColor = '#238be6';
+
+    return () => {
+      document.body.style.backgroundColor = '';
+    };
   }, []);
 
   const { login } = useAuthStore();
@@ -62,13 +69,11 @@ export function Login() {
 
   return (
     <Container size={420} my={40}>
-      <Title ta="center" className={classes.title}>
-        Æther
-      </Title>
+      <Logo />
 
-      <Text className={classes.subtitle}>
+      <Text className={classes.subtitle} c="white">
         Do not have an account yet?{' '}
-        <Anchor component={Link} to="/register">
+        <Anchor component={Link} to="/register" c="white" td="underline">
           Create account
         </Anchor>
       </Text>

@@ -1,3 +1,5 @@
+![Æther Logo](/frontend/src/assets/images/ReadmeLogo.png){height=100}
+
 # Æther
 
 

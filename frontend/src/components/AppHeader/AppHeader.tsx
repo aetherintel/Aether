@@ -1,6 +1,6 @@
 import { IconLogout, IconSettings, IconUser } from '@tabler/icons-react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Avatar, Burger, Flex, Group, Menu, rem } from '@mantine/core';
+import { Avatar, Burger, Flex, Group, Menu, rem, Text } from '@mantine/core';
 import { useMediaQuery } from '@mantine/hooks';
 import { useStore } from '../../store/client/useStore';
 import ThemeSwitch from '../ThemeSwitch/ThemeSwitch';
@@ -38,6 +38,8 @@ export default function AppHeader({ opened, toggle }: Props) {
             onClick={toggleNavbar}
           />
         )}
+
+        <Text fw={500}>Æther</Text>
       </Flex>
 
       <Flex align="center" gap={24}>
@@ -46,7 +48,7 @@ export default function AppHeader({ opened, toggle }: Props) {
         <Menu shadow="md" width={200}>
           <Menu.Target>
             <Avatar radius="xl">
-              <IconUser color="black" />
+              <IconUser />
             </Avatar>
           </Menu.Target>
 
