@@ -120,6 +120,8 @@ ENVIRONMENT=dev
 
 - TODO
 
+![Demo](/frontend/src/assets/images/demo.png)
+![Demo Dark](/frontend/src/assets/images/demo_dark.png)
 
 # 🛡️ Backend Setup – FastAPI + Keycloak + PostgreSQL
 
