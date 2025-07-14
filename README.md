@@ -1,16 +1,17 @@
 ![Æther Logo](/frontend/src/assets/images/ReadmeLogo.svg)
 
-# Æther
+# Æther - Telegram Monitoring and Analysis Tool
 
-### Architecture
+Aether is an OSINT (Open Source Intelligence) web application for creating and managing Telegram-based monitoring projects. It enables users to define cases, add and track Telegram channels/groups, collect messages automatically via scrapers, and analyze the data using full-text search and Neo4j-based graph visualizations.
 
-![Architecture diagram](/frontend/src/assets/images/architecture_diagram.svg#gh-light-mode-only)
-![Architecture diagram](/frontend/src/assets/images/architecture_diagram_dark.svg#gh-dark-mode-only)
+## 🔧 Prerequisites
 
-### Installation
+- [Docker](https://www.docker.com/get-started)
+- [Docker Compose](https://docs.docker.com/compose/install/)
+
+## 🚀 Installation
 
 1. **Clone repository:**
-   ##### SSH
    ```sh
    git clone git@github.com:hsfl-htit/Aether.git
    ```
@@ -19,83 +20,65 @@
    ```sh
    cd Aether
    ```
-      
-3. **Build and start the application:**
+
+3. **Create .env.dev with required variables (see below):**
    ```sh
-   docker compose up --build
+   nano .env.dev
+   ```
+      
+4. **Build and start the application:**
+   ```sh
+   docker compose --env-file .env.dev up --build
    ```
 
 The application should now be running at [http://localhost/](http://localhost/).
 
-The api should be available here [http://localhost/api](http://localhost/api).
+| **Service**              | **URL**                      |
+| ------------------------ | ---------------------- |
+| 🖥️ **Frontend** | [http://localhost](http://localhost)           |
+| 🔐 **Keycloak Admin UI** | [http://localhost:8080](http://localhost:8080)           |
+| ⚙️ **FastAPI Swagger**   | [http://localhost:8000/docs](http://localhost:8000/docs) |
+| 🧠 **Neo4j Browser**     | [http://localhost:7474](http://localhost:7474)           |
 
-4. **Start vite server with HMR:**
+### ⚙️ Development
+
+1. **Navigate to directory:**
+   ```sh
+   cd frontend
+   ```
+
+2. **Start vite server with HMR (Hot Module Replacement):**
    ```sh
    npm run dev
    ```
 
 Vite server with HMR is running at [http://localhost:5173](http://localhost:5173).
-   
-# 🛡️ Backend Setup – FastAPI + Keycloak + PostgreSQL
 
-Dieses Backend verwendet FastAPI, Keycloak für Authentifizierung und PostgreSQL als Datenbank. Es ist vollständig containerisiert über Docker Compose und unterstützt lokale Entwicklung sowie Deployment via CI/CD.
-
----
-
-## 🔧 Voraussetzungen
-
-- [Docker](https://www.docker.com/get-started)
-- [Docker Compose](https://docs.docker.com/compose/install/)
-- `.env.dev`-Datei mit den benötigten Variablen (siehe unten)
-
----
-
-## 📁 Projektstruktur (Ausschnitt)
-
-├── backend/
-│ └── app/
-│ └── main.py
-├── telegram_scraper/ # Scraper-Dockerfile & Code
-├── job_launcher/ # FastAPI API zum Starten von Jobs
-├── keycloak/
-│ └── exports/
-│ └── HotTopics-realm.json # Realm für Keycloak
-├── docker-compose.yml
-├── .env.dev
-
-````
-
----
-
-## 📄 .env.dev (Beispiel)
+### 📄 .env.dev (Example)
 
 ```env
 # Postgres
 DB_USER=devuser
 DB_PASSWORD=devpass
 
-# Keycloak admin
+# Keycloak
 KEYCLOAK_ADMIN=admin
 KEYCLOAK_ADMIN_PASSWORD=admin
+
 KEYCLOAK_HOSTNAME=keycloak
-KEYCLOAK_HOSTNAME_STRICT=false
-
-KEYCLOAK_INTERNAL_URL=http://keycloak:8080/realms/HotTopics
-
-KEYCLOAK_URL=http://localhost:8080/realms/HotTopics
 KEYCLOAK_CLIENT_ID=HotTopics
 KEYCLOAK_CLIENT_SECRET=IVe53dL7kdbCLz8rpepuDEr1KaZnvNx0
-PUBLIC_KEY_URL=/protocol/openid-connect/certs
-KEYCLOAK_BASE_URL=http://keycloak:8080
-SWAGGER_TOKEN_URL=http://localhost:8080/realms/HotTopics/protocol/openid-connect/token
-KEYCLOAK_PUBLIC_URL=http://localhost:8080/realms/HotTopics
-
 KEYCLOAK_ADMIN_CLIENT_ID=backend-admin-client
 KEYCLOAK_ADMIN_CLIENT_SECRET=F0DVD1k2c9N6IBRxbhvCsHaUpQbXltHz
+SWAGGER_TOKEN_URL=http://keycloak:8080/realms/HotTopics/protocol/openid-connect/token
+KEYCLOAK_BASE_URL=http://keycloak:8080
+KEYCLOAK_URL=http://localhost:8080/realms/HotTopics
+KEYCLOAK_INTERNAL_URL=http://keycloak:8080/realms/HotTopics
 
-TG_API_ID=...
-TG_API_HASH=...
-TG_PHONE=+...
+TG_API_ID=25718412
+TG_API_HASH=ac7d797b83488d421bfe2eed87269481
+# Replace with your phone number (used for telegram)
+TG_PHONE=+49123456789
 POSTGRES_HOST=postgres
 POSTGRES_PORT=5432
 POSTGRES_DB=telegramdb
@@ -108,20 +91,40 @@ NEO4J_PASSWORD=secretpass
 
 JOB_LAUNCHER_URL=http://job-launcher:9001
 JOB_SECRET_TOKEN=supersecure
-# Hier pfad ins repo und /shared/media... Falls nicht vorhanden Bitte ordner anlegen...
+
 MEDIA_PATH=${PWD}/shared/media
 
-````
+FRONTEND_URL=http://localhost/
+ENVIRONMENT=dev
+```
 
-🧱 Dienste im Überblick
-Dienst	Beschreibung
-backend	FastAPI + Keycloak Auth API
-keycloak	Identity Provider mit Realm Import
-postgres	Datenbank für Keycloak
-neo4j	Graphdatenbank (z. B. für Channel-Verbindungen)
-telegram-job	Scraper-Worker (per Job-Launcher gestartet)
-job-launcher	API, die telegram-job Container startet
-frontend	Nginx + Vite SPA
+## 🏗️ Architecture
+
+### 📈 Diagram
+
+![Architecture diagram](/frontend/src/assets/images/architecture_diagram.svg#gh-light-mode-only)
+![Architecture diagram](/frontend/src/assets/images/architecture_diagram_dark.svg#gh-dark-mode-only)
+
+### 🧱 Services
+| **Service**      | **Description** |
+| ---------------- | --------------------------------- |
+| **backend**      | FastAPI-based API with Keycloak authentication                 |
+| **keycloak**     | Identity provider with preconfigured realm import              |
+| **postgres**     | Database used by `keycloak` and `backend`   |
+| **neo4j**        | Graph database (e.g., for modeling channel relationships)      |
+| **telegram-job** | Scraper worker, triggered via `job launcher` |
+| **job-launcher** | API service responsible for starting `telegram-job` containers |
+| **frontend**     | Single-page application built with React and served via Nginx   |
+
+## 📘 User guide
+
+- TODO
+
+
+# 🛡️ Backend Setup – FastAPI + Keycloak + PostgreSQL
+
+Dieses Backend verwendet FastAPI, Keycloak für Authentifizierung und PostgreSQL als Datenbank. Es ist vollständig containerisiert über Docker Compose und unterstützt lokale Entwicklung sowie Deployment via CI/CD.
+
 
 🚀 Lokaler Start (inkl. Realm Import)
 ```
@@ -130,11 +133,6 @@ docker compose --env-file .env.dev up --build -d # --build stellt sicher, dass a
 ```
     
 
-📡 Zugänge
-Dienst	URL
-🔐 Keycloak Admin UI	http://localhost:8080
-⚙️ FastAPI Swagger	http://localhost:8000/docs
-🧠 Neo4j Browser	http://localhost:7474
 
 ## Telegram Scraper
 ### Doku von diesem Github Repo geklaut: https://github.com/unnohwn/telegram-scraper
@@ -187,18 +185,3 @@ docker build -t telegram-job:latest .
 - Uses containerized scraper jobs triggered dynamically via `job-launcher`.
 
 ---
-
-### ⚙️ ENV Parameters – Additions
-
-```env
-# Scraper control flags
-MODE=full               # scrape | full | similar | live
-CHANNELS=cryptovalleyweek
-SESSION_NAME=default
-RECURSIVE=1             # Enables invite link discovery
-NEO4J_WRITE=1           # Writes similarity output to Neo4j
-SKIP_HISTORY=1          # Disables historic backfill, useful for live-only
-
-# Job Launcher
-JOB_LAUNCHER_URL=http://job-launcher:9001
-JOB_SECRET_TOKEN=supersecure
