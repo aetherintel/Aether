@@ -248,6 +248,7 @@ async def read_casefile(
     try:
         messages = await get_messages_with_media(
             owner_id=owner,
+            channel_ids=channel_ids,
             limit=20,
         )
 
