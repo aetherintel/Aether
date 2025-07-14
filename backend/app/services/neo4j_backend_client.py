@@ -471,26 +471,27 @@ async def get_user_messages(
     
 async def get_messages_with_media(
     owner_id: str | None,
+    channel_ids: list[str] | None = None,
     limit: int = 100,
     before: datetime | None = None,
     query: str | None = None,
 ):
-    # Define common image file extensions
     IMAGE_EXTENSIONS = {
-        '.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tiff', '.tif', 
+        '.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tiff', '.tif',
         '.webp', '.svg', '.ico', '.heic', '.heif', '.avif'
     }
-    
+
     async with get_session(owner_id) as session:
         cypher = """
         MATCH (u:User {owner_id:$ownerId})-[:SENT]->(m:Message)
         MATCH (ch:Channel)-[:HAS_MESSAGE]->(m)
         WHERE m.media_path IS NOT NULL
-        AND (
+          AND ($channelIds IS NULL OR ch.channel_id IN $channelIds)
+          AND (
             $query IS NULL OR $query = '' OR
             (m.text IS NOT NULL AND toLower(m.text) CONTAINS toLower($query))
-        )
-        AND ($before IS NULL OR m.date < $before)
+          )
+          AND ($before IS NULL OR m.date < $before)
         OPTIONAL MATCH (m)-[:REPLY_TO]->(reply:Message)
         RETURN m.text        AS text,
                m.date        AS date,
@@ -513,6 +514,7 @@ async def get_messages_with_media(
             "query": query,
             "before": before.isoformat() if before else None,
             "ownerId": owner_id,
+            "channelIds": channel_ids if channel_ids else None,
         }
 
         result = await session.run(cypher, params)
@@ -523,15 +525,13 @@ async def get_messages_with_media(
                 or f"{r['first_name'] or ''} {r['last_name'] or ''}".strip()
                 or "Unknown"
             )
-            
-            # Check if media_path ends with an image extension
+
             media_path = r["media_path"]
             is_image = False
             if media_path:
-                # Extract file extension and check if it's an image
                 file_extension = media_path.lower().split('.')[-1] if '.' in media_path else ''
                 is_image = f'.{file_extension}' in IMAGE_EXTENSIONS
-            
+
             messages.append(
                 {
                     "message_id": r["message_id"],
@@ -539,7 +539,7 @@ async def get_messages_with_media(
                     "date": r["date"],
                     "media_type": r["media_type"],
                     "media_path": media_path,
-                    "is_image": is_image,  # New field indicating if it's an image
+                    "is_image": is_image,
                     "reply_to_id": r["reply_to_id"],
                     "author": {"id": r["user_id"], "name": author_name},
                     "channel": {"id": r["channel_id"], "username": r["channel_username"]},
