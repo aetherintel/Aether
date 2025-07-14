@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   Anchor,
@@ -12,11 +13,10 @@ import {
 } from '@mantine/core';
 import { useForm } from '@mantine/form';
 import { notifications } from '@mantine/notifications';
+import Logo from '@/components/Logo';
 import { keycloakLogin, type LoginCredentials } from '../../context/auth';
 import { useAuthStore } from '../../store/client/authStore';
 import classes from './Login.module.css';
-import { useEffect } from 'react';
-import Logo from '@/components/Logo';
 
 export function Login() {
   useEffect(() => {

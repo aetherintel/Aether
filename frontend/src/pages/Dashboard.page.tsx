@@ -1,6 +1,6 @@
-import BreadcrumbsBar from '@/components/BreadcrumbsBar/BreadcrumbsBar';
 import { useEffect } from 'react';
 import { Grid } from '@mantine/core';
+import BreadcrumbsBar from '@/components/BreadcrumbsBar/BreadcrumbsBar';
 import { DashboardCaseWidget } from '@/components/DashboardCaseWidget/DashboardCaseWidget';
 import { TopMessagesWidget } from '@/components/TopMessagesWidget/TopMessagesWidget';
 import { TopUserWidget } from '@/components/TopUserWidget/TopUserWidget';

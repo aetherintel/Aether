@@ -14,10 +14,14 @@ export function ProtectedRoute() {
   }, []);
 
   // still checking? render nothing or a spinner
-  if (allowed === null) return null;                 // or <Loader />
+  if (allowed === null) {
+    return null;
+  } // or <Loader />
 
   // not allowed → bounce to login
-  if (!allowed) return <Navigate to="/login" replace />;
+  if (!allowed) {
+    return <Navigate to="/login" replace />;
+  }
 
   // allowed → show the protected tree
   return <Outlet />;

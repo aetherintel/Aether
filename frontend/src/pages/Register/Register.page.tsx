@@ -1,19 +1,11 @@
+import { useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import {
-  Anchor,
-  Button,
-  Container,
-  Paper,
-  PasswordInput,
-  Text,
-  TextInput,
-} from '@mantine/core';
+import { Anchor, Button, Container, Paper, PasswordInput, Text, TextInput } from '@mantine/core';
 import { useForm } from '@mantine/form';
 import { notifications } from '@mantine/notifications';
+import Logo from '@/components/Logo';
 import { keycloakRegister } from '../../context/auth';
 import classes from './Register.module.css';
-import { useEffect } from 'react';
-import Logo from '@/components/Logo';
 
 export function Register() {
   useEffect(() => {

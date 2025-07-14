@@ -1,14 +1,14 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { SessionSetupService } from '../services/sessionSetup';
 import type {
-  Session,
   CurrentSetup,
+  ListSessionsResponse,
+  Session,
   SetupStep,
   StartSetupResponse,
+  UseSessionSetupReturn,
   VerifyCodeResponse,
   VerifyPasswordResponse,
-  ListSessionsResponse,
-  UseSessionSetupReturn
 } from '../types/sessionSetup';
 
 export const useSessionSetup = (): UseSessionSetupReturn => {
@@ -41,16 +41,16 @@ export const useSessionSetup = (): UseSessionSetupReturn => {
     try {
       setError(null);
       setIsLoading(true);
-      
+
       const response: StartSetupResponse = await SessionSetupService.startSetup(phone, sessionName);
       setSetupId(response.setup_id);
       setCurrentSetup({
         phone,
         sessionName,
-        message: response.message
+        message: response.message,
       });
       setSetupStep('code_sent');
-      
+
       return response;
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to start setup';
@@ -69,17 +69,17 @@ export const useSessionSetup = (): UseSessionSetupReturn => {
     try {
       setError(null);
       setIsLoading(true);
-      
+
       const response: VerifyCodeResponse = await SessionSetupService.verifyCode(setupId, code);
-      
+
       if (response.success) {
         setSetupStep('completed');
-        setCurrentSetup(prev => prev ? { ...prev, user: response.user } : null);
+        setCurrentSetup((prev) => (prev ? { ...prev, user: response.user } : null));
         await loadSessions(); // Sessions neu laden
       } else if (response.requires_password) {
         setSetupStep('password_required');
       }
-      
+
       return response;
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to verify code';
@@ -98,15 +98,18 @@ export const useSessionSetup = (): UseSessionSetupReturn => {
     try {
       setError(null);
       setIsLoading(true);
-      
-      const response: VerifyPasswordResponse = await SessionSetupService.verifyPassword(setupId, password);
-      
+
+      const response: VerifyPasswordResponse = await SessionSetupService.verifyPassword(
+        setupId,
+        password
+      );
+
       if (response.success) {
         setSetupStep('completed');
-        setCurrentSetup(prev => prev ? { ...prev, user: response.user } : null);
+        setCurrentSetup((prev) => (prev ? { ...prev, user: response.user } : null));
         await loadSessions(); // Sessions neu laden
       }
-      
+
       return response;
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to verify password';
@@ -121,7 +124,7 @@ export const useSessionSetup = (): UseSessionSetupReturn => {
     try {
       setError(null);
       setIsLoading(true);
-      
+
       await SessionSetupService.deleteSession(sessionName);
       await loadSessions(); // Sessions neu laden
     } catch (err) {
@@ -159,7 +162,7 @@ export const useSessionSetup = (): UseSessionSetupReturn => {
     setupStep,
     currentSetup,
     error,
-    
+
     // Actions
     startSetup,
     verifyCode,
@@ -167,6 +170,6 @@ export const useSessionSetup = (): UseSessionSetupReturn => {
     deleteSession,
     cancelSetup,
     resetSetup,
-    loadSessions
+    loadSessions,
   };
 };

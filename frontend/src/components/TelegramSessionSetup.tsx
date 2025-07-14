@@ -1,31 +1,31 @@
 import React, { useState } from 'react';
 import {
-  Paper,
-  Title,
-  TextInput,
-  Button,
-  Text,
-  Alert,
-  Group,
-  Stack,
-  Card,
-  Badge,
-  ActionIcon,
-  LoadingOverlay,
-  Table,
-  Modal
-} from '@mantine/core';
-import {
-  IconPhone,
-  IconKey,
-  IconLock,
-  IconUser,
-  IconTrash,
   IconAlertCircle,
   IconCheck,
+  IconKey,
+  IconLock,
+  IconPhone,
   IconPlus,
-  IconRefresh
+  IconRefresh,
+  IconTrash,
+  IconUser,
 } from '@tabler/icons-react';
+import {
+  ActionIcon,
+  Alert,
+  Badge,
+  Button,
+  Card,
+  Group,
+  LoadingOverlay,
+  Modal,
+  Paper,
+  Stack,
+  Table,
+  Text,
+  TextInput,
+  Title,
+} from '@mantine/core';
 import { useSessionSetup } from '../hooks/useSessionSetup';
 import type { Session } from '../types/sessionSetup';
 
@@ -42,7 +42,7 @@ export const TelegramSessionSetup: React.FC = () => {
     deleteSession,
     cancelSetup,
     resetSetup,
-    loadSessions
+    loadSessions,
   } = useSessionSetup();
 
   const [showSetup, setShowSetup] = useState<boolean>(false);
@@ -56,7 +56,7 @@ export const TelegramSessionSetup: React.FC = () => {
     if (!phone.trim() || !sessionName.trim()) {
       return;
     }
-    
+
     try {
       await startSetup(phone, sessionName);
     } catch (err) {
@@ -69,7 +69,7 @@ export const TelegramSessionSetup: React.FC = () => {
     if (!code.trim()) {
       return;
     }
-    
+
     try {
       await verifyCode(code);
     } catch (err) {
@@ -82,7 +82,7 @@ export const TelegramSessionSetup: React.FC = () => {
     if (!password.trim()) {
       return;
     }
-    
+
     try {
       await verifyPassword(password);
     } catch (err) {
@@ -136,10 +136,7 @@ export const TelegramSessionSetup: React.FC = () => {
             >
               Refresh
             </Button>
-            <Button
-              leftSection={<IconPlus size={16} />}
-              onClick={() => setShowSetup(true)}
-            >
+            <Button leftSection={<IconPlus size={16} />} onClick={() => setShowSetup(true)}>
               New Session
             </Button>
           </Group>
@@ -180,7 +177,9 @@ export const TelegramSessionSetup: React.FC = () => {
                       {session.user?.username ? `@${session.user.username}` : '-'}
                     </Table.Td>
                     <Table.Td>
-                      <Text size="xs" c="dimmed">{session.user?.id}</Text>
+                      <Text size="xs" c="dimmed">
+                        {session.user?.id}
+                      </Text>
                     </Table.Td>
                     <Table.Td>
                       <ActionIcon
@@ -264,7 +263,7 @@ export const TelegramSessionSetup: React.FC = () => {
         closeOnClickOutside={setupStep === 'initial'}
       >
         <LoadingOverlay visible={isLoading} />
-        
+
         {error && (
           <Alert
             icon={<IconAlertCircle size={16} />}
@@ -283,22 +282,28 @@ export const TelegramSessionSetup: React.FC = () => {
             <Alert color="green" icon={<IconCheck size={16} />}>
               Session "{currentSetup.sessionName}" created successfully!
             </Alert>
-            
+
             {currentSetup.user && (
               <Card withBorder>
                 <Stack gap="xs">
-                  <Text size="sm" c="dimmed">Authenticated as:</Text>
+                  <Text size="sm" c="dimmed">
+                    Authenticated as:
+                  </Text>
                   <Text fw={500}>
                     {currentSetup.user.first_name} {currentSetup.user.last_name}
                   </Text>
                   {currentSetup.user.username && (
-                    <Text size="sm" c="dimmed">@{currentSetup.user.username}</Text>
+                    <Text size="sm" c="dimmed">
+                      @{currentSetup.user.username}
+                    </Text>
                   )}
-                  <Text size="xs" c="dimmed">ID: {currentSetup.user.id}</Text>
+                  <Text size="xs" c="dimmed">
+                    ID: {currentSetup.user.id}
+                  </Text>
                 </Stack>
               </Card>
             )}
-            
+
             <Button fullWidth onClick={handleCompleteSetup}>
               Finish
             </Button>
@@ -316,7 +321,7 @@ export const TelegramSessionSetup: React.FC = () => {
                 required
                 data-autofocus
               />
-              
+
               <TextInput
                 label="Phone Number"
                 placeholder="+49123456789"
@@ -325,16 +330,12 @@ export const TelegramSessionSetup: React.FC = () => {
                 onChange={(e) => setPhone(e.target.value)}
                 required
               />
-              
+
               <Text size="xs" c="dimmed">
                 The session file will be saved as "{sessionName}.session".
               </Text>
-              
-              <Button
-                type="submit"
-                fullWidth
-                disabled={!phone.trim() || !sessionName.trim()}
-              >
+
+              <Button type="submit" fullWidth disabled={!phone.trim() || !sessionName.trim()}>
                 Request 2FA-Code
               </Button>
             </Stack>
@@ -347,7 +348,7 @@ export const TelegramSessionSetup: React.FC = () => {
               <Alert color="blue" icon={<IconCheck size={16} />}>
                 {currentSetup.message}
               </Alert>
-              
+
               <TextInput
                 label="2FA-Code"
                 placeholder="12345"
@@ -357,7 +358,7 @@ export const TelegramSessionSetup: React.FC = () => {
                 required
                 data-autofocus
               />
-              
+
               <Group justify="space-between">
                 <Button variant="subtle" onClick={cancelSetup}>
                   Cancel
@@ -376,7 +377,7 @@ export const TelegramSessionSetup: React.FC = () => {
               <Alert color="orange" icon={<IconLock size={16} />}>
                 Two-factor authentication is enabled. Please enter your password.
               </Alert>
-              
+
               <TextInput
                 label="2FA-Passwort"
                 type="password"
@@ -387,7 +388,7 @@ export const TelegramSessionSetup: React.FC = () => {
                 required
                 data-autofocus
               />
-              
+
               <Group justify="space-between">
                 <Button variant="subtle" onClick={cancelSetup}>
                   Cancel

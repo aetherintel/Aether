@@ -3,7 +3,7 @@ import '@mantine/notifications/styles.css';
 
 import { Suspense, useEffect } from 'react';
 import { Outlet } from 'react-router-dom';
-import { AppShell, Overlay, Container } from '@mantine/core';
+import { AppShell, Container, Overlay } from '@mantine/core';
 import { useDisclosure, useMediaQuery } from '@mantine/hooks';
 import { useAuthStore } from '../../store/client/authStore';
 import { useStore } from '../../store/client/useStore';
@@ -63,7 +63,7 @@ export default function AppContainer() {
         )}
         <Suspense fallback={<div>Loading</div>}>
           <Container size="xl">
-              <Outlet />
+            <Outlet />
           </Container>
         </Suspense>
       </AppShell.Main>

@@ -1,12 +1,12 @@
 import { authFetch } from '@/utils/authFetch';
 import type {
+  ApiErrorResponse,
+  CancelSetupResponse,
+  DeleteSessionResponse,
   ListSessionsResponse,
   StartSetupResponse,
   VerifyCodeResponse,
   VerifyPasswordResponse,
-  DeleteSessionResponse,
-  CancelSetupResponse,
-  ApiErrorResponse
 } from '../types/sessionSetup';
 
 const apiUrl = import.meta.env.VITE_API_URL;
@@ -21,17 +21,17 @@ export class SessionSetupService {
   private static async handleResponse<T>(response: Response): Promise<T> {
     if (!response.ok) {
       let errorMessage = 'API request failed';
-      
+
       try {
         const errorData: ApiErrorResponse = await response.json();
         errorMessage = errorData.detail || `HTTP ${response.status}: ${response.statusText}`;
       } catch {
         errorMessage = `HTTP ${response.status}: ${response.statusText}`;
       }
-      
+
       throw new Error(errorMessage);
     }
-    
+
     return response.json() as Promise<T>;
   }
 
@@ -48,59 +48,53 @@ export class SessionSetupService {
    * Start the session setup process
    */
   static async startSetup(
-    phone: string, 
+    phone: string,
     sessionName: string = 'default'
   ): Promise<StartSetupResponse> {
     const base = apiUrl ?? 'http://localhost:8000/api';
     const response = await authFetch(`${base}/telegram-auth/setup/start`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ 
-        phone, 
-        session_name: sessionName 
-      })
+      body: JSON.stringify({
+        phone,
+        session_name: sessionName,
+      }),
     });
-    
+
     return this.handleResponse<StartSetupResponse>(response);
   }
 
   /**
    * Verify the 2FA code received during setup
    */
-  static async verifyCode(
-    setupId: string, 
-    code: string
-  ): Promise<VerifyCodeResponse> {
+  static async verifyCode(setupId: string, code: string): Promise<VerifyCodeResponse> {
     const base = apiUrl ?? 'http://localhost:8000/api';
     const response = await authFetch(`${base}/telegram-auth/setup/verify-code`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ 
-        setup_id: setupId, 
-        code 
-      })
+      body: JSON.stringify({
+        setup_id: setupId,
+        code,
+      }),
     });
-    
+
     return this.handleResponse<VerifyCodeResponse>(response);
   }
 
   /**
    * Verify the 2FA password during setup
    */
-  static async verifyPassword(
-    setupId: string, 
-    password: string
-  ): Promise<VerifyPasswordResponse> {
+  static async verifyPassword(setupId: string, password: string): Promise<VerifyPasswordResponse> {
     const base = apiUrl ?? 'http://localhost:8000/api';
     const response = await authFetch(`${base}/telegram-auth/setup/verify-password`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ 
-        setup_id: setupId, 
-        password 
-      })
+      body: JSON.stringify({
+        setup_id: setupId,
+        password,
+      }),
     });
-    
+
     return this.handleResponse<VerifyPasswordResponse>(response);
   }
 
@@ -109,10 +103,13 @@ export class SessionSetupService {
    */
   static async deleteSession(sessionName: string): Promise<DeleteSessionResponse> {
     const base = apiUrl ?? 'http://localhost:8000/api';
-    const response = await authFetch(`${base}/telegram-auth/sessions/${encodeURIComponent(sessionName)}`, {
-      method: 'DELETE'
-    });
-    
+    const response = await authFetch(
+      `${base}/telegram-auth/sessions/${encodeURIComponent(sessionName)}`,
+      {
+        method: 'DELETE',
+      }
+    );
+
     return this.handleResponse<DeleteSessionResponse>(response);
   }
 
@@ -121,10 +118,13 @@ export class SessionSetupService {
    */
   static async cancelSetup(setupId: string): Promise<CancelSetupResponse> {
     const base = apiUrl ?? 'http://localhost:8000/api';
-    const response = await authFetch(`${base}/telegram-auth/setup/cancel/${encodeURIComponent(setupId)}`, {
-      method: 'POST'
-    });
-    
+    const response = await authFetch(
+      `${base}/telegram-auth/setup/cancel/${encodeURIComponent(setupId)}`,
+      {
+        method: 'POST',
+      }
+    );
+
     return this.handleResponse<CancelSetupResponse>(response);
   }
 }

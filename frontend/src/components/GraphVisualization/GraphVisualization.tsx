@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import { Card, Stack, Group, Text, Loader, Alert, Slider } from '@mantine/core';
-import { authFetch } from '@/utils/authFetch';
 import { IconInfoCircle } from '@tabler/icons-react';
+import { Alert, Card, Group, Loader, Slider, Stack, Text } from '@mantine/core';
+import { authFetch } from '@/utils/authFetch';
 
 interface GraphVisualizationProps {
   selectedChannelIds: string[];
@@ -10,11 +10,11 @@ interface GraphVisualizationProps {
   type?: string | null;
 }
 
-const GraphVisualization: React.FC<GraphVisualizationProps> = ({ 
-  selectedChannelIds, 
+const GraphVisualization: React.FC<GraphVisualizationProps> = ({
+  selectedChannelIds,
   searchQuery,
   user,
-  type
+  type,
 }) => {
   const vizRef = useRef<HTMLDivElement>(null);
   const networkRef = useRef<any>(null);
@@ -22,8 +22,8 @@ const GraphVisualization: React.FC<GraphVisualizationProps> = ({
   const [visualizationType] = useState<string>('network');
   const [visLoaded, setVisLoaded] = useState(false);
   const [limit, setLimit] = useState(100);
-  
-  // Load vis.js from CDN 
+
+  // Load vis.js from CDN
   // TODO: install npm packages vis-network and vis-data
   useEffect(() => {
     const loadVis = () => {
@@ -47,7 +47,9 @@ const GraphVisualization: React.FC<GraphVisualizationProps> = ({
   }, []);
 
   const renderNetworkVisualization = async (data: any) => {
-    if (!visLoaded || !vizRef.current) {return;}
+    if (!visLoaded || !vizRef.current) {
+      return;
+    }
 
     // Clear previous visualization
     if (networkRef.current) {
@@ -62,25 +64,25 @@ const GraphVisualization: React.FC<GraphVisualizationProps> = ({
           return {
             background: '#ff6b6b',
             border: '#ff5252',
-            highlight: { background: '#ff8a80', border: '#ff1744' }
+            highlight: { background: '#ff8a80', border: '#ff1744' },
           };
         case 'User':
           return {
             background: '#4ecdc4',
             border: '#26c6da',
-            highlight: { background: '#80e5ff', border: '#00acc1' }
+            highlight: { background: '#80e5ff', border: '#00acc1' },
           };
         case 'Message':
           return {
             background: '#ffd93d',
             border: '#ffcc02',
-            highlight: { background: '#ffeb3b', border: '#ff8f00' }
+            highlight: { background: '#ffeb3b', border: '#ff8f00' },
           };
         default:
           return {
             background: '#95a5a6',
             border: '#7f8c8d',
-            highlight: { background: '#bdc3c7', border: '#34495e' }
+            highlight: { background: '#bdc3c7', border: '#34495e' },
           };
       }
     };
@@ -92,7 +94,7 @@ const GraphVisualization: React.FC<GraphVisualizationProps> = ({
       title: `${node.type}: ${node.label}`,
       color: getNodeColor(node.type),
       size: Math.max((node.properties?.message_count || 1) * 2, 15),
-      font: { size: 12, color: '#000000' }
+      font: { size: 12, color: '#000000' },
     }));
 
     // Prepare edges with different colors for different relationship types
@@ -122,7 +124,7 @@ const GraphVisualization: React.FC<GraphVisualizationProps> = ({
       width: Math.min(Math.max(rel.properties?.message_count || rel.properties?.score || 1, 1), 10),
       arrows: 'to',
       color: getEdgeColor(rel.type),
-      smooth: { type: 'continuous' }
+      smooth: { type: 'continuous' },
     }));
 
     // Deduplicate nodes
@@ -158,15 +160,15 @@ const GraphVisualization: React.FC<GraphVisualizationProps> = ({
         },
         font: {
           size: 12,
-          face: 'Tahoma'
+          face: 'Tahoma',
         },
       },
       edges: {
         width: 0.15,
         color: { inherit: 'from' },
         smooth: {
-          type: 'continuous'
-        }
+          type: 'continuous',
+        },
       },
       physics: {
         enabled: true,
@@ -175,20 +177,20 @@ const GraphVisualization: React.FC<GraphVisualizationProps> = ({
           centralGravity: 0.3,
           springLength: 95,
           springConstant: 0.04,
-          damping: 0.09
+          damping: 0.09,
         },
         maxVelocity: 50,
         minVelocity: 0.1,
         solver: 'barnesHut',
         stabilization: { iterations: 80 },
         timestep: 0.35,
-        adaptiveTimestep: true
+        adaptiveTimestep: true,
       },
       interaction: {
         tooltipDelay: 200,
         hideEdgesOnDrag: true,
-        hideNodesOnDrag: false
-      }
+        hideNodesOnDrag: false,
+      },
     };
 
     // Create network
@@ -202,40 +204,44 @@ const GraphVisualization: React.FC<GraphVisualizationProps> = ({
     networkRef.current.on('click', (params: any) => {
       if (params.nodes.length > 0) {
         const nodeId = params.nodes[0];
-        const node = nodes.find((n: { id: any; }) => n.id === nodeId);
+        const node = nodes.find((n: { id: any }) => n.id === nodeId);
         console.log('Clicked node:', node);
       }
     });
   };
 
   const renderVisualization = async () => {
-    if (!vizRef.current) {return;}
+    if (!vizRef.current) {
+      return;
+    }
 
     setLoading(true);
-    
+
     try {
       // Fetch data from our backend endpoint
-      const response = await authFetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000/api'}/graph/visualization`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          channel_ids: selectedChannelIds,
-          search_query: searchQuery,
-          user: user || null,
-          type: type || null,
-          limit,
-          visualization_type: visualizationType
-        })
-      });
+      const response = await authFetch(
+        `${import.meta.env.VITE_API_URL || 'http://localhost:8000/api'}/graph/visualization`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            channel_ids: selectedChannelIds,
+            search_query: searchQuery,
+            user: user || null,
+            type: type || null,
+            limit,
+            visualization_type: visualizationType,
+          }),
+        }
+      );
 
       const data = await response.json();
 
       if (visualizationType === 'network') {
         await renderNetworkVisualization(data);
       }
-
     } catch (error) {
       console.error('Error rendering visualization:', error);
     } finally {
@@ -274,7 +280,8 @@ const GraphVisualization: React.FC<GraphVisualizationProps> = ({
       <Stack>
         <Stack>
           <Alert variant="light" color="blue" title="Graph Visualization" icon={<IconInfoCircle />}>
-            In the "Messages"-Tab: Click on a username or the channel/group next to it, to update the graph.
+            In the "Messages"-Tab: Click on a username or the channel/group next to it, to update
+            the graph.
           </Alert>
           <Text size="sm">Limit</Text>
           <Slider
@@ -301,7 +308,9 @@ const GraphVisualization: React.FC<GraphVisualizationProps> = ({
         {loading && (
           <Group>
             <Loader size="sm" />
-            <Text size="sm" c="dimmed">Loading visualization data...</Text>
+            <Text size="sm" c="dimmed">
+              Loading visualization data...
+            </Text>
           </Group>
         )}
 
@@ -313,7 +322,7 @@ const GraphVisualization: React.FC<GraphVisualizationProps> = ({
             height: '500px',
             border: '1px solid #e9ecef',
             borderRadius: '8px',
-            backgroundColor: '#fff'
+            backgroundColor: '#fff',
           }}
         />
 

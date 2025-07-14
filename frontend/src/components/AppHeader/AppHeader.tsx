@@ -2,9 +2,9 @@ import { IconLogout, IconSettings, IconUser } from '@tabler/icons-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Avatar, Burger, Flex, Group, Menu, rem, Text } from '@mantine/core';
 import { useMediaQuery } from '@mantine/hooks';
+import { useAuthStore } from '@/store/client/authStore';
 import { useStore } from '../../store/client/useStore';
 import ThemeSwitch from '../ThemeSwitch/ThemeSwitch';
-import { useAuthStore } from '@/store/client/authStore';
 
 interface Props {
   opened: boolean;

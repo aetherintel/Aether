@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { TextInput, MultiSelect, Button, Group, Stack } from '@mantine/core';
+import { useEffect, useState } from 'react';
+import { Button, Group, MultiSelect, Stack, TextInput } from '@mantine/core';
 import { authFetch } from '@/utils/authFetch';
 
 const apiUrl = import.meta.env.VITE_API_URL;
@@ -25,7 +25,12 @@ interface TopMessagesFormProps {
   onReset: () => void;
 }
 
-export function TopMessagesForm({ searchParams, setSearchParams, onSearch, onReset }: TopMessagesFormProps) {
+export function TopMessagesForm({
+  searchParams,
+  setSearchParams,
+  onSearch,
+  onReset,
+}: TopMessagesFormProps) {
   const [channels, setChannels] = useState<Channel[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -38,16 +43,18 @@ export function TopMessagesForm({ searchParams, setSearchParams, onSearch, onRes
         const res = await authFetch(`${base}/messages/channels`);
         const data = await res.json();
 
-        console.log("all available channels:", data);
+        console.log('all available channels:', data);
 
         // get only channels that have been scraped or have messages
         const scrapedChannels = data.filter((channel: any) => {
-        // Debug for every channel
-        console.log(`Channel ${channel.username}: is_scraped=${channel.is_scraped}, message_count=${channel.message_count}`);
-        return channel.is_scraped === true || channel.message_count > 0;
-      });
+          // Debug for every channel
+          console.log(
+            `Channel ${channel.username}: is_scraped=${channel.is_scraped}, message_count=${channel.message_count}`
+          );
+          return channel.is_scraped === true || channel.message_count > 0;
+        });
 
-        console.log("scraped Channels:", scrapedChannels);
+        console.log('scraped Channels:', scrapedChannels);
         setChannels(scrapedChannels);
       } catch (error) {
         console.error('Error fetching channels:', error);
@@ -100,16 +107,12 @@ export function TopMessagesForm({ searchParams, setSearchParams, onSearch, onRes
 
         <Group justify="right">
           {searchParams.isActive && (
-            <Button 
-              onClick={onReset} 
-              variant="outline" 
-              color="red"
-            >
+            <Button onClick={onReset} variant="outline" color="red">
               Reset
             </Button>
           )}
-          <Button 
-            type="submit" 
+          <Button
+            type="submit"
             disabled={!searchParams.keywords || searchParams.channelIds.length === 0}
           >
             Search

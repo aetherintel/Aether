@@ -1,6 +1,17 @@
-import { useState, useEffect } from 'react';
-import { Box, Title, Accordion, Text, Group, Button, Badge, Loader, Divider, ActionIcon } from '@mantine/core';
-import { IconSettings, IconBrandTelegram } from '@tabler/icons-react';
+import { useEffect, useState } from 'react';
+import { IconBrandTelegram, IconSettings } from '@tabler/icons-react';
+import {
+  Accordion,
+  ActionIcon,
+  Badge,
+  Box,
+  Button,
+  Divider,
+  Group,
+  Loader,
+  Text,
+  Title,
+} from '@mantine/core';
 import { authFetch } from '@/utils/authFetch';
 import { TopMessagesForm } from './TopMessagesForm';
 import classes from './TopMessagesWidget.module.css';
@@ -33,7 +44,7 @@ export function TopMessagesWidget() {
     label: 'Top 5 Messages',
     channelIds: [],
     keywords: '',
-    isActive: false
+    isActive: false,
   });
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(false);
@@ -50,15 +61,13 @@ export function TopMessagesWidget() {
     if (!shouldTruncateText(text)) {
       return text;
     }
-    return `${text.substring(0, MAX_TEXT_LENGTH)  }...`;
+    return `${text.substring(0, MAX_TEXT_LENGTH)}...`;
   };
 
   // toggle message
   const toggleMessageExpansion = (messageId: string) => {
-    setExpandedMessages(prev => 
-      prev.includes(messageId) 
-        ? prev.filter(id => id !== messageId) 
-        : [...prev, messageId]
+    setExpandedMessages((prev) =>
+      prev.includes(messageId) ? prev.filter((id) => id !== messageId) : [...prev, messageId]
     );
   };
 
@@ -82,7 +91,7 @@ export function TopMessagesWidget() {
         setMessages(msgData);
         // check if messages are available
         if (msgData.length > 0) {
-          setSearchParams(prev => ({ ...prev, isActive: true }));
+          setSearchParams((prev) => ({ ...prev, isActive: true }));
           // open Messages-Accordion
           setOpenItems(['messages']);
         }
@@ -97,12 +106,12 @@ export function TopMessagesWidget() {
       label: 'Top 5 Messages',
       channelIds: [],
       keywords: '',
-      isActive: false
+      isActive: false,
     });
     setMessages([]);
     setOpenItems(['config']);
     setExpandedMessages([]);
-    
+
     // delete saved data
     localStorage.removeItem('topMessagesConfig');
     localStorage.removeItem('topMessagesResults');
@@ -117,18 +126,18 @@ export function TopMessagesWidget() {
     try {
       const base = apiUrl ?? 'http://localhost:8000/api';
       const channelInfoMap = new Map();
-      
+
       try {
         const channelsRes = await authFetch(`${base}/messages/channels`);
         const channelsData = await channelsRes.json();
-        
+
         channelsData.forEach((channel: any) => {
           channelInfoMap.set(channel.channel_id, {
-            title: channel.title || channel.username || channel.channel_id
+            title: channel.title || channel.username || channel.channel_id,
           });
         });
       } catch (error) {
-        console.error("Error fetching channel information:", error);
+        console.error('Error fetching channel information:', error);
       }
 
       const resultsPerChannel = await Promise.all(
@@ -137,17 +146,17 @@ export function TopMessagesWidget() {
             const url = new URL(`${base}/messages/channels/${channelId}/messages`);
             url.searchParams.set('limit', '10');
             url.searchParams.set('q', searchParams.keywords.trim());
-            
+
             const res = await authFetch(url.toString());
             const data = await res.json();
-            
+
             return {
               channelId,
               messages: data.map((msg: any) => ({
                 ...msg,
                 channel_id: channelId,
-                channel_title: channelInfoMap.get(channelId)?.title || channelId
-              }))
+                channel_title: channelInfoMap.get(channelId)?.title || channelId,
+              })),
             };
           } catch (error) {
             console.error(`Error fetching messages for channel ${channelId}:`, error);
@@ -155,26 +164,27 @@ export function TopMessagesWidget() {
           }
         })
       );
-      
+
       let allMessages: Message[] = [];
-      
+
       // case for one channel
       if (resultsPerChannel.length === 1) {
         allMessages = resultsPerChannel[0].messages
           .sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime())
           .slice(0, 5);
-      } 
+      }
       // case for more channels
       else if (resultsPerChannel.length > 1) {
-        const sortedChannels = [...resultsPerChannel]
-          .sort((a, b) => b.messages.length - a.messages.length);
-        
+        const sortedChannels = [...resultsPerChannel].sort(
+          (a, b) => b.messages.length - a.messages.length
+        );
+
         const totalMessages = 5;
         const messagesPerChannel: Record<string, number> = {};
         let remainingMessages = totalMessages;
-        
+
         // one message for each channel
-        sortedChannels.forEach(channel => {
+        sortedChannels.forEach((channel) => {
           if (channel.messages.length > 0 && remainingMessages > 0) {
             messagesPerChannel[channel.channelId] = 1;
             remainingMessages--;
@@ -182,21 +192,26 @@ export function TopMessagesWidget() {
             messagesPerChannel[channel.channelId] = 0;
           }
         });
-        
+
         // sort messages for the rest
         while (remainingMessages > 0) {
           let distributed = false;
           for (const channel of sortedChannels) {
-            if (channel.messages.length > messagesPerChannel[channel.channelId] && remainingMessages > 0) {
+            if (
+              channel.messages.length > messagesPerChannel[channel.channelId] &&
+              remainingMessages > 0
+            ) {
               messagesPerChannel[channel.channelId]++;
               remainingMessages--;
               distributed = true;
             }
           }
           // no more messages to distribute
-          if (!distributed) {break;}
+          if (!distributed) {
+            break;
+          }
         }
-        
+
         // final messages
         for (const channel of sortedChannels) {
           const count = messagesPerChannel[channel.channelId];
@@ -204,28 +219,33 @@ export function TopMessagesWidget() {
             const sortedMessages = channel.messages
               .sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime())
               .slice(0, count);
-            
+
             allMessages = [...allMessages, ...sortedMessages];
           }
         }
-        
+
         // sort
-        allMessages = allMessages.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        allMessages = allMessages.sort(
+          (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+        );
       }
-      
+
       setMessages(allMessages);
       setExpandedMessages([]);
-      
+
       // mark widget as active
       if (allMessages.length > 0) {
-        setSearchParams(prev => ({ ...prev, isActive: true }));
-        
-        localStorage.setItem('topMessagesConfig', JSON.stringify({
-          ...searchParams,
-          isActive: true
-        }));
+        setSearchParams((prev) => ({ ...prev, isActive: true }));
+
+        localStorage.setItem(
+          'topMessagesConfig',
+          JSON.stringify({
+            ...searchParams,
+            isActive: true,
+          })
+        );
         localStorage.setItem('topMessagesResults', JSON.stringify(allMessages));
-        
+
         setOpenItems(['messages']);
       }
     } catch (error) {
@@ -257,14 +277,22 @@ export function TopMessagesWidget() {
 
   // mark keywords in text
   const highlightText = (text: string, query: string) => {
-    if (!query) {return text;}
+    if (!query) {
+      return text;
+    }
 
-    const keywords = query.split(' ').filter(k => k.length > 0);
+    const keywords = query.split(' ').filter((k) => k.length > 0);
     const regex = new RegExp(`(${keywords.join('|')})`, 'gi');
     const parts = text.split(regex);
 
     return parts.map((part, index) =>
-      regex.test(part) ? <mark key={index} className={classes.highlight}>{part}</mark> : part
+      regex.test(part) ? (
+        <mark key={index} className={classes.highlight}>
+          {part}
+        </mark>
+      ) : (
+        part
+      )
     );
   };
 
@@ -272,9 +300,9 @@ export function TopMessagesWidget() {
   const toggleConfig = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    
+
     if (openItems.includes('config')) {
-      setOpenItems(openItems.filter(item => item !== 'config'));
+      setOpenItems(openItems.filter((item) => item !== 'config'));
     } else {
       setOpenItems([...openItems, 'config']);
     }
@@ -286,9 +314,9 @@ export function TopMessagesWidget() {
         <Title order={3} className={classes.title}>
           {searchParams.isActive ? searchParams.label : 'Top Messages'}
         </Title>
-        <ActionIcon 
-          variant="subtle" 
-          color="gray" 
+        <ActionIcon
+          variant="subtle"
+          color="gray"
           onClick={toggleConfig}
           className={classes.settingsButton}
         >
@@ -296,11 +324,7 @@ export function TopMessagesWidget() {
         </ActionIcon>
       </Group>
 
-      <Accordion 
-        multiple 
-        value={openItems} 
-        onChange={setOpenItems}
-      >
+      <Accordion multiple value={openItems} onChange={setOpenItems}>
         <Accordion.Item value="config" className={classes.configAccordionItem}>
           <Accordion.Control className={classes.hiddenControl}>
             <span style={{ display: 'none' }}>Configuration</span>
@@ -331,9 +355,15 @@ export function TopMessagesWidget() {
                     <div key={message.message_id}>
                       <div className={classes.messageItem}>
                         <div className={classes.messageHeader}>
-                          <Group justify="space-between" className={classes.messageHeaderInner} wrap="nowrap">
+                          <Group
+                            justify="space-between"
+                            className={classes.messageHeaderInner}
+                            wrap="nowrap"
+                          >
                             <Group gap="xs" wrap="nowrap">
-                              <Badge color="blue" radius="sm">{message.channel_title || message.channel_id}</Badge>
+                              <Badge color="blue" radius="sm">
+                                {message.channel_title || message.channel_id}
+                              </Badge>
                               {message.author && (
                                 <Text size="xs" color="dimmed" className={classes.authorName}>
                                   {message.author.name}
@@ -341,24 +371,28 @@ export function TopMessagesWidget() {
                               )}
                             </Group>
                             <Group gap="xs" className={classes.dateGroup} wrap="nowrap">
-                              <Text size="xs" color="dimmed" className={classes.dateText}>{formatRelativeTime(message.date)}</Text>
+                              <Text size="xs" color="dimmed" className={classes.dateText}>
+                                {formatRelativeTime(message.date)}
+                              </Text>
                               <IconBrandTelegram size={16} className={classes.telegramIcon} />
                             </Group>
                           </Group>
                         </div>
                         <div className={classes.messageContent}>
                           <Text className={classes.messageText}>
-                            {expandedMessages.includes(message.message_id) 
+                            {expandedMessages.includes(message.message_id)
                               ? highlightText(message.text, searchParams.keywords)
                               : highlightText(truncateText(message.text), searchParams.keywords)}
                           </Text>
                           {shouldTruncateText(message.text) && (
-                            <Button 
+                            <Button
                               variant="subtle"
                               onClick={() => toggleMessageExpansion(message.message_id)}
                               className={classes.showMoreButton}
                             >
-                              {expandedMessages.includes(message.message_id) ? "Show less" : "Show more"}
+                              {expandedMessages.includes(message.message_id)
+                                ? 'Show less'
+                                : 'Show more'}
                             </Button>
                           )}
                         </div>
