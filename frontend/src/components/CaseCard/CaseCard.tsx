@@ -1,8 +1,19 @@
 import { IconArchive, IconTrash } from '@tabler/icons-react';
-import { ActionIcon, Badge, Button, Card, Group, Image, Menu, rem, SimpleGrid, Text } from '@mantine/core';
-import classes from './CaseCard.module.css';
-import { CaseFile } from '../CaseFileList/CaseFileList';
 import { Link } from 'react-router-dom';
+import {
+  ActionIcon,
+  Badge,
+  Button,
+  Card,
+  Group,
+  Image,
+  Menu,
+  rem,
+  SimpleGrid,
+  Text,
+} from '@mantine/core';
+import { CaseFile } from '../CaseFileList/CaseFileList';
+import classes from './CaseCard.module.css';
 
 interface CaseCardProps {
   caseFile: CaseFile;
@@ -11,7 +22,12 @@ interface CaseCardProps {
   compact?: boolean;
 }
 
-export default function CaseCard({ caseFile, onDelete, onArchive, compact = false }: CaseCardProps) {
+export default function CaseCard({
+  caseFile,
+  onDelete,
+  onArchive,
+  compact = false,
+}: CaseCardProps) {
   const handleDeleteCaseClick = () => {
     onDelete(caseFile.id);
   };
@@ -26,19 +42,25 @@ export default function CaseCard({ caseFile, onDelete, onArchive, compact = fals
   ));
 
   const thumbnails = [...new Set(caseFile.thumbnails)]
-  .slice(0, 4)  // Limit to first 4 items
-  .map((thumbnail) => (
-    <Image 
-      key={thumbnail} 
-      src={thumbnail} 
-      alt={thumbnail} 
-      height={90} 
-      fallbackSrc="https://placehold.co/600x360?text=Not downloaded yet" 
-    />
-  ));
+    .slice(0, 4) // Limit to first 4 items
+    .map((thumbnail) => (
+      <Image
+        key={thumbnail}
+        src={thumbnail}
+        alt={thumbnail}
+        height={90}
+        fallbackSrc="https://placehold.co/600x360?text=Not downloaded yet"
+      />
+    ));
 
   return (
-    <Card withBorder radius="md" p="md" className={classes.card} opacity={caseFile.archived ? 0.5 : 1}>
+    <Card
+      withBorder
+      radius="md"
+      p="md"
+      className={classes.card}
+      opacity={caseFile.archived ? 0.5 : 1}
+    >
       {compact ? null : (
         <Card.Section>
           <SimpleGrid cols={2} spacing="0" verticalSpacing="0">
@@ -100,11 +122,11 @@ export default function CaseCard({ caseFile, onDelete, onArchive, compact = fals
               </Menu.Item>
             ) : null}
             <Menu.Item
-                color="red"
-                leftSection={<IconTrash style={{ width: rem(14), height: rem(14) }} />}
-                onClick={handleDeleteCaseClick}
-              >
-                Delete case
+              color="red"
+              leftSection={<IconTrash style={{ width: rem(14), height: rem(14) }} />}
+              onClick={handleDeleteCaseClick}
+            >
+              Delete case
             </Menu.Item>
           </Menu.Dropdown>
         </Menu>
@@ -123,7 +145,13 @@ export default function CaseCard({ caseFile, onDelete, onArchive, compact = fals
         <Button radius="md" component={Link} to={`/cases/${caseFile.id}`} style={{ flex: 1 }}>
           Show details
         </Button>
-        <ActionIcon variant="default" radius="md" size={36} onClick={handleArchiveCaseClick} display={compact ? 'none' : 'block'}>
+        <ActionIcon
+          variant="default"
+          radius="md"
+          size={36}
+          onClick={handleArchiveCaseClick}
+          display={compact ? 'none' : 'block'}
+        >
           <IconArchive className={classes.like} stroke={1.5} />
         </ActionIcon>
       </Group>

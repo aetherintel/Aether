@@ -15,7 +15,7 @@ export default function TabSection() {
   };
 
   const handleRefresh = () => {
-    setRefreshTrigger(prev => prev + 1);
+    setRefreshTrigger((prev) => prev + 1);
   };
 
   const handleTabChange = (newValue: string | null) => {
@@ -45,7 +45,11 @@ export default function TabSection() {
 
         <Box w="100%" my={30}>
           <Tabs.Panel w="100%" value="1">
-            <CaseFileList archived={false} refreshTrigger={refreshTrigger} onRefresh={handleRefresh} />
+            <CaseFileList
+              archived={false}
+              refreshTrigger={refreshTrigger}
+              onRefresh={handleRefresh}
+            />
           </Tabs.Panel>
           <Tabs.Panel value="2">
             <CaseFileList archived refreshTrigger={refreshTrigger} onRefresh={handleRefresh} />

@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { TextInput, MultiSelect, Button, Group, Stack } from '@mantine/core';
+import { useEffect, useState } from 'react';
+import { Button, Group, MultiSelect, Stack, TextInput } from '@mantine/core';
 import { authFetch } from '@/utils/authFetch';
 
 const apiUrl = import.meta.env.VITE_API_URL;
@@ -25,7 +25,12 @@ interface TopUserFormProps {
   onReset: () => void;
 }
 
-export function TopUserForm({ searchParams, setSearchParams, onSearch, onReset }: TopUserFormProps) {
+export function TopUserForm({
+  searchParams,
+  setSearchParams,
+  onSearch,
+  onReset,
+}: TopUserFormProps) {
   const [channels, setChannels] = useState<Channel[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -39,8 +44,8 @@ export function TopUserForm({ searchParams, setSearchParams, onSearch, onReset }
         const data = await res.json();
 
         // Only show channels that have been scraped or have messages
-        const scrapedChannels = data.filter((channel: Channel) => 
-          channel.is_scraped === true || channel.message_count > 0
+        const scrapedChannels = data.filter(
+          (channel: Channel) => channel.is_scraped === true || channel.message_count > 0
         );
 
         setChannels(scrapedChannels);
@@ -87,18 +92,11 @@ export function TopUserForm({ searchParams, setSearchParams, onSearch, onReset }
 
         <Group justify="right">
           {searchParams.isActive && (
-            <Button 
-              onClick={onReset} 
-              variant="outline" 
-              color="red"
-            >
+            <Button onClick={onReset} variant="outline" color="red">
               Reset
             </Button>
           )}
-          <Button 
-            type="submit" 
-            disabled={searchParams.channelIds.length === 0}
-          >
+          <Button type="submit" disabled={searchParams.channelIds.length === 0}>
             Search
           </Button>
         </Group>

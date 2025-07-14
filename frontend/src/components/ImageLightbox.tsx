@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
-import { Modal, Image, ActionIcon, Box } from '@mantine/core';
 import { IconX } from '@tabler/icons-react';
-
+import { ActionIcon, Box, Image, Modal } from '@mantine/core';
 
 interface ImageLightboxProps {
   image: string;
@@ -16,7 +15,7 @@ const ImageLightbox: React.FC<ImageLightboxProps> = ({
   thumbnailWidth = '100%',
   thumbnailHeight = 'auto',
   className,
-  style
+  style,
 }) => {
   const [opened, setOpened] = useState<boolean>(false);
 
@@ -60,7 +59,7 @@ const ImageLightbox: React.FC<ImageLightboxProps> = ({
           minWidth: thumbnailWidth,
           width: thumbnailWidth,
           height: thumbnailHeight,
-          ...style
+          ...style,
         }}
         onClick={openLightbox}
         onMouseEnter={handleMouseEnter}
@@ -73,7 +72,7 @@ const ImageLightbox: React.FC<ImageLightboxProps> = ({
           fit="cover"
           style={{
             width: '100%',
-            height: '100%'
+            height: '100%',
           }}
         />
       </Box>
@@ -115,7 +114,7 @@ const ImageLightbox: React.FC<ImageLightboxProps> = ({
             fit="cover"
             style={{
               height: '100%',
-              width: '100%'
+              width: '100%',
             }}
           />
         </Box>

@@ -1,10 +1,20 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Text, Button, Group, Slider, Stack, Stepper, TextInput, Textarea, Select } from '@mantine/core';
+import {
+  Button,
+  Group,
+  Select,
+  Slider,
+  Stack,
+  Stepper,
+  Text,
+  Textarea,
+  TextInput,
+} from '@mantine/core';
 import { useForm } from '@mantine/form';
 import { notifications } from '@mantine/notifications';
-import { TgChannelMultiSelect } from '../TgChannelMultiSelect';
 import { authFetch } from '@/utils/authFetch';
+import { TgChannelMultiSelect } from '../TgChannelMultiSelect';
 
 const apiUrl = import.meta.env.VITE_API_URL;
 
@@ -13,11 +23,11 @@ interface CaseFileFormValues {
   description: string;
   category: string;
   postCount: number;
-  tgchannels: string[],
-  topics: string[],
-  terms: string[],
-  duration: number,
-  tg_session: string,
+  tgchannels: string[];
+  topics: string[];
+  terms: string[];
+  duration: number;
+  tg_session: string;
 }
 
 interface SessionInfo {
@@ -86,23 +96,26 @@ export function CreateCaseFileForm() {
 
   const fetchSessions = async (): Promise<void> => {
     try {
-      const response = await authFetch(`${apiUrl ? apiUrl : 'http://localhost:8000/api'}/telegram-auth/sessions`, {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token') || ''}`
+      const response = await authFetch(
+        `${apiUrl ? apiUrl : 'http://localhost:8000/api'}/telegram-auth/sessions`,
+        {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem('token') || ''}`,
+          },
         }
-      });
-      
+      );
+
       if (!response.ok) {
         throw new Error('Failed to fetch sessions');
       }
-      
+
       const data: SessionsResponse = await response.json();
       setSessions(data.sessions || []);
-      
+
       // Filter active sessions
-      const active = data.sessions?.filter(session => session.active) || [];
+      const active = data.sessions?.filter((session) => session.active) || [];
       setActiveSessions(active);
-      
+
       // Auto-select first active session
       if (active.length > 0) {
         form.setFieldValue('tg_session', active[0].name);
@@ -111,7 +124,7 @@ export function CreateCaseFileForm() {
       notifications.show({
         title: 'Error',
         message: 'Failed to fetch Telegram sessions',
-        color: 'red'
+        color: 'red',
       });
       console.error('Error fetching sessions:', error);
     } finally {
@@ -120,9 +133,9 @@ export function CreateCaseFileForm() {
   };
 
   const getSessionOptions = (): SelectOption[] => {
-    return activeSessions.map(session => ({
+    return activeSessions.map((session) => ({
       value: session.name,
-      label: `${session.name} (${session.user?.first_name || session.user_info?.first_name || 'Unknown'} ${session.user?.last_name || session.user_info?.last_name || ''})`
+      label: `${session.name} (${session.user?.first_name || session.user_info?.first_name || 'Unknown'} ${session.user?.last_name || session.user_info?.last_name || ''})`,
     }));
   };
 
@@ -140,7 +153,7 @@ export function CreateCaseFileForm() {
         },
         body: JSON.stringify({
           ...values,
-          scraper_mode: 'full' // Always use full scraper
+          scraper_mode: 'full', // Always use full scraper
         }),
       });
 
@@ -149,7 +162,7 @@ export function CreateCaseFileForm() {
       }
 
       const data = await res.json();
-      
+
       // Show appropriate notifications based on scraper status
       if (willStartScraper && hasActiveSession) {
         notifications.show({
@@ -170,7 +183,7 @@ export function CreateCaseFileForm() {
           color: 'blue',
         });
       }
-      
+
       form.reset();
       navigate('/cases');
     } catch (err: any) {
@@ -184,14 +197,19 @@ export function CreateCaseFileForm() {
     }
   };
 
-  const canStartScraper = form.values.tgchannels.length > 0 && activeSessions.length > 0 && form.values.tg_session;
+  const canStartScraper =
+    form.values.tgchannels.length > 0 && activeSessions.length > 0 && form.values.tg_session;
 
   return (
-    <form onSubmit={form.onSubmit(handleSubmit)} onKeyDown={(e) => {
+    // eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions
+    <form
+      onSubmit={form.onSubmit(handleSubmit)}
+      onKeyDown={(e) => {
         if (e.key === 'Enter' && (e.target as any).tagName !== 'TEXTAREA') {
           e.preventDefault();
         }
-      }}>
+      }}
+    >
       <Stepper active={active} onStepClick={setActive} mt="xl">
         <Stepper.Step label="Case" description="Basics">
           <Stack>
@@ -214,25 +232,32 @@ export function CreateCaseFileForm() {
               value={form.values.tgchannels}
               onChange={(val) => form.setFieldValue('tgchannels', val)}
             />
-            
+
             {form.values.tgchannels.length > 0 && (
               <>
-                <Text size="sm" mt="md">Telegram Session:</Text>
+                <Text size="sm" mt="md">
+                  Telegram Session:
+                </Text>
                 <Select
-                  placeholder={sessionLoading ? "Loading sessions..." : "Select a Telegram session"}
+                  placeholder={sessionLoading ? 'Loading sessions...' : 'Select a Telegram session'}
                   data={getSessionOptions()}
                   value={form.values.tg_session}
                   onChange={(val) => form.setFieldValue('tg_session', val || '')}
                   disabled={sessionLoading || activeSessions.length === 0}
-                  error={form.values.tgchannels.length > 0 && activeSessions.length === 0 ? "No active sessions available. Create one first!" : undefined}
+                  error={
+                    form.values.tgchannels.length > 0 && activeSessions.length === 0
+                      ? 'No active sessions available. Create one first!'
+                      : undefined
+                  }
                 />
-                
+
                 {!canStartScraper && form.values.tgchannels.length > 0 && (
                   <Text size="sm" color="orange">
-                    ⚠️ Full scraper cannot start automatically - no active Telegram session available
+                    ⚠️ Full scraper cannot start automatically - no active Telegram session
+                    available
                   </Text>
                 )}
-                
+
                 {canStartScraper && (
                   <Text size="sm" color="green">
                     ✅ Full scraper will start automatically when case is created
@@ -257,9 +282,7 @@ export function CreateCaseFileForm() {
           </Stack>
         </Stepper.Step>
 
-        <Stepper.Completed>
-          Completed, click back button to get to previous step
-        </Stepper.Completed>
+        <Stepper.Completed>Completed, click back button to get to previous step</Stepper.Completed>
       </Stepper>
 
       <Group justify="end" mt="xl">
@@ -273,7 +296,9 @@ export function CreateCaseFileForm() {
           <Button
             onClick={() => {
               const isValid = form.validate().hasErrors === false;
-              if (isValid) {nextStep();}
+              if (isValid) {
+                nextStep();
+              }
             }}
           >
             Next
@@ -281,10 +306,7 @@ export function CreateCaseFileForm() {
         )}
 
         {active === 2 && (
-          <Button
-            type="submit"
-            loading={loading}
-          >
+          <Button type="submit" loading={loading}>
             Create Case
           </Button>
         )}

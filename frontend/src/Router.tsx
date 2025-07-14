@@ -5,9 +5,9 @@ import { CaseFileDetail } from './pages/CaseFileDetail/CaseFileDetail.page';
 import CaseOverview from './pages/CaseOverview.page';
 import { CreateCaseFilePage } from './pages/CreateCaseFile.page';
 import { Dashboard } from './pages/Dashboard.page';
-import { Settings } from './pages/Settings.page';
 import { Login } from './pages/Login/Login.page';
 import { Register } from './pages/Register/Register.page';
+import { Settings } from './pages/Settings.page';
 
 const router = createBrowserRouter([
   {

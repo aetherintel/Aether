@@ -1,10 +1,5 @@
 import { useState } from 'react';
-import {
-  IconFiles,
-  IconHome2,
-  IconLogout,
-  IconSettings,
-} from '@tabler/icons-react';
+import { IconFiles, IconHome2, IconLogout, IconSettings } from '@tabler/icons-react';
 import { useNavigate } from 'react-router-dom';
 import { Box, Center, Stack, Text, Tooltip, UnstyledButton } from '@mantine/core';
 import { useAuthStore } from '../../store/client/authStore';

@@ -1,16 +1,16 @@
+import { useEffect } from 'react';
 import { IconPlus } from '@tabler/icons-react';
 import { useNavigate } from 'react-router-dom';
 import { ActionIcon, Grid, Group, Stack } from '@mantine/core';
 import BreadcrumbsBar from '@/components/BreadcrumbsBar/BreadcrumbsBar';
 import TabSection from '@/components/TabSection/TabSection';
 import ActionCard from '../components/ActionCard/ActionCard';
-import { useEffect } from 'react';
 
 export default function CaseOverview() {
   useEffect(() => {
     document.title = 'Cases - Æther';
   }, []);
-  
+
   const navigate = useNavigate();
 
   const handleNewCaseClick = () => {

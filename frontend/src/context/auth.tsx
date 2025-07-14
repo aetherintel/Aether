@@ -1,4 +1,4 @@
-import { authFetch } from "@/utils/authFetch";
+import { authFetch } from '@/utils/authFetch';
 
 const apiUrl = import.meta.env.VITE_API_URL;
 
@@ -43,13 +43,16 @@ export const keycloakLogin = async (credentials: LoginCredentials): Promise<Logi
 export const keycloakRegister = async (
   credentials: RegisterCredentials
 ): Promise<LoginResponse> => {
-  const response = await authFetch(`${apiUrl ? apiUrl : 'http://localhost:8000/api'}/auth/register`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(credentials),
-  });
+  const response = await authFetch(
+    `${apiUrl ? apiUrl : 'http://localhost:8000/api'}/auth/register`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(credentials),
+    }
+  );
 
   if (!response.ok) {
     throw new Error('Registration failed');

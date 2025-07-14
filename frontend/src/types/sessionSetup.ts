@@ -67,7 +67,7 @@ export interface UseSessionSetupReturn {
   setupStep: SetupStep;
   currentSetup: CurrentSetup | null;
   error: string | null;
-  
+
   // Actions
   startSetup: (phone: string, sessionName: string) => Promise<StartSetupResponse>;
   verifyCode: (code: string) => Promise<VerifyCodeResponse>;

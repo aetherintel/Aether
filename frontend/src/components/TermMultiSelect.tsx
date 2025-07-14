@@ -1,12 +1,5 @@
-import {
-  CheckIcon,
-  Combobox,
-  Group,
-  Pill,
-  PillsInput,
-  useCombobox,
-} from '@mantine/core';
 import { useState } from 'react';
+import { CheckIcon, Combobox, Group, Pill, PillsInput, useCombobox } from '@mantine/core';
 
 interface TermMultiSelectProps {
   value: string[];
@@ -37,16 +30,11 @@ export function TermMultiSelect({
       setData((current) => [...current, search]);
       onChange([...value, search]);
     } else {
-      onChange(
-        value.includes(val)
-          ? value.filter((v) => v !== val)
-          : [...value, val]
-      );
+      onChange(value.includes(val) ? value.filter((v) => v !== val) : [...value, val]);
     }
   };
 
-  const handleRemove = (val: string) =>
-    onChange(value.filter((v) => v !== val));
+  const handleRemove = (val: string) => onChange(value.filter((v) => v !== val));
 
   const values = value.map((item) => (
     <Pill key={item} withRemoveButton onRemove={() => handleRemove(item)}>
@@ -55,9 +43,7 @@ export function TermMultiSelect({
   ));
 
   const options = data
-    .filter((item) =>
-      item.toLowerCase().includes(search.trim().toLowerCase())
-    )
+    .filter((item) => item.toLowerCase().includes(search.trim().toLowerCase()))
     .map((item) => (
       <Combobox.Option value={item} key={item} active={value.includes(item)}>
         <Group gap="sm">
@@ -68,11 +54,7 @@ export function TermMultiSelect({
     ));
 
   return (
-    <Combobox
-      store={combobox}
-      onOptionSubmit={handleSelect}
-      withinPortal={false}
-    >
+    <Combobox store={combobox} onOptionSubmit={handleSelect} withinPortal={false}>
       <Combobox.DropdownTarget>
         <PillsInput onClick={() => combobox.openDropdown()}>
           <Pill.Group>

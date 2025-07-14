@@ -1,20 +1,20 @@
 import { useEffect, useState } from 'react';
+import { IconEye, IconInfoCircle, IconMessage, IconUsersGroup } from '@tabler/icons-react';
 import { useParams } from 'react-router-dom';
-import { Loader, Text, Title, Grid, Card, Tabs, Stack, Group, Badge } from '@mantine/core';
+import { Badge, Card, Grid, Group, Loader, Stack, Tabs, Text, Title } from '@mantine/core';
 import BreadcrumbsBar from '@/components/BreadcrumbsBar/BreadcrumbsBar';
-import classes from './CaseFileDetail.module.css';
-import {
-  IconUsersGroup,
-  IconMessage,
-  IconEye,
-  IconInfoCircle,
-} from '@tabler/icons-react';
+import ChannelsTab from '@/components/ChannelsTab';
 import GraphVisualization from '@/components/GraphVisualization/GraphVisualization';
 import MessagesTab from '@/components/MessagesTab/MessagesTab';
 import TgChannelsCheckboxList from '@/components/TgChannelsCheckboxList';
-import ChannelsTab from '@/components/ChannelsTab';
 import { authFetch } from '@/utils/authFetch';
-import type { Channel, GroupedChannelStructure, OutputChannelStructure, OutputChannelEntry } from '../../types/caseFileDetail';
+import type {
+  Channel,
+  GroupedChannelStructure,
+  OutputChannelEntry,
+  OutputChannelStructure,
+} from '../../types/caseFileDetail';
+import classes from './CaseFileDetail.module.css';
 
 const apiUrl = import.meta.env.VITE_API_URL;
 
@@ -34,7 +34,7 @@ export function CaseFileDetail() {
 
   useEffect(() => {
     const fetchData = async () => {
-      setLoading(true);  // Start loading
+      setLoading(true); // Start loading
       try {
         const base = apiUrl ?? 'http://localhost:8000/api';
         const resCaseFile = await authFetch(`${base}/casefiles/${id}`);
@@ -42,34 +42,30 @@ export function CaseFileDetail() {
         setCaseFile(caseFileData);
 
         console.log(caseFileData);
-  
-        // ✅ STEP 1: Get case channels from PostgreSQL
+
         const initialChannels = caseFileData.tgchannels || [];
 
-        /*const channelsUrl = new URL(`${base}/messages/channels`);
-        channelsUrl.searchParams.set('usernames', initialChannels.join(','));
-        const channelsRes = await authFetch(channelsUrl.toString());
-        const tgChannelsData = await channelsRes.json();*/
-        
+
         if (initialChannels.length > 0) {
           try {
-            // ✅ STEP 2: Expand channels using RECOMMENDS relationships
             const expandUrl = new URL(`${base}/messages/channels/expand`);
             expandUrl.searchParams.set('channel_usernames', initialChannels.join(','));
             const expandRes = await authFetch(expandUrl.toString());
             const expandedChannels = await expandRes.json();
 
-            const uniqueChannels = [...new Set(
-              // @ts-ignore
-              Object.entries(expandedChannels).flatMap(([key, recommendations]) => [key, ...recommendations]).map(item => item.toLowerCase())
-            )];
-            
-            console.log(`[DEBUG] Expanded ${initialChannels.length} to ${expandedChannels.length} channels`);
-            
-            // ✅ STEP 3: Get channel details for expanded list
-            // IMPORTANT: Only fetch if we have channels to fetch
-            //const channelsToFetch = expandedChannels.length > 0 ? expandedChannels : initialChannels;
-            
+            const uniqueChannels = [
+              ...new Set(
+                Object.entries(expandedChannels)
+                // @ts-ignore
+                  .flatMap(([key, recommendations]) => [key, ...recommendations])
+                  .map((item) => item.toLowerCase())
+              ),
+            ];
+
+            console.log(
+              `[DEBUG] Expanded ${initialChannels.length} to ${expandedChannels.length} channels`
+            );
+
             const channelsUrl = new URL(`${base}/messages/channels`);
             channelsUrl.searchParams.set('usernames', uniqueChannels.join(','));
             const channelsRes = await authFetch(channelsUrl.toString());
@@ -80,64 +76,8 @@ export function CaseFileDetail() {
             setTgChannels(mergedChannelsData);
             setSelectedTgChannelIds(tgChannelsData.map((c: any) => c.channel_id));
 
-            /*if (channelsToFetch.length > 0) {
-              const channelsUrl = new URL(`${base}/messages/channels`);
-              channelsUrl.searchParams.set('usernames', channelsToFetch.join(','));
-              const channelsRes = await authFetch(channelsUrl.toString());
-              const tgChannelsData = await channelsRes.json();
-              
-              // Handle case where channels exist in case but aren't scraped yet
-              if (tgChannelsData.length === 0) {
-                console.log('[INFO] Channels not yet scraped, showing placeholder data');
-                // Create placeholder entries for unscraped channels
-                const placeholderChannels = channelsToFetch.map((username: string) => ({
-                  channel_id: `pending_${username}`,
-                  username,
-                  title: `${username} (pending scrape)`,
-                  message_count: 0,
-                  last_message_date: null,
-                  is_scraped: false,
-                  scraped_at: null,
-                }));
-                setTgChannels(placeholderChannels);
-                setSelectedTgChannelIds([]);  // Don't select unscraped channels
-              } else {
-                console.log(tgChannelsData);
-                setTgChannels(tgChannelsData);
-                setSelectedTgChannelIds(tgChannelsData.map((c: any) => c.channel_id));
-              }
-            } else {
-              // No channels found after expansion
-              setTgChannels([]);
-              setSelectedTgChannelIds([]);
-            }*/
-            
           } catch (expandError) {
             console.warn('Failed to expand channels, using initial list:', expandError);
-            
-            // Fallback: fetch details for initial channels only
-            /*const channelsUrl = new URL(`${base}/messages/channels`);
-            channelsUrl.searchParams.set('usernames', initialChannels.join(','));
-            const channelsRes = await authFetch(channelsUrl.toString());
-            const tgChannelsData = await channelsRes.json();
-            
-            // Handle empty response for unscraped channels
-            if (tgChannelsData.length === 0) {
-              const placeholderChannels = initialChannels.map((username: string) => ({
-                channel_id: `pending_${username}`,
-                username,
-                title: `${username} (pending scrape)`,
-                message_count: 0,
-                last_message_date: null,
-                is_scraped: false,
-                scraped_at: null,
-              }));
-              setTgChannels(placeholderChannels);
-              setSelectedTgChannelIds([]);
-            } else {
-              setTgChannels(tgChannelsData);
-              setSelectedTgChannelIds(tgChannelsData.map((c: any) => c.channel_id));
-            }*/
           }
         } else {
           // No channels in case
@@ -145,15 +85,15 @@ export function CaseFileDetail() {
           setSelectedTgChannelIds([]);
         }
 
-        document.title = `${caseFileData.title} - Æther`; 
+        document.title = `${caseFileData.title} - Æther`;
       } catch (error) {
         console.error('Error fetching case data:', error);
         // Handle error appropriately
       } finally {
-        setLoading(false);  // Always stop loading
+        setLoading(false); // Always stop loading
       }
     };
-    
+
     fetchData();
   }, [id]);
 
@@ -165,7 +105,7 @@ export function CaseFileDetail() {
 
   function formatDate(dateString: string | null): string {
     if (!dateString) {
-      return "No valid date provided";
+      return 'No valid date provided';
     }
     const date = new Date(dateString);
     return date.toLocaleString();
@@ -229,7 +169,11 @@ export function CaseFileDetail() {
                 <div className={classes.inner}>
                   <Stack>
                     <Text>Telegram Channels:</Text>
-                    <TgChannelsCheckboxList structuredChannels={structuredChannels} selectedTgChannelIds={selectedTgChannelIds} setSelectedTgChannelIds={setSelectedTgChannelIds} />
+                    <TgChannelsCheckboxList
+                      structuredChannels={structuredChannels}
+                      selectedTgChannelIds={selectedTgChannelIds}
+                      setSelectedTgChannelIds={setSelectedTgChannelIds}
+                    />
                   </Stack>
                 </div>
               </Card>
@@ -256,15 +200,24 @@ export function CaseFileDetail() {
                 </Tabs.List>
 
                 <Tabs.Panel value="messages" mt="md">
-                  <MessagesTab selectedTgChannelIds={selectedTgChannelIds} searchQuery={searchQuery} setSearchQuery={setSearchQuery} onUpdateGraph={updateGraph} />
+                  <MessagesTab
+                    selectedTgChannelIds={selectedTgChannelIds}
+                    searchQuery={searchQuery}
+                    setSearchQuery={setSearchQuery}
+                    onUpdateGraph={updateGraph}
+                  />
                 </Tabs.Panel>
 
                 <Tabs.Panel value="scraper" mt="md">
-                  <ChannelsTab caseId={id!} caseFile={caseFile} structuredChannels={structuredChannels} />
+                  <ChannelsTab
+                    caseId={id!}
+                    caseFile={caseFile}
+                    structuredChannels={structuredChannels}
+                  />
                 </Tabs.Panel>
 
                 <Tabs.Panel value="visuals" mt="md">
-                  <GraphVisualization 
+                  <GraphVisualization
                     selectedChannelIds={selectedTgChannelIds}
                     searchQuery={searchQuery}
                     user={graphUser}
@@ -283,11 +236,11 @@ export function CaseFileDetail() {
                           {caseFile.postCount} messages
                         </Badge>
                       </Group>
-                      
+
                       <Text size="md" c="dimmed" lineClamp={3}>
                         {caseFile.description}
                       </Text>
-                      
+
                       <Group gap="xs">
                         <Text size="sm" fw={500}>
                           Created:
