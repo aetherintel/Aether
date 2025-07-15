@@ -69,7 +69,7 @@ def public_route():
     return {"message": "Anyone can access this"}
 
 @router.get("/user")
-def user_route(user=Depends(has_role(["user", "admin", "default-roles-hottopics"]))):
+def user_route(user=Depends(has_role(["user", "admin", "default-roles-aether"]))):
     return {"message": f"Hello, {user['preferred_username']}! You are a user."}
 
 @router.get("/admin")
@@ -145,12 +145,12 @@ def send_verification_email(user_id: str, admin_token: str):
     }
     
     # FIX: Container-interne URL für Admin API
-    email_url = f"{os.getenv('KEYCLOAK_BASE_URL')}/admin/realms/HotTopics/users/{user_id}/execute-actions-email"
+    email_url = f"{os.getenv('KEYCLOAK_BASE_URL')}/admin/realms/Aether/users/{user_id}/execute-actions-email"
 
     # Query Parameter für Redirect (EXTERN URL!)
     params = {
         # TODO: redirect URL einfügen
-        "redirect_uri": os.getenv("FRONTEND_URL_2", "http://localhost/"),
+        "redirect_uri": os.getenv("FRONTEND_URL", "http://localhost/"),
         "client_id": os.getenv("KEYCLOAK_CLIENT_ID")
     }
     
@@ -170,7 +170,7 @@ def register(data: RegisterRequest):
         "Authorization": f"Bearer {token}",
         "Content-Type": "application/json"
     }
-    user_url = f"{os.getenv('KEYCLOAK_BASE_URL')}/admin/realms/HotTopics/users"
+    user_url = f"{os.getenv('KEYCLOAK_BASE_URL')}/admin/realms/Aether/users"
     
     # User payload MIT Email Verification
     user_payload = {
@@ -213,7 +213,7 @@ def resend_verification(email_address: str):  # Parameter umbenannt
     headers = {"Authorization": f"Bearer {token}"}
     
     # User by email finden - KORRIGIERT!
-    users_url = f"{os.getenv('KEYCLOAK_BASE_URL')}/admin/realms/HotTopics/users?email={email_address}"
+    users_url = f"{os.getenv('KEYCLOAK_BASE_URL')}/admin/realms/Aether/users?email={email_address}"
     response = requests.get(users_url, headers=headers)
     
     if response.status_code == 200 and response.json():
@@ -221,12 +221,12 @@ def resend_verification(email_address: str):  # Parameter umbenannt
         user_id = user['id']
         
         # Required Actions setzen und Email senden
-        user_url = f"{os.getenv('KEYCLOAK_BASE_URL')}/admin/realms/HotTopics/users/{user_id}"
+        user_url = f"{os.getenv('KEYCLOAK_BASE_URL')}/admin/realms/Aether/users/{user_id}"
         update_payload = {"requiredActions": ["VERIFY_EMAIL"]}
         requests.put(user_url, headers=headers, json=update_payload)
         
         # Email senden
-        email_url = f"{os.getenv('KEYCLOAK_BASE_URL')}/admin/realms/HotTopics/users/{user_id}/execute-actions-email"
+        email_url = f"{os.getenv('KEYCLOAK_BASE_URL')}/admin/realms/Aether/users/{user_id}/execute-actions-email"
         email_response = requests.put(email_url, headers=headers, json=["VERIFY_EMAIL"])
         
         if email_response.status_code == 204:
