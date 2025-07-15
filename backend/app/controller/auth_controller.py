@@ -150,7 +150,7 @@ def send_verification_email(user_id: str, admin_token: str):
     # Query Parameter für Redirect (EXTERN URL!)
     params = {
         # TODO: redirect URL einfügen
-        "redirect_uri": os.getenv("FRONTEND_URL_2", "http://localhost/"),
+        "redirect_uri": os.getenv("FRONTEND_URL", "http://localhost/"),
         "client_id": os.getenv("KEYCLOAK_CLIENT_ID")
     }
     
