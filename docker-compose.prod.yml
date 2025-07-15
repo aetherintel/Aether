@@ -38,7 +38,7 @@ services:
       KC_HOSTNAME: xn--ther-uoa.tech
       KC_PROXY: edge
 
-      FRONTEND_URL: https://æther.tech/
+      FRONTEND_URL: https://xn--ther-uoa.tech/
     volumes:
       - keycloak_data:/opt/keycloak/data
       - ./keycloak/exports:/opt/keycloak/data/import
@@ -61,7 +61,7 @@ services:
       KEYCLOAK_ADMIN_CLIENT_SECRET: ${KEYCLOAK_ADMIN_CLIENT_SECRET}
       KEYCLOAK_CLIENT_ID: HotTopics
       KEYCLOAK_CLIENT_SECRET: ${KEYCLOAK_CLIENT_SECRET}
-      FRONTEND_URL: https://æther.tech/
+      FRONTEND_URL: https://xn--ther-uoa.tech/
       POSTGRES_HOST: postgres
       POSTGRES_PORT: 5432
       POSTGRES_DB: telegramdb
