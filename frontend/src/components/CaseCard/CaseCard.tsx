@@ -42,6 +42,7 @@ export default function CaseCard({
   ));
 
   const thumbnails = [...new Set(caseFile.thumbnails)]
+    .sort(() => 0.5 - Math.random())
     .slice(0, 4) // Limit to first 4 items
     .map((thumbnail) => (
       <Image
