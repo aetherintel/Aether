@@ -249,7 +249,7 @@ async def read_casefile(
         messages = await get_messages_with_media(
             owner_id=owner,
             channel_ids=channel_ids,
-            limit=20,
+            limit=100,
         )
 
         messages_with_media = []
