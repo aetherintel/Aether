@@ -282,7 +282,7 @@ const TelegramScraper: React.FC<TelegramScraperProps> = ({ case_id }) => {
       const addChannelToCase = async (caseId: number, channelUsername: string) => {
         try {
           const base = apiUrl ?? 'http://localhost:8000/api';
-          const response = await authFetch(`${base}/api/casefiles/${caseId}/add-channels`, {
+          const response = await authFetch(`${base}/casefiles/${caseId}/add-channels`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
