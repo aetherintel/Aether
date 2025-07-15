@@ -504,7 +504,7 @@ async def get_messages_with_media(
                ch.channel_id AS channel_id,
                ch.username   AS channel_username,
                reply.mid     AS reply_to_id
-        ORDER BY m.date DESC
+        ORDER BY m.date ASC
         LIMIT $limit
         """
 
@@ -527,23 +527,28 @@ async def get_messages_with_media(
 
             media_path = r["media_path"]
             is_image = False
+            is_downloaded = False
             if media_path:
                 file_extension = media_path.lower().split('.')[-1] if '.' in media_path else ''
                 is_image = f'.{file_extension}' in IMAGE_EXTENSIONS
+                if is_image:
+                    print(f"[CHECK DIR] {os.getcwd()}shared/media/{media_path.split('/media/')[-1]} exists {os.path.exists(os.getcwd() + 'shared/media/' + media_path.split('/media/')[-1])} ")
+                    is_downloaded = os.path.exists(os.getcwd() + 'shared/media/' + media_path.split('/media/')[-1])
 
-            messages.append(
-                {
-                    "message_id": r["message_id"],
-                    "text": r["text"],
-                    "date": r["date"],
-                    "media_type": r["media_type"],
-                    "media_path": media_path,
-                    "is_image": is_image,
-                    "reply_to_id": r["reply_to_id"],
-                    "author": {"id": r["user_id"], "name": author_name},
-                    "channel": {"id": r["channel_id"], "username": r["channel_username"]},
-                }
-            )
+            if is_downloaded:
+                messages.append(
+                    {
+                        "message_id": r["message_id"],
+                        "text": r["text"],
+                        "date": r["date"],
+                        "media_type": r["media_type"],
+                        "media_path": media_path,
+                        "is_image": is_image,
+                        "reply_to_id": r["reply_to_id"],
+                        "author": {"id": r["user_id"], "name": author_name},
+                        "channel": {"id": r["channel_id"], "username": r["channel_username"]},
+                    }
+                )
         return messages
 
 async def get_case_channels_with_recommendations(channel_usernames: List[str], owner_id: str = None) -> Dict[str, List[str]]:
