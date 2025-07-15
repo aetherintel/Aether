@@ -627,7 +627,7 @@
     "alwaysDisplayInConsole" : false,
     "clientAuthenticatorType" : "client-secret",
     "secret" : "IVe53dL7kdbCLz8rpepuDEr1KaZnvNx0",
-    "redirectUris" : [ "https://aether.tech/*", "http://localhost/*", "http://localhost:8000/*", "http://localhost:5713/*" ],
+    "redirectUris" : [ "https://xn--ther-uoa.tech/*", "https://aether.tech/*", "http://localhost/*", "http://localhost:8000/*", "http://localhost:5713/*" ],
     "webOrigins" : [ "http://localhost:8000" ],
     "notBefore" : 0,
     "bearerOnly" : false,
@@ -1262,12 +1262,12 @@
   },
   "smtpServer" : {
     "replyToDisplayName" : "",
-    "starttls" : "false",
+    "starttls" : "true",
     "auth" : "true",
     "envelopeFrom" : "",
-    "ssl" : "true",
+    "ssl" : "false",
     "password" : "jkni ztpm aurz wpuk",
-    "port" : "465",
+    "port" : "587",
     "host" : "smtp.gmail.com",
     "replyTo" : "",
     "from" : "aether.hottopics@gmail.com",
@@ -1313,7 +1313,7 @@
       "subType" : "authenticated",
       "subComponents" : { },
       "config" : {
-        "allowed-protocol-mapper-types" : [ "oidc-address-mapper", "oidc-usermodel-attribute-mapper", "saml-user-attribute-mapper", "saml-user-property-mapper", "oidc-sha256-pairwise-sub-mapper", "oidc-full-name-mapper", "oidc-usermodel-property-mapper", "saml-role-list-mapper" ]
+        "allowed-protocol-mapper-types" : [ "oidc-usermodel-attribute-mapper", "oidc-usermodel-property-mapper", "saml-user-attribute-mapper", "saml-role-list-mapper", "oidc-sha256-pairwise-sub-mapper", "oidc-address-mapper", "saml-user-property-mapper", "oidc-full-name-mapper" ]
       }
     }, {
       "id" : "08013a7b-4baf-46f9-bb3a-15b9e37f5f49",
@@ -1331,7 +1331,7 @@
       "subType" : "anonymous",
       "subComponents" : { },
       "config" : {
-        "allowed-protocol-mapper-types" : [ "oidc-usermodel-property-mapper", "saml-role-list-mapper", "saml-user-attribute-mapper", "oidc-address-mapper", "oidc-usermodel-attribute-mapper", "oidc-full-name-mapper", "oidc-sha256-pairwise-sub-mapper", "saml-user-property-mapper" ]
+        "allowed-protocol-mapper-types" : [ "saml-role-list-mapper", "oidc-usermodel-attribute-mapper", "oidc-sha256-pairwise-sub-mapper", "oidc-address-mapper", "oidc-full-name-mapper", "saml-user-property-mapper", "oidc-usermodel-property-mapper", "saml-user-attribute-mapper" ]
       }
     }, {
       "id" : "7edd8afe-d79c-4ed9-9643-ec744b3e3dc5",
