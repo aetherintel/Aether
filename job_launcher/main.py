@@ -70,7 +70,7 @@ def launch_similarity(req: SimilarRequest, request: Request):
         else "aether_default"
     )
 
-    session_string, user_info = load_string_session(req.tg_session)
+    session_string, user_info = load_string_session(req.tg_session, req.owner_id)
     container = docker_client.containers.run(
         image=image_name,
         name=f"similar_{uuid.uuid4().hex[:6]}",
@@ -120,7 +120,7 @@ def launch_scraper(req: ScrapeRequest, request: Request):
             detail=f"Maximum recursion depth ({MAX_RECURSION_DEPTH}) exceeded"
         )
 
-    session_string, user_info = load_string_session(req.tg_session)
+    session_string, user_info = load_string_session(req.tg_session, req.owner_id)
 
     print(f"Launching {req.mode} job for: {req.channels} with session: {req.tg_session} (depth: {req.depth})")
     
@@ -417,9 +417,9 @@ def remove_container(container_id: str, req: ContainerControlRequest, request: R
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
 
-def load_string_session(session_name: str) -> tuple:
+def load_string_session(session_name: str, owner_id: str) -> tuple:
     """StringSession aus JSON-Datei"""
-    session_file = SESSION_DIR / f"{session_name}.json"
+    session_file = SESSION_DIR / f"user_{owner_id}/{session_name}.json"
     if not session_file.exists():
         return None, None
     
