@@ -118,7 +118,19 @@ ENVIRONMENT=dev
 
 ## 📘 User guide
 
-- TODO
+**Getting started:**
+
+1. Register or login here: [https://æther.tech](https://æther.tech) or if running locally here: [http://localhost](https://localhost)
+2. Go to `Settings` and create a new telegram session
+3. Enter your phone number and type in your `2FA-Code` that you will recieve on your `Telegram-App`
+4. Switch to `Cases` and create a `new case` using the corresponding button
+5. Enter a name, category and description
+6. In the next step enter all the names of `Telegram channels or groups` you want to monitor
+7. After creating a new case scrapers will automatically start and monitor your selected channels
+8. Now you can start analysing the data, while new messages will be scraped in the backgroud
+9. You can also add or modify the `widgets` on your `dashboard` to e.g. focus on specific keywords across cases and channels
+
+- TODO...
 
 ![Demo](/frontend/src/assets/images/demo.png)
 ![Demo Dark](/frontend/src/assets/images/demo_dark.png)
