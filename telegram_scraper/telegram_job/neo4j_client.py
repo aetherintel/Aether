@@ -91,40 +91,64 @@ async def save_message(channel_id, username, message, sender, media_path=None):
 async def _save_message(tx, channel_id, username, message, sender, media_path):
     cypher = """
     MERGE (ch:Channel {channel_id:$cid, owner_id:$owner})
-      ON CREATE SET ch.username = $uname
-
-    MERGE (u:User {user_id:$uid, owner_id:$owner})
-      ON CREATE SET u.first_name=$fname, u.last_name=$lname, u.username=$uusername
-
+    ON CREATE SET ch.username = $uname
+    
+    // Create message first
     MERGE (m:Message {mid:$mid, owner_id:$owner})
-      ON CREATE SET m.date=datetime($date), m.text=$text,
-                    m.media_type=$mtype, m.media_path=$mpath
-
-    // Simplified relationships - NO owner_id properties
+    ON CREATE SET m.date=datetime($date), m.text=$text,
+                  m.media_type=$mtype, m.media_path=$mpath
+    
+    // Always create channel-message relationship
     MERGE (ch)-[:HAS_MESSAGE]->(m)
-    MERGE (u)-[:SENT]->(m)
-    MERGE (u)-[:PART_OF]->(ch)
-
+    
+    // Only create user and relationships if sender exists
+    FOREACH (_ IN CASE WHEN $uid IS NOT NULL THEN [1] ELSE [] END |
+        MERGE (u:User {user_id:$uid, owner_id:$owner})
+        ON CREATE SET u.first_name=$fname, u.last_name=$lname, u.username=$uusername
+        MERGE (u)-[:SENT]->(m)
+        MERGE (u)-[:PART_OF]->(ch)
+    )
+    
+    // Handle reply relationships
     FOREACH (_ IN CASE WHEN $reply_to IS NOT NULL THEN [1] ELSE [] END |
-        MERGE (rm:Message {mid:$cid + "-" + $reply_to, owner_id:$owner})
+        MERGE (rm:Message {mid:$reply_to_mid, owner_id:$owner})
         MERGE (m)-[:REPLY_TO]->(rm)
     )
     """
+    
+    # Safely extract sender information
+    sender_id = None
+    first_name = None
+    last_name = None
+    sender_username = None
+    
+    if sender is not None:
+        sender_id = getattr(sender, 'id', None)
+        first_name = getattr(sender, 'first_name', None)
+        last_name = getattr(sender, 'last_name', None)
+        sender_username = getattr(sender, 'username', None)
+    
+    # Handle reply_to_msg_id
+    reply_to_mid = None
+    if message.reply_to_msg_id:
+        reply_to_mid = f"{channel_id}-{message.reply_to_msg_id}"
+    
     await tx.run(
         cypher,
         owner=OWNER_ID,
         cid=str(channel_id),
         uname=username,
-        uid=sender.id or None,
-        fname=getattr(sender, "first_name", None),
-        lname=getattr(sender, "last_name", None),
-        uusername=getattr(sender, "username", None),
+        uid=sender_id,
+        fname=first_name,
+        lname=last_name,
+        uusername=sender_username,
         mid=f"{channel_id}-{message.id}",
         date=message.date.isoformat(),
-        text=message.message,
+        text=message.message or "",  # Handle None message text
         mtype=message.media.__class__.__name__ if message.media else None,
         mpath=media_path,
         reply_to=message.reply_to_msg_id,
+        reply_to_mid=reply_to_mid,
     )
 
 

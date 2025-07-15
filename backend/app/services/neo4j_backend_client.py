@@ -10,7 +10,6 @@ from model.message_model import Author, Channel, Message
 from datetime import datetime
 from neo4j.time import DateTime as Neo4jDateTime
 
-
 load_dotenv()
 
 driver = AsyncGraphDatabase.driver(
