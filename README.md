@@ -4,6 +4,9 @@
 
 Aether is an OSINT (Open Source Intelligence) web application for creating and managing Telegram-based monitoring projects. It enables users to define cases, add and track Telegram channels/groups, collect messages automatically via scrapers, and analyze the data using full-text search and Neo4j-based graph visualizations.
 
+![Demo](/frontend/src/assets/images/demo.png)
+
+
 ## 🔧 Prerequisites
 
 - [Docker](https://www.docker.com/get-started)
@@ -130,72 +133,3 @@ ENVIRONMENT=dev
 8. Now you can start analysing the data, while new messages will be scraped in the backgroud
 9. You can also add or modify the `widgets` on your `dashboard` to e.g. focus on specific keywords across cases and channels
 
-- TODO...
-
-![Demo](/frontend/src/assets/images/demo.png)
-![Demo Dark](/frontend/src/assets/images/demo_dark.png)
-
-# 🛡️ Backend Setup – FastAPI + Keycloak + PostgreSQL
-
-Dieses Backend verwendet FastAPI, Keycloak für Authentifizierung und PostgreSQL als Datenbank. Es ist vollständig containerisiert über Docker Compose und unterstützt lokale Entwicklung sowie Deployment via CI/CD.
-
-
-🚀 Lokaler Start (inkl. Realm Import)
-```
-docker compose down -v  # -v entfernt bestehende Volumes → wichtig für erstmaligen Realm-Import
-docker compose --env-file .env.dev up --build -d # --build stellt sicher, dass aktuelle Images verwendet werden
-```
-    
-
-
-## Telegram Scraper
-### Doku von diesem Github Repo geklaut: https://github.com/unnohwn/telegram-scraper
-
-Getting Telegram API Credentials 🔑
-
-Visit https://my.telegram.org/auth
-Log in with your phone number
-Click on "API development tools"
-Fill in the form:
-App title: Your app name
-Short name: Your app short name
-Platform: Can be left as "Desktop"
-Description: Brief description of your app
-Click "Create application"
-You'll receive:
-api_id: A number
-api_hash: A string of letters and numbers
-Keep these credentials safe, you'll need them to run the script!
-
-### In Swagger UI mit USER und Passwort Authentifizieren -> Dann können similarity search und Scraper gestartet werden.
-### Similarity macht eine Abfrage und schmeißt das Ergebnis in die NEO4j
-### Scraper bleibt solange als Container am Leben bis er gekillt wird ...
-#### TODO: Parameter für SCraper wie lange er am Leben bleibt
-
-### Troubleshooting
-Temporär: Sollte bei Starten des Scrapers folgender Fehler auftreten:
-```
-docker.errors.ImageNotFound: 404 Client Error for http+docker://localhost/v1.48/images/create?tag=latest&fromImage=telegram-job: Not Found ("pull access denied for telegram-job, repository does not exist or may require 'docker login'") 
-```
-
-Muss einmalig das "telegram-job" Image gebuilded werden:
-```
-cd telegram_scraper
-docker build -t telegram-job:latest .
-```
-
-## 🕵️‍♂️ Telegram Scraper
-
-### ✅ Features
-
-- Supports multiple `MODE`s:
-  - `similar` – recommends similar channels based on Telegram's API and optionally writes to Neo4j.
-  - `scrape` – scrapes historical + live messages.
-  - `full` – scrapes + finds similar channels + scrapes those too.
-  - `live` – only listens for new messages (no backfill).
-- Recursive scraping through invite links.
-- Channels are only marked as `scraped` if actual messages are saved.
-- Optional flag `SKIP_HISTORY=1` to ignore past messages and only do live tracking.
-- Uses containerized scraper jobs triggered dynamically via `job-launcher`.
-
----
