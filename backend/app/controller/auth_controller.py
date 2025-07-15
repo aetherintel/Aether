@@ -147,7 +147,7 @@ def send_verification_email(user_id: str, admin_token: str):
     # FIX: Container-interne URL für Admin API
     email_url = f"{os.getenv('KEYCLOAK_BASE_URL')}/admin/realms/HotTopics/users/{user_id}/execute-actions-email"
     
-    print(f"Redirect_uri: {os.getenv("FRONTEND_URL", "http://localhost/")}")
+    print(f"Redirect_uri: {os.getenv('FRONTEND_URL', 'http://localhost/')}")
 
     # Query Parameter für Redirect (EXTERN URL!)
     params = {
