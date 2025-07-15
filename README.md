@@ -69,14 +69,14 @@ KEYCLOAK_ADMIN=admin
 KEYCLOAK_ADMIN_PASSWORD=admin
 
 KEYCLOAK_HOSTNAME=keycloak
-KEYCLOAK_CLIENT_ID=HotTopics
+KEYCLOAK_CLIENT_ID=Aether
 KEYCLOAK_CLIENT_SECRET=IVe53dL7kdbCLz8rpepuDEr1KaZnvNx0
 KEYCLOAK_ADMIN_CLIENT_ID=backend-admin-client
 KEYCLOAK_ADMIN_CLIENT_SECRET=F0DVD1k2c9N6IBRxbhvCsHaUpQbXltHz
-SWAGGER_TOKEN_URL=http://keycloak:8080/realms/HotTopics/protocol/openid-connect/token
+SWAGGER_TOKEN_URL=http://keycloak:8080/realms/Aether/protocol/openid-connect/token
 KEYCLOAK_BASE_URL=http://keycloak:8080
-KEYCLOAK_URL=http://localhost:8080/realms/HotTopics
-KEYCLOAK_INTERNAL_URL=http://keycloak:8080/realms/HotTopics
+KEYCLOAK_URL=http://localhost:8080/realms/Aether
+KEYCLOAK_INTERNAL_URL=http://keycloak:8080/realms/Aether
 
 TG_API_ID=25718412
 TG_API_HASH=ac7d797b83488d421bfe2eed87269481

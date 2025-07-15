@@ -1,6 +1,6 @@
 {
   "id" : "77f9ba14-49a8-41e1-98a5-8180d6630f69",
-  "realm" : "HotTopics",
+  "realm" : "Aether",
   "notBefore" : 0,
   "defaultSignatureAlgorithm" : "RS256",
   "revokeRefreshToken" : false,
@@ -55,7 +55,7 @@
       "attributes" : { }
     }, {
       "id" : "3368f35b-ef22-4473-8b0c-96ccbcae5ec8",
-      "name" : "default-roles-hottopics",
+      "name" : "default-roles-aether",
       "description" : "${role_default-roles}",
       "composite" : true,
       "composites" : {
@@ -258,7 +258,7 @@
         "containerId" : "27dde22c-871e-422f-97bb-41abbf617d03",
         "attributes" : { }
       } ],
-      "HotTopics" : [ ],
+      "Aether" : [ ],
       "account" : [ {
         "id" : "e517c99b-915e-4c56-bbaf-5abbc280ceda",
         "name" : "view-groups",
@@ -339,7 +339,7 @@
   "groups" : [ ],
   "defaultRole" : {
     "id" : "3368f35b-ef22-4473-8b0c-96ccbcae5ec8",
-    "name" : "default-roles-hottopics",
+    "name" : "default-roles-aether",
     "description" : "${role_default-roles}",
     "composite" : true,
     "clientRole" : false,
@@ -388,7 +388,7 @@
     "credentials" : [ ],
     "disableableCredentialTypes" : [ ],
     "requiredActions" : [ ],
-    "realmRoles" : [ "default-roles-hottopics" ],
+    "realmRoles" : [ "default-roles-aether" ],
     "clientRoles" : {
       "realm-management" : [ "manage-users", "view-users" ]
     },
@@ -410,12 +410,12 @@
     "clientId" : "account",
     "name" : "${client_account}",
     "rootUrl" : "${authBaseUrl}",
-    "baseUrl" : "/realms/HotTopics/account/",
+    "baseUrl" : "/realms/Aether/account/",
     "surrogateAuthRequired" : false,
     "enabled" : true,
     "alwaysDisplayInConsole" : false,
     "clientAuthenticatorType" : "client-secret",
-    "redirectUris" : [ "/realms/HotTopics/account/*" ],
+    "redirectUris" : [ "/realms/Aether/account/*" ],
     "webOrigins" : [ ],
     "notBefore" : 0,
     "bearerOnly" : false,
@@ -440,12 +440,12 @@
     "clientId" : "account-console",
     "name" : "${client_account-console}",
     "rootUrl" : "${authBaseUrl}",
-    "baseUrl" : "/realms/HotTopics/account/",
+    "baseUrl" : "/realms/Aether/account/",
     "surrogateAuthRequired" : false,
     "enabled" : true,
     "alwaysDisplayInConsole" : false,
     "clientAuthenticatorType" : "client-secret",
-    "redirectUris" : [ "/realms/HotTopics/account/*" ],
+    "redirectUris" : [ "/realms/Aether/account/*" ],
     "webOrigins" : [ ],
     "notBefore" : 0,
     "bearerOnly" : false,
@@ -616,7 +616,7 @@
     "optionalClientScopes" : [ "address", "phone", "offline_access", "microprofile-jwt" ]
   }, {
     "id" : "fcaf9722-2079-4e02-9f49-ef5e2b7228de",
-    "clientId" : "HotTopics",
+    "clientId" : "Aether",
     "name" : "",
     "description" : "",
     "rootUrl" : "http://localhost:8000",
@@ -686,12 +686,12 @@
     "clientId" : "security-admin-console",
     "name" : "${client_security-admin-console}",
     "rootUrl" : "${authAdminUrl}",
-    "baseUrl" : "/admin/HotTopics/console/",
+    "baseUrl" : "/admin/Aether/console/",
     "surrogateAuthRequired" : false,
     "enabled" : true,
     "alwaysDisplayInConsole" : false,
     "clientAuthenticatorType" : "client-secret",
-    "redirectUris" : [ "/admin/HotTopics/console/*" ],
+    "redirectUris" : [ "/admin/Aether/console/*" ],
     "webOrigins" : [ "+" ],
     "notBefore" : 0,
     "bearerOnly" : false,
@@ -802,7 +802,7 @@
   }, {
     "id" : "0645ea57-b794-445b-bc47-fe6cc1e156ac",
     "name" : "api-audience",
-    "description" : "Adds HotTopics as audience",
+    "description" : "Adds Aether as audience",
     "protocol" : "openid-connect",
     "attributes" : {
       "include.in.token.scope" : "false",
@@ -812,12 +812,12 @@
     },
     "protocolMappers" : [ {
       "id" : "436a2201-ff79-4b3b-a59e-c121ec64a17c",
-      "name" : "audience-HotTopics",
+      "name" : "audience-Aether",
       "protocol" : "openid-connect",
       "protocolMapper" : "oidc-audience-mapper",
       "consentRequired" : false,
       "config" : {
-        "included.client.audience" : "HotTopics",
+        "included.client.audience" : "Aether",
         "introspection.token.claim" : "true",
         "userinfo.token.claim" : "true",
         "id.token.claim" : "true",
