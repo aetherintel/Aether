@@ -433,7 +433,6 @@ const MessagesTab: React.FC<MessagesTabProps> = ({
             size="lg"
             onClick={handleRefresh}
             loading={isRefreshing}
-            disabled={selectedTgChannelIds.length === 0}
           >
             <IconRefresh size={18} />
           </ActionIcon>
