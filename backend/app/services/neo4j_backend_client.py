@@ -3,12 +3,15 @@ from contextlib import asynccontextmanager
 import os
 from datetime import datetime
 from http.client import HTTPException
-from typing import AsyncIterator, Dict, List, Optional
+from typing import AsyncIterator, Dict, List, Optional, OrderedDict
 from neo4j import AsyncGraphDatabase
 from dotenv import load_dotenv
 from model.message_model import Author, Channel, Message
 from datetime import datetime
 from neo4j.time import DateTime as Neo4jDateTime
+from collections import OrderedDict
+from typing import List, Dict
+
 
 load_dotenv()
 
@@ -284,8 +287,9 @@ async def get_channel_list(owner_id: str | None):
           AND m.text IS NOT NULL
         WITH ch, count(m) AS msg_count, max(m.date) AS latest
         WHERE msg_count > 0
-        OPTIONAL MATCH (other:Channel)-[:RECOMMENDS]->(ch)
-        WHERE $ownerId IS NULL OR other.owner_id = $ownerId
+         OPTIONAL MATCH (other:Channel)-[:RECOMMENDS]->(ch)
+        WHERE ($ownerId IS NULL OR other.owner_id = $ownerId)
+            AND (other.channel_id = ch.channel_id OR other.username = ch.username)
         RETURN
             ch.channel_id        AS channel_id,
             coalesce(ch.username, '') AS username,
@@ -329,12 +333,13 @@ async def get_channel_by_id(channel_id: str, owner_id: str | None):
         WHERE ($ownerId IS NULL OR m.owner_id = $ownerId)
           AND m.date IS NOT NULL
 
-        OPTIONAL MATCH (ch)-[:RECOMMENDS]->(rec:Channel)
-        WHERE $ownerId IS NULL OR rec.owner_id = $ownerId
+          OPTIONAL MATCH (ch)-[:RECOMMENDS]->(rec:Channel)
+  WHERE ($ownerId IS NULL OR rec.owner_id = $ownerId)
+    AND (rec.channel_id = ch.channel_id OR rec.username = ch.username)
 
-        OPTIONAL MATCH (other:Channel)
-              WHERE ($ownerId IS NULL OR other.owner_id = $ownerId)
-              AND   (other)-[:RECOMMENDS]->(ch)
+  OPTIONAL MATCH (other:Channel)-[:RECOMMENDS]->(ch)
+  WHERE ($ownerId IS NULL OR other.owner_id = $ownerId)
+    AND (other.channel_id = ch.channel_id OR other.username = ch.username)
 
         RETURN
             ch.channel_id             AS channel_id,
@@ -375,7 +380,10 @@ async def get_user_channels(user_id: int, owner_id: str | None):
             MATCH (u:User {user_id:$user_id, owner_id:$ownerId})-[:PART_OF]->(ch:Channel)
             OPTIONAL MATCH (ch)-[:HAS_MESSAGE]->(m:Message)
             WITH ch, count(m) AS msg_count, max(m.date) AS latest
-            OPTIONAL MATCH (other:Channel {owner_id:$ownerId})-[:RECOMMENDS]->(ch)
+              OPTIONAL MATCH (other:Channel)-[:RECOMMENDS]->(ch)
+  WHERE ($ownerId IS NULL OR other.owner_id = $ownerId)
+    AND (other.channel_id = ch.channel_id OR other.username = ch.username)
+
             RETURN ch.channel_id  AS channel_id,
                    ch.username    AS username,
                    ch.title       AS title,
@@ -551,51 +559,60 @@ async def get_messages_with_media(
                 )
         return messages
 
-async def get_case_channels_with_recommendations(channel_usernames: List[str], owner_id: str = None) -> Dict[str, List[str]]:
+
+async def get_case_channels_with_recommendations(
+    channel_usernames: List[str],
+    owner_id: str | None = None
+) -> Dict[str, List[str]]:
     """
-    Get channels and their recommendations from Neo4j
-    Now with case-insensitive matching!
+    Returns an OrderedDict mapping each input channel (de-duplicated) to the
+    list of OTHER channels it recommends.  Channels with zero recommendations
+    are omitted entirely.
     """
+    # 1) collapse duplicates while preserving order
+    unique = list(OrderedDict.fromkeys(channel_usernames))
+    lowercase = [u.lower() for u in unique]
+
     try:
         async with get_session(owner_id) as session:
-            # Convert input usernames to lowercase for matching
-            lowercase_usernames = [u.lower() for u in channel_usernames]
-            
-            query = """
-            MATCH (c:Channel)-[:RECOMMENDS]-(recommended:Channel)
-            WHERE c.channel_id IN $usernames
-            AND ($ownerId IS NULL OR c.owner_id = $ownerId)
-            AND recommended.username IS NOT NULL 
-            AND recommended.username <> ''
-            RETURN c.channel_id as channel_username, 
-                   COLLECT(DISTINCT recommended.username) as recommendations
+            cypher = """
+            MATCH (c:Channel)-[:RECOMMENDS]-(rec:Channel)
+            WHERE ($ownerId IS NULL OR c.owner_id = $ownerId)
+              AND (
+                toLower(c.channel_id) IN $usernames OR
+                toLower(c.username)   IN $usernames
+              )
+              AND rec.username IS NOT NULL AND rec.username <> ''
+            RETURN
+              toLower(c.channel_id)           AS input_key,
+              COLLECT(DISTINCT rec.username)  AS recs
             """
-            
             result = await session.run(
-                query,
-                usernames=lowercase_usernames,
+                cypher,
+                usernames=lowercase,
                 ownerId=owner_id
             )
-            
-            # Collect channels with their recommendations
-            channel_recommendations = {}
-            async for record in result:
-                channel_username = record["channel_username"]
-                recommendations = record["recommendations"]
-                channel_recommendations[channel_username] = recommendations
-            
-            for username in channel_usernames:
-                if username.lower() not in channel_recommendations:
-                    channel_recommendations[username.lower()] = []
-            
-            print(f"[NEO4J] Found recommendations for {len(channel_recommendations)} channels from input: {channel_usernames}")
-            return channel_recommendations
-            
-    except Exception as e:
-        print(f"[WARN] Error expanding channels: {str(e)}. Returning empty dict for original list.")
-        # Return empty lists for all input channels in case of error
-        return {username.lower(): [] for username in channel_usernames}
-    
+            records = await result.data()
+
+        # 2) build a map from lowercase key → raw rec list
+        raw_map = {r["input_key"]: r["recs"] for r in records}
+
+        # 3) build final OrderedDict, filtering out self and empty lists
+        final = OrderedDict()
+        for orig in unique:
+            key = orig.lower()
+            recs = raw_map.get(key, [])
+            # drop any rec equal to the channel itself
+            filtered = [r for r in recs if r.lower() != key]
+            if filtered:
+                final[orig] = filtered
+
+        return final
+
+    except Exception:
+        # on error, just return empty (no menu entries)
+        return OrderedDict()
+
 async def get_total_message_count_for_channels(
     channel_ids: list[str],
     owner_id: str | None,
