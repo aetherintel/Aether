@@ -50,7 +50,12 @@ The application should now be running at [http://localhost/](http://localhost/).
    cd frontend
    ```
 
-2. **Start vite server with HMR (Hot Module Replacement):**
+2. **Install npm packages:**
+   ```sh
+   npm install
+   ```
+   
+3. **Start vite server with HMR (Hot Module Replacement):**
    ```sh
    npm run dev
    ```

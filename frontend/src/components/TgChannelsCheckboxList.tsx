@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { Checkbox, Stack } from '@mantine/core';
 import type { OutputChannelEntry } from '../types/caseFileDetail';
+import classes from '@/components/MessagesTab/MessagesTab.module.css';
 
 interface TgChannelsCheckboxListProps {
   structuredChannels: [string, OutputChannelEntry][];
@@ -80,7 +81,7 @@ const TgChannelsCheckboxList: React.FC<TgChannelsCheckboxListProps> = ({
               indeterminate={indeterminate}
               onChange={() => handleParentChange(parentId, recommendedIds)}
             />
-            <Stack pl="lg" mt="xs">
+            <Stack pl="lg" mt="xs" className={classes.recommendedStack}>
               {recommendedChannels.map(([recUsername, recData]) => (
                 <Checkbox
                   key={recData.channel.channel_id}
