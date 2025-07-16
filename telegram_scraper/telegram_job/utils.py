@@ -103,7 +103,6 @@ def generate_media_path(username: str, msg_id: int, media_type: str, message=Non
 async def download_media(channel: str, message, client) -> str | None:
     if not message.media or not client:
         return None
-
     # Use MEDIA_ROOT consistently
     channel_dir = MEDIA_ROOT / channel
     media_folder = channel_dir / "media"  # Keep the /media subfolder if needed
@@ -132,7 +131,7 @@ async def download_media(channel: str, message, client) -> str | None:
                 return path
         except Exception as e:
             print(f"[MEDIA] Failed to download media (attempt {attempt}): {e}")
-            await asyncio.sleep(2 ** attempt)
+            await asyncio.sleep(2 * attempt)
     return None
 
 async def download_media_to_path(username: str, msg, client_ref, target_path: str) -> str:
