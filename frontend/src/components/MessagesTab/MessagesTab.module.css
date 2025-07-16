@@ -64,3 +64,9 @@
   margin-top: 10px;
   border-radius: 8px;
 }
+
+.recommendedStack {
+  & > :only-child {
+    display: none;
+  }
+}
