@@ -111,14 +111,14 @@ async def expand_channels_with_recommendations(
         # This allows the frontend to know what channels are intended for the case
         if len(expanded_channels) == 0:
             print(f"[INFO] No scraped channels found for: {input_channels}. Returning original list.")
-            return input_channels
+            return {username.lower(): [] for username in input_channels}
             
         return expanded_channels
         
     except Exception as e:
         # On error, return the original channels so the case still shows intended channels
         print(f"[WARN] Error expanding channels: {str(e)}. Returning original list.")
-        return input_channels
+        return {username.lower(): [] for username in input_channels}
 
 
 # ADD THIS NEW ENDPOINT - Place it BEFORE the individual channel endpoint
