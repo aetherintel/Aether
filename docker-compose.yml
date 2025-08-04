@@ -1,52 +1,54 @@
 services:
   postgres:
-    image: postgres:15
+    image: pgvector/pgvector:pg15  # ← Geändert von postgres:15
     container_name: postgres
     restart: always
     environment:
       POSTGRES_USER: ${DB_USER}
       POSTGRES_PASSWORD: ${DB_PASSWORD}
-      POSTGRES_DB: keycloak
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./docker/db-init:/docker-entrypoint-initdb.d
-  keycloak:
-    image: quay.io/keycloak/keycloak:24.0.2
-    container_name: keycloak
-    depends_on:
-      - postgres
-    command: 
-      - start-dev 
-      - --import-realm
-      - --hostname=localhost
-      - --hostname-port=8080
-      - --hostname-strict=false
-      - --hostname-strict-https=false
-      - --http-enabled=true
+      - ./docker/db-init/02-init-pgvector.sql:/docker-entrypoint-initdb.d/02-init-pgvector.sql
     ports:
-      - "8080:8080"
-    restart: always
-    environment:
-      # Database
-      KC_DB: postgres
-      KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
-      KC_DB_USERNAME: ${DB_USER}
-      KC_DB_PASSWORD: ${DB_PASSWORD}
+      - "5432:5432"  # Falls noch nicht exposed
+  # keycloak:
+  #   image: quay.io/keycloak/keycloak:24.0.2
+  #   container_name: keycloak
+  #   depends_on:
+  #     - postgres
+  #   command: 
+  #     - start-dev 
+  #     - --import-realm
+  #     - --hostname=localhost
+  #     - --hostname-port=8080
+  #     - --hostname-strict=false
+  #     - --hostname-strict-https=false
+  #     - --http-enabled=true
+  #   ports:
+  #     - "8080:8080"
+  #   restart: always
+  #   environment:
+  #     # Database
+  #     KC_DB: postgres
+  #     KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
+  #     KC_DB_USERNAME: ${DB_USER}
+  #     KC_DB_PASSWORD: ${DB_PASSWORD}
       
       # Admin
-      KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN}
-      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
+      # KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN}
+      # KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
       
-      # Hostname Config für Email Links
-      KC_HOSTNAME: localhost
-      KC_HOSTNAME_PORT: 8080
-      KC_HOSTNAME_STRICT: "false"
-      KC_HOSTNAME_STRICT_HTTPS: "false"
-      KC_HTTP_ENABLED: "true"
+      # # Hostname Config für Email Links
+      # KC_HOSTNAME: localhost
+      # KC_HOSTNAME_PORT: 8080
+      # KC_HOSTNAME_STRICT: "false"
+      # KC_HOSTNAME_STRICT_HTTPS: "false"
+      # KC_HTTP_ENABLED: "true"
       
-    volumes:
-      - keycloak_data:/opt/keycloak/data
-      - ./keycloak/exports:/opt/keycloak/data/import
+    # volumes:
+    #   - keycloak_data:/opt/keycloak/data
+    #   - ./keycloak/exports:/opt/keycloak/data/import
   backend:
     build: ./backend/app
     restart: on-failure
@@ -54,8 +56,8 @@ services:
       - .env.dev
     environment:
       DB_URL: postgresql://${DB_USER}:${DB_PASSWORD}@postgres:5432/aether
-      KEYCLOAK_URL: http://${KEYCLOAK_HOSTNAME}:8080/realms/Aether
-      SWAGGER_TOKEN_URL: http://localhost:8080/realms/Aether/protocol/openid-connect/token
+      # KEYCLOAK_URL: http://${KEYCLOAK_HOSTNAME}:8080/realms/Aether
+      #SWAGGER_TOKEN_URL: http://localhost:8080/realms/Aether/protocol/openid-connect/token
       ENVIRONMENT: ${ENVIRONMENT}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
@@ -63,7 +65,7 @@ services:
       - ${MEDIA_PATH}:/shared/media
     depends_on:
       - postgres
-      - keycloak
+      # - keycloak
     ports:
       - "8000:8000"
   frontend:
@@ -130,5 +132,5 @@ volumes:
   pgdata:
   neo4j_data:
   neo4j_logs:
-  keycloak_data:
+  # keycloak_data:
   tg_sessions:
