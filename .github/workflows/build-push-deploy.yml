@@ -1,171 +1,149 @@
-name: CI
+name: CI/CD Pipeline
 
 on:
   push:
     branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_PREFIX: ${{ github.repository_owner }}/aether
 
 jobs:
-  build-push-frontend:
+  # Step 1: Build and Push to GitHub Container Registry
+  build-and-push:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        include:
+          - service: frontend
+            context: ./frontend
+            dockerfile: ./frontend/Dockerfile
+            build-args: |
+              VITE_API_URL=https://xn--ther-uoa.tech/api
+          - service: backend
+            context: ./backend/app
+            dockerfile: ./backend/app/Dockerfile
+          - service: job-launcher
+            context: ./job_launcher
+            dockerfile: ./job_launcher/Dockerfile
+          - service: telegram-scraper
+            context: ./telegram_scraper
+            dockerfile: ./telegram_scraper/Dockerfile
+    
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v1
+        uses: docker/setup-buildx-action@v3
 
-      - name: Log in to Docker Hub
-        uses: docker/login-action@v1
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
         with:
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_PASSWORD }}
-      
-      - name: Extract metadata (tags, labels) for Frontend Docker Image
-        id: meta_frontend
-        uses: docker/metadata-action@v3
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
         with:
-          images: ${{ secrets.DOCKER_USERNAME }}/aether-frontend
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-${{ matrix.service }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=sha,prefix={{branch}}-
 
-      - name: Build and push
-        uses: docker/build-push-action@v2
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
         with:
-          context: ./frontend 
-          file: ./frontend/Dockerfile
-          push: true  
-          tags: ${{ secrets.DOCKER_USERNAME }}/aether-frontend:latest
-          labels: ${{ steps.meta_frontend.outputs.labels }}
-          no-cache: true
-          build-args: |
-            VITE_API_URL=https://xn--ther-uoa.tech/api
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: ${{ matrix.build-args }}
 
-  build-push-backend:
-    needs: build-push-frontend
-    runs-on: ubuntu-latest  
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v1
-
-      - name: Log in to Docker Hub
-        uses: docker/login-action@v1
-        with:
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_PASSWORD }}
-      
-      - name: Extract metadata (tags, labels) for Frontend Docker Image
-        id: meta_backend
-        uses: docker/metadata-action@v3
-        with:
-          images: ${{ secrets.DOCKER_USERNAME }}/aether-backend
-
-      - name: Build and push
-        uses: docker/build-push-action@v2
-        with:
-          context: ./backend/app 
-          file: ./backend/app/Dockerfile
-          push: true  
-          tags: ${{ secrets.DOCKER_USERNAME }}/aether-backend:latest
-          labels: ${{ steps.meta_backend.outputs.labels }}
-          no-cache: true
-
-  build-push-job_launcher:
-    needs: build-push-backend
-    runs-on: ubuntu-latest  
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v1
-
-      - name: Log in to Docker Hub
-        uses: docker/login-action@v1
-        with:
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_PASSWORD }}
-      
-      - name: Extract metadata (tags, labels) for Frontend Docker Image
-        id: meta_job_launcher
-        uses: docker/metadata-action@v3
-        with:
-          images: ${{ secrets.DOCKER_USERNAME }}/aether-job_launcher
-
-      - name: Build and push
-        uses: docker/build-push-action@v2
-        with:
-          context: ./job_launcher 
-          file: ./job_launcher/Dockerfile
-          push: true  
-          tags: ${{ secrets.DOCKER_USERNAME }}/aether-job_launcher:latest
-          labels: ${{ steps.meta_job_launcher.outputs.labels }}
-          no-cache: true
-
-  build-push-telegram_scraper:
-    needs: build-push-job_launcher
-    runs-on: ubuntu-latest  
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v1
-
-      - name: Log in to Docker Hub
-        uses: docker/login-action@v1
-        with:
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_PASSWORD }}
-      
-      - name: Extract metadata (tags, labels) for Frontend Docker Image
-        id: meta_telegram_scraper
-        uses: docker/metadata-action@v3
-        with:
-          images: ${{ secrets.DOCKER_USERNAME }}/aether-telegram_scraper
-
-      - name: Build and push
-        uses: docker/build-push-action@v2
-        with:
-          context: ./telegram_scraper
-          file: ./telegram_scraper/Dockerfile
-          push: true  
-          tags: ${{ secrets.DOCKER_USERNAME }}/aether-telegram_scraper:latest
-          labels: ${{ steps.meta_telegram_scraper.outputs.labels }}
-          no-cache: true
-
-  deploy-prod:
-    needs: build-push-telegram_scraper
+  # Step 2: Deploy to Production VM
+  deploy-to-vm:
+    needs: build-and-push
     runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-      - name: Copy docker-compose.yml to prod
-        uses: appleboy/scp-action@v1
+      - name: Prepare deployment files
+        run: |
+          # Create a deployment script
+          cat > deploy.sh << 'EOF'
+          #!/bin/bash
+          set -e
+          
+          # Variables
+          REGISTRY=ghcr.io
+          IMAGE_PREFIX=$1
+          GITHUB_TOKEN=$2
+          
+          # Login to GitHub Container Registry
+          echo "$GITHUB_TOKEN" | docker login ghcr.io -u $3 --password-stdin
+          
+          # Pull latest images
+          docker compose -f docker-compose.prod.yml pull
+          
+          # Stop existing containers
+          docker compose -f docker-compose.prod.yml down
+          
+          # Start new containers
+          docker compose -f docker-compose.prod.yml up -d
+          
+          # Clean up old images
+          docker image prune -f
+          EOF
+          chmod +x deploy.sh
+
+      - name: Copy files to production VM
+        uses: appleboy/scp-action@v0.1.5
         with:
           host: ${{ secrets.PROD_HOST }}
           username: ${{ secrets.PROD_USER }}
           key: ${{ secrets.PROD_SSH_KEY }}
-          source: "docker-compose.prod.yml"
+          source: "docker-compose.prod.yml,deploy.sh,docker/,keycloak/,certbot/"
           target: "/var/www/app/"
+          strip_components: 0
 
-      - name: Deploy to Prod
-        uses: appleboy/ssh-action@v1
+      - name: Deploy to Production VM
+        uses: appleboy/ssh-action@v1.0.0
         with:
           host: ${{ secrets.PROD_HOST }}
           username: ${{ secrets.PROD_USER }}
           key: ${{ secrets.PROD_SSH_KEY }}
+          envs: GITHUB_TOKEN,REGISTRY,IMAGE_PREFIX
           script: |
-            export DOCKER_USERNAME=${{ secrets.DOCKER_USERNAME }}
-            export DOCKER_PASSWORD=${{ secrets.DOCKER_PASSWORD }}
+            cd /var/www/app
+            
+            # Set environment variables
+            export REGISTRY=ghcr.io
+            export GITHUB_REPOSITORY_OWNER=${{ github.repository_owner }}
+            export GITHUB_USER=${{ github.actor }}
+            export GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }}
+            
+            # Production environment variables
             export PROD_DOMAIN=${{ secrets.PROD_DOMAIN }}
             export PROD_MAIL=${{ secrets.PROD_MAIL }}
             export DB_USER=${{ secrets.DB_USER }}
             export DB_PASSWORD=${{ secrets.DB_PASSWORD }}
-            export KEYCLOAK_HOSTNAME=keycloak
-            export KC_DB_USERNAME=${{ secrets.DB_USER }}
-            export KC_DB_PASSWORD=${{ secrets.DB_PASSWORD }}
             export KEYCLOAK_ADMIN=${{ secrets.KEYCLOAK_ADMIN }}
             export KEYCLOAK_ADMIN_PASSWORD=${{ secrets.KEYCLOAK_ADMIN_PASSWORD }}
             export KEYCLOAK_CLIENT_SECRET=${{ secrets.KEYCLOAK_CLIENT_SECRET }}
@@ -177,8 +155,54 @@ jobs:
             export NEO4J_PASSWORD=${{ secrets.NEO4J_PASSWORD }}
             export JOB_SECRET_TOKEN=${{ secrets.JOB_SECRET_TOKEN }}
             export ENVIRONMENT=prod
-            cd /var/www/app
-            mv /var/www/app/docker-compose.prod.yml /var/www/app/docker-compose.yml
-            echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u ${{ secrets.DOCKER_USERNAME }} --password-stdin
-            docker compose pull
-            docker compose up -d
+            
+            # Login to GitHub Container Registry
+            echo "$GITHUB_TOKEN" | docker login ghcr.io -u $GITHUB_USER --password-stdin
+            
+            # Pull latest images
+            docker compose -f docker-compose.prod.yml pull
+            
+            # Stop existing containers (with timeout)
+            docker compose -f docker-compose.prod.yml down --timeout 30
+            
+            # Start new containers
+            docker compose -f docker-compose.prod.yml up -d
+            
+            # Clean up old images
+            docker image prune -f
+            
+            # Health check
+            sleep 30
+            docker compose -f docker-compose.prod.yml ps
+            
+            # Check if critical services are healthy
+            if ! docker compose -f docker-compose.prod.yml ps | grep -E "(backend|frontend|keycloak)" | grep -q "Up"; then
+              echo "Deployment failed - critical services not running"
+              docker compose -f docker-compose.prod.yml logs --tail=50
+              exit 1
+            fi
+            
+            echo "Deployment successful!"
+
+  # Optional: Clean up old packages
+  cleanup-packages:
+    needs: deploy-to-vm
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+    steps:
+      - name: Delete old container versions
+        uses: actions/delete-package-versions@v4
+        with:
+          package-name: 'aether-frontend'
+          package-type: 'container'
+          min-versions-to-keep: 5
+          delete-only-untagged-versions: 'true'
+      
+      - name: Delete old backend versions
+        uses: actions/delete-package-versions@v4
+        with:
+          package-name: 'aether-backend'
+          package-type: 'container'
+          min-versions-to-keep: 5
+          delete-only-untagged-versions: 'true'
