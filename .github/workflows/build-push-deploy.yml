@@ -89,7 +89,7 @@ jobs:
           #!/bin/bash
           set -e
           
-          # Variables  
+          # Variables
           REGISTRY=ghcr.io
           IMAGE_PREFIX=$1
           GITHUB_TOKEN=$2
@@ -118,9 +118,9 @@ jobs:
           username: ${{ secrets.PROD_USER }}
           key: ${{ secrets.PROD_SSH_KEY }}
           source: "docker-compose.prod.yml,deploy.sh,docker/,keycloak/,certbot/"
-          target: "/var/www/app/"
+          target: "~/app/"  # <- Verwende Home-Verzeichnis
           strip_components: 0
-          overwrite: true
+
       - name: Deploy to Production VM
         uses: appleboy/ssh-action@v1.0.0
         with:
@@ -129,7 +129,7 @@ jobs:
           key: ${{ secrets.PROD_SSH_KEY }}
           envs: GITHUB_TOKEN,REGISTRY,IMAGE_PREFIX
           script: |
-            cd /var/www/app
+            cd ~/app  # <- Ändere auch hier das Verzeichnis
             
             # Set environment variables
             export REGISTRY=ghcr.io
