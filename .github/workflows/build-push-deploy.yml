@@ -73,7 +73,6 @@ jobs:
           cache-to: type=gha,mode=max
           build-args: ${{ matrix.build-args }}
 
-  # Step 2: Deploy to Production VM
   deploy-to-vm:
     needs: build-and-push
     runs-on: ubuntu-latest
