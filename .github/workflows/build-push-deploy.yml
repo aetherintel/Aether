@@ -120,7 +120,6 @@ jobs:
           source: "docker-compose.prod.yml,deploy.sh,docker/,keycloak/,certbot/"
           target: "/var/www/app/"
           strip_components: 0
-
       - name: Deploy to Production VM
         uses: appleboy/ssh-action@v1.0.0
         with:
