@@ -89,7 +89,7 @@ jobs:
           #!/bin/bash
           set -e
           
-          # Variables
+          # Variables  
           REGISTRY=ghcr.io
           IMAGE_PREFIX=$1
           GITHUB_TOKEN=$2
@@ -120,6 +120,7 @@ jobs:
           source: "docker-compose.prod.yml,deploy.sh,docker/,keycloak/,certbot/"
           target: "/var/www/app/"
           strip_components: 0
+          overwrite: true  # Überschreibe bestehende Dateien
       - name: Deploy to Production VM
         uses: appleboy/ssh-action@v1.0.0
         with:
