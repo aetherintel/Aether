@@ -182,25 +182,25 @@ jobs:
             
             echo "Deployment successful!"
 
-  # Optional: Clean up old packages
-  cleanup-packages:
-    needs: deploy-to-vm
-    runs-on: ubuntu-latest
-    permissions:
-      packages: write
-    steps:
-      - name: Delete old container versions
-        uses: actions/delete-package-versions@v4
-        with:
-          package-name: 'aether-frontend'
-          package-type: 'container'
-          min-versions-to-keep: 5
-          delete-only-untagged-versions: 'true'
+  # # Optional: Clean up old packages
+  # cleanup-packages:
+  #   needs: deploy-to-vm
+  #   runs-on: ubuntu-latest
+  #   permissions:
+  #     packages: write
+  #   steps:
+  #     - name: Delete old container versions
+  #       uses: actions/delete-package-versions@v4
+  #       with:
+  #         package-name: 'aether-frontend'
+  #         package-type: 'container'
+  #         min-versions-to-keep: 5
+  #         delete-only-untagged-versions: 'true'
       
-      - name: Delete old backend versions
-        uses: actions/delete-package-versions@v4
-        with:
-          package-name: 'aether-backend'
-          package-type: 'container'
-          min-versions-to-keep: 5
-          delete-only-untagged-versions: 'true'
+  #     - name: Delete old backend versions
+  #       uses: actions/delete-package-versions@v4
+  #       with:
+  #         package-name: 'aether-backend'
+  #         package-type: 'container'
+  #         min-versions-to-keep: 5
+  #         delete-only-untagged-versions: 'true'
