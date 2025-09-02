@@ -1,3 +1,5 @@
+version: '3.8'
+
 services:
   postgres:
     image: postgres:15
@@ -10,6 +12,8 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./docker/db-init:/docker-entrypoint-initdb.d
+    networks:
+      - aether-network
 
   keycloak:
     image: quay.io/keycloak/keycloak:24.0.2
@@ -33,25 +37,28 @@ services:
       KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN}
       KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
       
-      # Hostname Config für Email Links
+      # Hostname Config for Email Links
       KC_HTTP_RELATIVE_PATH: /keycloak
-      KC_HOSTNAME: xn--ther-uoa.tech
+      KC_HOSTNAME: ${PROD_DOMAIN:-xn--ther-uoa.tech}
       KC_PROXY: edge
     volumes:
       - keycloak_data:/opt/keycloak/data
       - ./keycloak/exports:/opt/keycloak/data/import
+    networks:
+      - aether-network
+
   backend:
-    image: ${DOCKER_USERNAME}/aether-backend:latest
+    image: ghcr.io/${GITHUB_REPOSITORY_OWNER:-aetherintel}/aether-backend:latest
     container_name: backend
     restart: on-failure
     environment:
       DB_USER: ${DB_USER}
       DB_PASSWORD: ${DB_PASSWORD}
       DB_URL: postgresql://${DB_USER}:${DB_PASSWORD}@postgres:5432/aether
-      SWAGGER_TOKEN_URL: https://xn--ther-uoa.tech/keycloak/realms/Aether/protocol/openid-connect/token
-      KEYCLOAK_BASE_URL: https://xn--ther-uoa.tech/keycloak
-      KEYCLOAK_URL: https://xn--ther-uoa.tech/keycloak/realms/Aether
-      KEYCLOAK_INTERNAL_URL: https://xn--ther-uoa.tech/keycloak/realms/Aether
+      SWAGGER_TOKEN_URL: https://${PROD_DOMAIN:-xn--ther-uoa.tech}/keycloak/realms/Aether/protocol/openid-connect/token
+      KEYCLOAK_BASE_URL: https://${PROD_DOMAIN:-xn--ther-uoa.tech}/keycloak
+      KEYCLOAK_URL: https://${PROD_DOMAIN:-xn--ther-uoa.tech}/keycloak/realms/Aether
+      KEYCLOAK_INTERNAL_URL: https://${PROD_DOMAIN:-xn--ther-uoa.tech}/keycloak/realms/Aether
       KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN}
       KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
       KEYCLOAK_HOSTNAME: keycloak
@@ -59,24 +66,25 @@ services:
       KEYCLOAK_ADMIN_CLIENT_SECRET: ${KEYCLOAK_ADMIN_CLIENT_SECRET}
       KEYCLOAK_CLIENT_ID: Aether
       KEYCLOAK_CLIENT_SECRET: ${KEYCLOAK_CLIENT_SECRET}
-      FRONTEND_URL: https://xn--ther-uoa.tech/
+      FRONTEND_URL: https://${PROD_DOMAIN:-xn--ther-uoa.tech}/
       POSTGRES_HOST: postgres
       POSTGRES_PORT: 5432
       POSTGRES_DB: telegramdb
       POSTGRES_USER: telegramuser
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       NEO4J_USER: neo4j
       NEO4J_URI: bolt://neo4j:7687
+      NEO4J_PASSWORD: ${NEO4J_PASSWORD}
       JOB_LAUNCHER_URL: http://job-launcher:9001
+      JOB_SECRET_TOKEN: ${JOB_SECRET_TOKEN}
       TG_API_ID: ${TG_API_ID}
       TG_API_HASH: ${TG_API_HASH}
       TG_PHONE: ${TG_PHONE}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      NEO4J_PASSWORD: ${NEO4J_PASSWORD}
-      JOB_SECRET_TOKEN: ${JOB_SECRET_TOKEN}
       MEDIA_PATH: ${PWD}/shared/media
       ENVIRONMENT: prod
-      DOCKER_USERNAME: ${DOCKER_USERNAME}
-      DOCKER_PASSWORD: ${DOCKER_PASSWORD}
+      # GitHub Registry credentials for pulling images
+      GITHUB_USER: ${GITHUB_USER}
+      GITHUB_TOKEN: ${GITHUB_TOKEN}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - tg_sessions:/app/sessions
@@ -86,8 +94,11 @@ services:
       - keycloak
     ports:
       - "8000:8000"
+    networks:
+      - aether-network
+
   frontend:
-    image: ${DOCKER_USERNAME}/aether-frontend:latest
+    image: ghcr.io/${GITHUB_REPOSITORY_OWNER:-aetherintel}/aether-frontend:latest
     container_name: frontend
     ports:
       - "80:80"
@@ -102,6 +113,8 @@ services:
     restart: always
     depends_on:
       - backend
+    networks:
+      - aether-network
 
   certbot:
     image: certbot/certbot
@@ -110,6 +123,8 @@ services:
       - ./certbot/www:/var/www/certbot
       - ./certbot/conf:/etc/letsencrypt
     entrypoint: "/bin/sh -c 'sleep 10 && certbot certonly --webroot -w /var/www/certbot -d ${PROD_DOMAIN} --email ${PROD_MAIL} --agree-tos --non-interactive'"
+    networks:
+      - aether-network
 
   neo4j:
     image: neo4j:5.18
@@ -125,22 +140,38 @@ services:
       - neo4j_data:/data
       - neo4j_logs:/logs
     healthcheck:
-      test: ["CMD", "cypher-shell", "-u", "${NEO4J_USER}", "-p", "${NEO4J_PASSWORD}", "RETURN 1"]
+      test: ["CMD", "cypher-shell", "-u", "neo4j", "-p", "${NEO4J_PASSWORD}", "RETURN 1"]
       interval: 10s
       retries: 10
+    networks:
+      - aether-network
     
   telegram-job:
-    image: ${DOCKER_USERNAME}/aether-telegram_scraper:latest
+    image: ghcr.io/${GITHUB_REPOSITORY_OWNER:-aetherintel}/aether-telegram-scraper:latest
     container_name: telegram_scraper
     environment:
       ENVIRONMENT: prod
-    #entrypoint: ["sleep", "infinity"]  # Keeps image warm but does nothing unless called
+      TG_API_ID: ${TG_API_ID}
+      TG_API_HASH: ${TG_API_HASH}
+      TG_PHONE: ${TG_PHONE}
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: telegramdb
+      POSTGRES_USER: telegramuser
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      NEO4J_URI: bolt://neo4j:7687
+      NEO4J_USER: neo4j
+      NEO4J_PASSWORD: ${NEO4J_PASSWORD}
+      MEDIA_PATH: /shared/media
     volumes:
-      - tg_sessions:/app/sessions    # ⬅️ Session volume (Telegram auth)
+      - tg_sessions:/app/sessions
       - ./shared/media:/shared/media
-    # profiles: ["scraper"] 
+    networks:
+      - aether-network
+    # This container is started on-demand by job-launcher
+
   job-launcher:
-    image: ${DOCKER_USERNAME}/aether-job_launcher:latest
+    image: ghcr.io/${GITHUB_REPOSITORY_OWNER:-aetherintel}/aether-job-launcher:latest
     container_name: job_launcher
     ports:
       - "9001:9001"
@@ -153,11 +184,21 @@ services:
       TG_API_HASH: ${TG_API_HASH}
       MEDIA_PATH: ${PWD}/shared/media
       ENVIRONMENT: prod
-      DOCKER_USERNAME: ${DOCKER_USERNAME}
-      DOCKER_PASSWORD: ${DOCKER_PASSWORD}
+      # GitHub Registry credentials for pulling telegram-job image
+      GITHUB_USER: ${GITHUB_USER}
+      GITHUB_TOKEN: ${GITHUB_TOKEN}
+      GITHUB_REPOSITORY_OWNER: ${GITHUB_REPOSITORY_OWNER}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - tg_sessions:/app/sessions
+      - ./shared/media:/shared/media
+    networks:
+      - aether-network
+
+networks:
+  aether-network:
+    driver: bridge
+
 volumes:
   pgdata:
   neo4j_data:
