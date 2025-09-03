@@ -107,6 +107,7 @@ services:
       PROD_DOMAIN: ${PROD_DOMAIN}
     volumes:
       - ./frontend:/app
+      - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf
       - ./certbot/www:/var/www/certbot
       - ./certbot/conf:/etc/letsencrypt
       - ./shared/media:/usr/share/nginx/html/app/public/media
