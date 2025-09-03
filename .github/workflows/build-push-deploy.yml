@@ -100,11 +100,50 @@ jobs:
           # Pull latest images
           docker compose -f docker-compose.prod.yml pull
           
-          # Stop existing containers
-          docker compose -f docker-compose.prod.yml down
+          if [ ! -f "/var/lib/docker/volumes/aether_certbot_conf/_data/live/$PROD_DOMAIN/fullchain.pem" ]; then
+              echo "SSL certificates not found. Running initial SSL setup..."
+              
+              # Start with HTTP-only configuration
+              cp docker/nginx/default-http.conf docker/nginx/default.conf
+              
+              # Stop any running containers
+              $COMPOSE_CMD -f docker-compose.prod.yml down || true
+              
+              # Start services
+              $COMPOSE_CMD -f docker-compose.prod.yml up -d
+              
+              # Wait for services
+              sleep 60
+              
+              # Generate SSL certificates
+              echo "Generating SSL certificates..."
+              $COMPOSE_CMD -f docker-compose.prod.yml exec -T certbot \
+                  certbot certonly \
+                  --webroot \
+                  --webroot-path=/var/www/certbot \
+                  --email $PROD_MAIL \
+                  --agree-tos \
+                  --no-eff-email \
+                  --non-interactive \
+                  -d $PROD_DOMAIN
+              
+              if [ $? -eq 0 ]; then
+                  echo "SSL certificates generated successfully!"
+                  # Switch to HTTPS configuration
+                  cp docker/nginx/default-https.conf docker/nginx/default.conf
+                  $COMPOSE_CMD -f docker-compose.prod.yml restart frontend
+              else
+                  echo "SSL certificate generation failed!"
+                  exit 1
+              fi
+          else
+              echo "SSL certificates found. Using HTTPS configuration..."
+              cp docker/nginx/default-https.conf docker/nginx/default.conf
+          fi
           
-          # Start new containers
-          docker compose -f docker-compose.prod.yml up -d
+          # Final deployment
+          $COMPOSE_CMD -f docker-compose.prod.yml down --timeout 30 || true
+          $COMPOSE_CMD -f docker-compose.prod.yml up -d
           
           # Clean up old images
           docker image prune -f
