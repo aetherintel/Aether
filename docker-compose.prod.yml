@@ -168,8 +168,7 @@ services:
       - ./shared/media:/shared/media
     networks:
       - aether-network
-    # This container is started on-demand by job-launcher
-
+      
   job-launcher:
     image: ghcr.io/${GITHUB_REPOSITORY_OWNER:-aetherintel}/aether-job-launcher:latest
     container_name: job_launcher
@@ -184,7 +183,6 @@ services:
       TG_API_HASH: ${TG_API_HASH}
       MEDIA_PATH: ${PWD}/shared/media
       ENVIRONMENT: prod
-      # GitHub Registry credentials for pulling telegram-job image
       GITHUB_USER: ${GITHUB_USER}
       GITHUB_TOKEN: ${GITHUB_TOKEN}
       GITHUB_REPOSITORY_OWNER: ${GITHUB_REPOSITORY_OWNER}
