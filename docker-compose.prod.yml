@@ -82,7 +82,7 @@ services:
       TG_PHONE: ${TG_PHONE}
       MEDIA_PATH: ${PWD}/shared/media
       ENVIRONMENT: prod
-      # GitHub Registry credentials for pulling images
+
       GITHUB_USER: ${GITHUB_USER}
       GITHUB_TOKEN: ${GITHUB_TOKEN}
     volumes:
@@ -168,7 +168,7 @@ services:
       - ./shared/media:/shared/media
     networks:
       - aether-network
-      
+
   job-launcher:
     image: ghcr.io/${GITHUB_REPOSITORY_OWNER:-aetherintel}/aether-job-launcher:latest
     container_name: job_launcher
