@@ -32,11 +32,9 @@ services:
       KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
       KC_DB_USERNAME: ${DB_USER}
       KC_DB_PASSWORD: ${DB_PASSWORD}
-      
       # Admin
       KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN}
       KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
-      
       # Hostname Config for Email Links
       KC_HTTP_RELATIVE_PATH: /
       KC_HOSTNAME: ${PROD_DOMAIN:-xn--ther-uoa.tech}
