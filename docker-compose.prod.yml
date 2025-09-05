@@ -53,7 +53,7 @@ services:
       DB_USER: ${DB_USER}
       DB_PASSWORD: ${DB_PASSWORD}
       DB_URL: postgresql://${DB_USER}:${DB_PASSWORD}@postgres:5432/aether
-      #SWAGGER_TOKEN_URL: https://${PROD_DOMAIN:-xn--ther-uoa.tech}/keycloak/realms/Aether/protocol/openid-connect/token
+      # SWAGGER_TOKEN_URL: https://${PROD_DOMAIN:-xn--ther-uoa.tech}/keycloak/realms/Aether/protocol/openid-connect/token
       # KEYCLOAK_BASE_URL: https://${PROD_DOMAIN:-xn--ther-uoa.tech}/keycloak
       # KEYCLOAK_URL: https://${PROD_DOMAIN:-xn--ther-uoa.tech}/keycloak/realms/Aether
       # KEYCLOAK_INTERNAL_URL: https://${PROD_DOMAIN:-xn--ther-uoa.tech}/keycloak/realms/Aether
