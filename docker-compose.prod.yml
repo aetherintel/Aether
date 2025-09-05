@@ -49,6 +49,7 @@ services:
     image: ghcr.io/${GITHUB_REPOSITORY_OWNER:-aetherintel}/aether-backend:latest
     container_name: backend
     restart: on-failure
+    user: "root"
     environment:
       DB_USER: ${DB_USER}
       DB_PASSWORD: ${DB_PASSWORD}
