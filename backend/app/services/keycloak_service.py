@@ -12,7 +12,10 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 PUBLIC_KEY_URL = f"{settings.KEYCLOAK_URL}/protocol/openid-connect/certs"
 
 # Get and cache public keys
-jwks = requests.get(PUBLIC_KEY_URL).json()
+try:
+    jwks = requests.get(PUBLIC_KEY_URL).json()
+except requests.RequestException as e:
+    raise HTTPException(status_code=503, detail=f"Failed to retrieve JWKS: {str(e)}")
 
 def get_public_key(kid: str):
     for key in jwks["keys"]:

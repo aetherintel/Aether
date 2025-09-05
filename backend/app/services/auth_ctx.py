@@ -1,6 +1,6 @@
 from typing import TypedDict
 from fastapi import Depends
-from services.keycloak_service import get_current_user  # ← you already have this
+from services.keycloak_service import get_current_user 
 
 class UserCtx(TypedDict):
     id: str
