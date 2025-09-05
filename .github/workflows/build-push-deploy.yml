@@ -23,7 +23,7 @@ jobs:
             context: ./frontend
             dockerfile: ./frontend/Dockerfile
             build-args: |
-              VITE_API_URL=https://xn--ther-uoa.tech/api
+              VITE_API_URL=http://46.243.55.90/api
           - service: backend
             context: ./backend/app
             dockerfile: ./backend/app/Dockerfile
