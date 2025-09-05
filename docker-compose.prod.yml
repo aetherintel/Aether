@@ -34,7 +34,7 @@ services:
       # Admin
       KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN}
       KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
-      # Hostname Config for Email Links
+
       KC_HTTP_RELATIVE_PATH: /
       KC_HOSTNAME: ${PROD_DOMAIN:-xn--ther-uoa.tech}
       KC_PROXY: edge
