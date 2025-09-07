@@ -1527,7 +1527,7 @@
     }, {
       "authenticator" : "idp-email-verification",
       "authenticatorFlow" : false,
-      "requirement" : "REQUIRED",
+      "requirement" : "DISABLED",
       "priority" : 11,
       "autheticatorFlow" : false,
       "userSetupAllowed" : false
