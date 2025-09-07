@@ -60,10 +60,10 @@ services:
       # KEYCLOAK_URL: https://${PROD_DOMAIN:-xn--ther-uoa.tech}/keycloak/realms/Aether
       # KEYCLOAK_INTERNAL_URL: https://${PROD_DOMAIN:-xn--ther-uoa.tech}/keycloak/realms/Aether
 
-      SWAGGER_TOKEN_URL: http://keycloak:8080/realms/Aether/protocol/openid-connect/token
-      KEYCLOAK_BASE_URL: http://keycloak:8080
-      KEYCLOAK_URL: http://keycloak:8080/realms/Aether
-      KEYCLOAK_INTERNAL_URL: http://keycloak:8080/realms/Aether
+      KEYCLOAK_URL: http://keycloak:8080/keycloak/realms/Aether
+      KEYCLOAK_INTERNAL_URL: http://keycloak:8080/keycloak/realms/Aether
+      SWAGGER_TOKEN_URL: http://keycloak:8080/keycloak/realms/Aether/protocol/openid-connect/token
+      KEYCLOAK_BASE_URL: http://keycloak:8080/keycloak
       KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN}
       KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
       KEYCLOAK_HOSTNAME: keycloak
