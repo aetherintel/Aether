@@ -105,7 +105,7 @@ services:
     image: telegram-job:latest
     #entrypoint: ["sleep", "infinity"]  # Keeps image warm but does nothing unless called
     volumes:
-      - tg_sessions:/app/sessions    # ⬅️ Session volume (Telegram auth)
+      - tg_sessions:/app/sessions
       - ./shared/media:/shared/media
     # profiles: ["scraper"] 
   job-launcher:
