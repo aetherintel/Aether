@@ -157,7 +157,7 @@ jobs:
           username: ${{ secrets.PROD_USER }}
           key: ${{ secrets.PROD_SSH_KEY }}
           source: "docker-compose.prod.yml,deploy.sh,docker/,keycloak/,certbot/"
-          target: "~/app/"  # <- Verwende Home-Verzeichnis
+          target: "~/app/"
           strip_components: 0
 
       - name: Deploy to Production VM
