@@ -48,7 +48,6 @@ if [ $? -eq 0 ]; then
     echo "Step 3: Switching to HTTPS configuration..."
     cp docker/nginx/default-https.conf docker/nginx/default.conf
     
-    # Restart frontend to load new configuration
     $COMPOSE_CMD -f docker-compose.prod.yml restart frontend
     
     echo "SSL setup completed successfully!"
