@@ -57,6 +57,7 @@ services:
       # KEYCLOAK_BASE_URL: https://${PROD_DOMAIN:-xn--ther-uoa.tech}/keycloak
       # KEYCLOAK_URL: https://${PROD_DOMAIN:-xn--ther-uoa.tech}/keycloak/realms/Aether
       # KEYCLOAK_INTERNAL_URL: https://${PROD_DOMAIN:-xn--ther-uoa.tech}/keycloak/realms/Aether
+      
       SWAGGER_TOKEN_URL: http://keycloak:8080/realms/Aether/protocol/openid-connect/token
       KEYCLOAK_BASE_URL: http://keycloak:8080
       KEYCLOAK_URL: http://keycloak:8080/realms/Aether
