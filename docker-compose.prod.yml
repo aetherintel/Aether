@@ -37,6 +37,7 @@ services:
 
       KC_HTTP_RELATIVE_PATH: /keycloak
       KC_HOSTNAME: 46.243.55.90  # Statt ${PROD_DOMAIN:-xn--ther-uoa.tech}
+      KC_HOSTNAME_STRICT_HTTPS: false
       KC_PROXY: edge
     volumes:
       - keycloak_data:/opt/keycloak/data
