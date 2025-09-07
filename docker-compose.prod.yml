@@ -70,7 +70,8 @@ services:
       KEYCLOAK_ADMIN_CLIENT_SECRET: ${KEYCLOAK_ADMIN_CLIENT_SECRET}
       KEYCLOAK_CLIENT_ID: Aether
       KEYCLOAK_CLIENT_SECRET: ${KEYCLOAK_CLIENT_SECRET}
-      FRONTEND_URL: https://${PROD_DOMAIN:-xn--ther-uoa.tech}/
+      #FRONTEND_URL: https://${PROD_DOMAIN:-xn--ther-uoa.tech}/
+      FRONTEND_URL: http://46.243.55.90/
       POSTGRES_HOST: postgres
       POSTGRES_PORT: 5432
       POSTGRES_DB: telegramdb
@@ -110,7 +111,6 @@ services:
     environment:
       PROD_DOMAIN: ${PROD_DOMAIN}
     volumes:
-      - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
       - ./certbot/www:/var/www/certbot:ro
       - ./certbot/conf:/etc/letsencrypt:ro
       - ./shared/media:/usr/share/nginx/html/app/public/media:ro
