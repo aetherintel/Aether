@@ -143,17 +143,16 @@ def send_verification_email(user_id: str, admin_token: str):
         "Authorization": f"Bearer {admin_token}",
         "Content-Type": "application/json"
     }
-    
     # FIX: Container-interne URL für Admin API
     email_url = f"{os.getenv('KEYCLOAK_BASE_URL')}/admin/realms/Aether/users/{user_id}/execute-actions-email"
 
     # Query Parameter für Redirect (EXTERN URL!)
     params = {
         # TODO: redirect URL einfügen
-        "redirect_uri": os.getenv("FRONTEND_URL", "http://localhost/"),
+        "redirect_uri": os.getenv("FRONTEND_URL", "http://46.243.55.90/"),
         "client_id": os.getenv("KEYCLOAK_CLIENT_ID")
     }
-    
+    print(f"Sending verification email to user {user_id} with params: {params}")
     actions_payload = ["VERIFY_EMAIL"]
     
     response = requests.put(email_url, headers=headers, json=actions_payload, params=params)
