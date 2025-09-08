@@ -23,6 +23,10 @@ origins = [
     "http://localhost:8080",
     "http://localhost:9001",   # job launcher
     "http://keycloak:8080",   # keycloak
+    "http://46.243.55.90",
+    "http://46.243.55.90:8080",
+    "http://46.243.55.90:9001",
+    "http://46.243.55.90:5173"
 
 ]
 
