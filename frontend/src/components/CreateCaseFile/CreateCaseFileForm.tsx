@@ -56,8 +56,8 @@ const marks = [
   { value: 0, label: '3 days' },
   { value: 20, label: '1 week' },
   { value: 40, label: '1 month' },
-  { value: 60, label: '3 mouths' },
-  { value: 80, label: '6 mouths' },
+  { value: 60, label: '3 months' },
+  { value: 80, label: '6 months' },
   { value: 100, label: '1 year' },
 ];
 
