@@ -112,7 +112,6 @@ def launch_similarity(req: SimilarRequest, request: Request):
 def launch_scraper(req: ScrapeRequest, request: Request):
     _check_auth(request)
 
-    # Prevent infinite recursion by limiting depth
     MAX_RECURSION_DEPTH = 3
     if req.depth >= MAX_RECURSION_DEPTH:
         raise HTTPException(
