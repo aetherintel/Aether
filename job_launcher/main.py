@@ -65,7 +65,7 @@ def launch_similarity(req: SimilarRequest, request: Request):
 )
 
     network = (
-        f"aether-network"
+        f"app_aether-network"
         if os.getenv("ENVIRONMENT") == "prod"
         else "aether_default"
     )
@@ -166,7 +166,7 @@ def launch_scraper(req: ScrapeRequest, request: Request):
 )
 
     network = (
-        f"aether-network"
+        f"app_aether-network"
         if os.getenv("ENVIRONMENT") == "prod"
         else "aether_default"
     )
