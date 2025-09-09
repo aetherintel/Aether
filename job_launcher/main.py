@@ -59,10 +59,10 @@ def launch_similarity(req: SimilarRequest, request: Request):
     docker_login_if_needed()
 
     image_name = (
-        f"{os.getenv('DOCKER_USERNAME')}/aether-telegram_scraper:latest"
-        if os.getenv("ENVIRONMENT") == "prod"
-        else "telegram-job:latest"
-    )
+    f"ghcr.io/{os.getenv('GITHUB_REPOSITORY_OWNER')}/aether-telegram-scraper:latest"
+    if os.getenv("ENVIRONMENT") == "prod"
+    else "telegram-job"
+)
 
     network = (
         f"app_default"
@@ -160,10 +160,10 @@ def launch_scraper(req: ScrapeRequest, request: Request):
     docker_login_if_needed()
 
     image_name = (
-        f"{os.getenv('DOCKER_USERNAME')}/aether-telegram_scraper:latest"
-        if os.getenv("ENVIRONMENT") == "prod"
-        else "telegram-job:latest"
-    )
+    f"ghcr.io/{os.getenv('GITHUB_REPOSITORY_OWNER')}/aether-telegram-scraper:latest"
+    if os.getenv("ENVIRONMENT") == "prod"
+    else "telegram-job"
+)
 
     network = (
         f"app_default"
@@ -325,7 +325,7 @@ def restart_container(container_id: str, req: ContainerControlRequest, request: 
     _check_auth(request)
     
     image_name = (
-        f"{os.getenv('DOCKER_USERNAME')}/aether-telegram_scraper"
+        f"ghcr.io/{os.getenv('GITHUB_REPOSITORY_OWNER')}/aether-telegram-scraper:latest"
         if os.getenv("ENVIRONMENT") == "prod"
         else "telegram-job"
     )
