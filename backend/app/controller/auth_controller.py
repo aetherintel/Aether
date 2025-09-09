@@ -250,10 +250,10 @@ def telegram_status(
     container_list = []
 
     image_name = (
-        f"{os.getenv('DOCKER_USERNAME')}/aether-telegram_scraper:latest"
-        if os.getenv("ENVIRONMENT") == "prod"
-        else "telegram-job:latest"
-    )
+    f"ghcr.io/{os.getenv('GITHUB_REPOSITORY_OWNER')}/aether-telegram-scraper:latest"
+    if os.getenv("ENVIRONMENT") == "prod"
+    else "telegram-job"
+)
     
     for c in containers:
         try:
