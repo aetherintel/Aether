@@ -87,7 +87,6 @@ export function CaseFileList({
         title: 'CaseFile',
         message: `CaseFile deleted with ID: ${id}`,
       });
-      // Trigger refresh of both lists
       onRefresh?.();
     } else {
       notifications.show({
