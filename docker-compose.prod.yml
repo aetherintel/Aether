@@ -35,7 +35,7 @@ services:
       KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN}
       KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
       KC_HTTP_RELATIVE_PATH: /keycloak
-      KC_HOSTNAME: 46.243.55.90  # Statt ${PROD_DOMAIN:-xn--ther-uoa.tech}
+      KC_HOSTNAME: ${PROD_DOMAIN:-aethery.cloud}  # Statt 
       KC_HOSTNAME_STRICT_HTTPS: false
       KC_HTTP_ENABLED: true
       KC_SPI_LOGIN_PROTOCOL_OPENID_CONNECT_LEGACY_LOGOUT_REDIRECT_URI: true
@@ -73,7 +73,7 @@ services:
       KEYCLOAK_CLIENT_ID: Aether
       KEYCLOAK_CLIENT_SECRET: ${KEYCLOAK_CLIENT_SECRET}
       #FRONTEND_URL: https://${PROD_DOMAIN:-xn--ther-uoa.tech}/
-      FRONTEND_URL: http://46.243.55.90/
+      FRONTEND_URL: https://aethery.cloud/
       POSTGRES_HOST: postgres
       POSTGRES_PORT: 5432
       POSTGRES_DB: telegramdb
