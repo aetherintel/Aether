@@ -26,7 +26,11 @@ origins = [
     "http://46.243.55.90",
     "http://46.243.55.90:8080",
     "http://46.243.55.90:9001",
-    "http://46.243.55.90:5173"
+    "http://46.243.55.90:5173",
+    "https://aethery.cloud",
+    "https://aethery.cloud:8080",
+    "https://aethery.cloud:9001",
+    "https://aethery.cloud:5173"
 
 ]
 
