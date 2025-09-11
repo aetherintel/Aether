@@ -72,8 +72,8 @@ services:
       KEYCLOAK_ADMIN_CLIENT_SECRET: ${KEYCLOAK_ADMIN_CLIENT_SECRET}
       KEYCLOAK_CLIENT_ID: Aether
       KEYCLOAK_CLIENT_SECRET: ${KEYCLOAK_CLIENT_SECRET}
-      #FRONTEND_URL: https://${PROD_DOMAIN:-xn--ther-uoa.tech}/
-      FRONTEND_URL: https://aethery.cloud/
+      FRONTEND_URL: https://${PROD_DOMAIN:-aethery.cloud}/
+      #FRONTEND_URL: https://aethery.cloud/
       POSTGRES_HOST: postgres
       POSTGRES_PORT: 5432
       POSTGRES_DB: telegramdb
