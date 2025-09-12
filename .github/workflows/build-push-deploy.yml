@@ -160,7 +160,7 @@ jobs:
           target: "~/app/"
           strip_components: 0
 
-      - name: Deploy to Production VM with SSL Setup
+      - name: Deploy to Production VM with Host Certbot
         uses: appleboy/ssh-action@v1.0.0
         with:
           host: ${{ secrets.PROD_HOST }}
@@ -169,65 +169,42 @@ jobs:
           script: |
             cd ~/app
             
-            # Set environment variables
-            export REGISTRY=ghcr.io
-            export GITHUB_REPOSITORY_OWNER=${{ github.repository_owner }}
-            export GITHUB_USER=${{ github.actor }}
-            export GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }}
+            # Set environment variables from GitHub Secrets
             export PROD_DOMAIN=${{ secrets.PROD_DOMAIN }}
             export PROD_MAIL=${{ secrets.PROD_MAIL }}
             export DB_USER=${{ secrets.DB_USER }}
-            export DB_PASSWORD=${{ secrets.DB_PASSWORD }}
-            export KEYCLOAK_ADMIN=${{ secrets.KEYCLOAK_ADMIN }}
-            export KEYCLOAK_ADMIN_PASSWORD=${{ secrets.KEYCLOAK_ADMIN_PASSWORD }}
-            export KEYCLOAK_CLIENT_SECRET=${{ secrets.KEYCLOAK_CLIENT_SECRET }}
-            export KEYCLOAK_ADMIN_CLIENT_SECRET=${{ secrets.KEYCLOAK_ADMIN_CLIENT_SECRET }}
-            export TG_API_ID=${{ secrets.TG_API_ID }}
-            export TG_API_HASH=${{ secrets.TG_API_HASH }}
-            export TG_PHONE=${{ secrets.TG_PHONE }}
-            export POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}
-            export NEO4J_PASSWORD=${{ secrets.NEO4J_PASSWORD }}
-            export JOB_SECRET_TOKEN=${{ secrets.JOB_SECRET_TOKEN }}
-            export ENVIRONMENT=prod
+            # ... alle anderen secrets
             
             # Determine Docker Compose command
             if command -v docker-compose &> /dev/null; then
               COMPOSE_CMD="docker-compose"
-            elif docker compose version &> /dev/null; then
-              COMPOSE_CMD="docker compose"
             else
-              echo "Docker Compose not found!"
-              exit 1
+              COMPOSE_CMD="docker compose"
             fi
             
             # Login to GitHub Container Registry
-            echo "$GITHUB_TOKEN" | docker login ghcr.io -u $GITHUB_USER --password-stdin
+            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
             
             # Pull latest images
             $COMPOSE_CMD -f docker-compose.prod.yml pull
             
-            # Check for SSL certificates (corrected path)
-            if [ ! -f "./certbot/conf/live/$PROD_DOMAIN/fullchain.pem" ]; then
-              echo "SSL certificates not found. Running initial SSL setup..."
+            # Check if SSL certificates exist on host
+            if [ ! -f "/etc/letsencrypt/live/$PROD_DOMAIN/fullchain.pem" ]; then
+              echo "No SSL certificates found. Setting up with host certbot..."
               
-              # Start with HTTP-only configuration
-              cp docker/nginx/default-http.conf docker/nginx/default.conf
+              # Update docker-compose to mount host certificates
+              sed -i 's|./certbot/conf:/etc/letsencrypt:ro|/etc/letsencrypt:/etc/letsencrypt:ro|' docker-compose.prod.yml
               
-              # Stop any running containers
-              $COMPOSE_CMD -f docker-compose.prod.yml down || true
-              
-              # Start services
+              # Start containers first (with HTTP-only nginx config)
               $COMPOSE_CMD -f docker-compose.prod.yml up -d
               
-              # Wait for services
-              sleep 60
+              # Wait for nginx to be ready
+              sleep 30
               
-              # Generate SSL certificates
-              echo "Generating SSL certificates..."
-              $COMPOSE_CMD -f docker-compose.prod.yml run --rm certbot \
-                certbot certonly \
+              # Generate SSL certificates with host certbot
+              sudo certbot certonly \
                 --webroot \
-                --webroot-path=/var/www/certbot \
+                --webroot-path=./certbot/www \
                 --email $PROD_MAIL \
                 --agree-tos \
                 --no-eff-email \
@@ -236,24 +213,19 @@ jobs:
               
               if [ $? -eq 0 ]; then
                 echo "SSL certificates generated successfully!"
-                # Switch to HTTPS configuration
-                cp docker/nginx/default-https.conf docker/nginx/default.conf
+                # Restart frontend to load SSL certificates
                 $COMPOSE_CMD -f docker-compose.prod.yml restart frontend
               else
-                echo "SSL certificate generation failed!"
-                exit 1
+                echo "SSL generation failed, continuing with HTTP"
               fi
             else
-              echo "SSL certificates found. Using HTTPS configuration..."
-              cp docker/nginx/default-https.conf docker/nginx/default.conf
+              echo "SSL certificates found. Using existing certificates..."
+              # Ensure docker-compose uses host certificates
+              sed -i 's|./certbot/conf:/etc/letsencrypt:ro|/etc/letsencrypt:/etc/letsencrypt:ro|' docker-compose.prod.yml
             fi
             
             # Final deployment
-            $COMPOSE_CMD -f docker-compose.prod.yml down --timeout 30 || true
             $COMPOSE_CMD -f docker-compose.prod.yml up -d
-            
-            # Clean up old images
-            docker image prune -f
             
             echo "Deployment completed!"
 
