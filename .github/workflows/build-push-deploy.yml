@@ -224,7 +224,7 @@ jobs:
               
               # Generate SSL certificates
               echo "Generating SSL certificates..."
-              $COMPOSE_CMD -f docker-compose.prod.yml exec -T certbot \
+              $COMPOSE_CMD -f docker-compose.prod.yml run --rm certbot \
                 certbot certonly \
                 --webroot \
                 --webroot-path=/var/www/certbot \
