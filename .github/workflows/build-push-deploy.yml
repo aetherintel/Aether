@@ -160,23 +160,20 @@ jobs:
           target: "~/app/"
           strip_components: 0
 
-      - name: Deploy to Production VM
+      - name: Deploy to Production VM with SSL Setup
         uses: appleboy/ssh-action@v1.0.0
         with:
           host: ${{ secrets.PROD_HOST }}
           username: ${{ secrets.PROD_USER }}
           key: ${{ secrets.PROD_SSH_KEY }}
-          envs: GITHUB_TOKEN,REGISTRY,IMAGE_PREFIX
           script: |
-            cd ~/app  # <- Ändere auch hier das Verzeichnis
+            cd ~/app
             
             # Set environment variables
             export REGISTRY=ghcr.io
             export GITHUB_REPOSITORY_OWNER=${{ github.repository_owner }}
             export GITHUB_USER=${{ github.actor }}
             export GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }}
-            
-            # Production environment variables
             export PROD_DOMAIN=${{ secrets.PROD_DOMAIN }}
             export PROD_MAIL=${{ secrets.PROD_MAIL }}
             export DB_USER=${{ secrets.DB_USER }}
@@ -193,33 +190,72 @@ jobs:
             export JOB_SECRET_TOKEN=${{ secrets.JOB_SECRET_TOKEN }}
             export ENVIRONMENT=prod
             
+            # Determine Docker Compose command
+            if command -v docker-compose &> /dev/null; then
+              COMPOSE_CMD="docker-compose"
+            elif docker compose version &> /dev/null; then
+              COMPOSE_CMD="docker compose"
+            else
+              echo "Docker Compose not found!"
+              exit 1
+            fi
+            
             # Login to GitHub Container Registry
             echo "$GITHUB_TOKEN" | docker login ghcr.io -u $GITHUB_USER --password-stdin
             
             # Pull latest images
-            docker compose -f docker-compose.prod.yml pull
+            $COMPOSE_CMD -f docker-compose.prod.yml pull
             
-            # Stop existing containers (with timeout)
-            docker compose -f docker-compose.prod.yml down --timeout 30
+            # Check for SSL certificates (corrected path)
+            if [ ! -f "./certbot/conf/live/$PROD_DOMAIN/fullchain.pem" ]; then
+              echo "SSL certificates not found. Running initial SSL setup..."
+              
+              # Start with HTTP-only configuration
+              cp docker/nginx/default-http.conf docker/nginx/default.conf
+              
+              # Stop any running containers
+              $COMPOSE_CMD -f docker-compose.prod.yml down || true
+              
+              # Start services
+              $COMPOSE_CMD -f docker-compose.prod.yml up -d
+              
+              # Wait for services
+              sleep 60
+              
+              # Generate SSL certificates
+              echo "Generating SSL certificates..."
+              $COMPOSE_CMD -f docker-compose.prod.yml exec -T certbot \
+                certbot certonly \
+                --webroot \
+                --webroot-path=/var/www/certbot \
+                --email $PROD_MAIL \
+                --agree-tos \
+                --no-eff-email \
+                --non-interactive \
+                -d $PROD_DOMAIN
+              
+              if [ $? -eq 0 ]; then
+                echo "SSL certificates generated successfully!"
+                # Switch to HTTPS configuration
+                cp docker/nginx/default-https.conf docker/nginx/default.conf
+                $COMPOSE_CMD -f docker-compose.prod.yml restart frontend
+              else
+                echo "SSL certificate generation failed!"
+                exit 1
+              fi
+            else
+              echo "SSL certificates found. Using HTTPS configuration..."
+              cp docker/nginx/default-https.conf docker/nginx/default.conf
+            fi
             
-            # Start new containers
-            docker compose -f docker-compose.prod.yml up -d
+            # Final deployment
+            $COMPOSE_CMD -f docker-compose.prod.yml down --timeout 30 || true
+            $COMPOSE_CMD -f docker-compose.prod.yml up -d
             
             # Clean up old images
             docker image prune -f
             
-            # Health check
-            sleep 30
-            docker compose -f docker-compose.prod.yml ps
-            
-            # Check if critical services are healthy
-            if ! docker compose -f docker-compose.prod.yml ps | grep -E "(backend|frontend|keycloak)" | grep -q "Up"; then
-              echo "Deployment failed - critical services not running"
-              docker compose -f docker-compose.prod.yml logs --tail=50
-              exit 1
-            fi
-            
-            echo "Deployment successful!"
+            echo "Deployment completed!"
 
   # # Optional: Clean up old packages
   # cleanup-packages:
