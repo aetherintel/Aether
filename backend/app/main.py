@@ -30,7 +30,11 @@ origins = [
     "https://aethery.cloud",
     "https://aethery.cloud:8080",
     "https://aethery.cloud:9001",
-    "https://aethery.cloud:5173"
+    "https://aethery.cloud:5173",
+    "http://aethery.cloud",
+    "http://aethery.cloud:8080",
+    "http://aethery.cloud:9001",
+    "http://aethery.cloud:5173"
 
 ]
 
