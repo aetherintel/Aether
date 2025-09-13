@@ -73,90 +73,13 @@ jobs:
           cache-to: type=gha,mode=max
           build-args: ${{ matrix.build-args }}
 
-  deploy-to-vm:
-    needs: build-and-push
-    runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Prepare deployment files
-        run: |
-          # Create a deployment script
-          cat > deploy.sh << 'EOF'
-          #!/bin/bash
-          set -e
-          
-          # Variables
-          REGISTRY=ghcr.io
-          IMAGE_PREFIX=$1
-          GITHUB_TOKEN=$2
-          
-          # Login to GitHub Container Registry
-          echo "$GITHUB_TOKEN" | docker login ghcr.io -u $3 --password-stdin
-          
-          # Pull latest images
-          docker compose -f docker-compose.prod.yml pull
-          
-          if [ ! -f "/var/lib/docker/volumes/aether_certbot_conf/_data/live/$PROD_DOMAIN/fullchain.pem" ]; then
-              echo "SSL certificates not found. Running initial SSL setup..."
-              
-              # Start with HTTP-only configuration
-              cp docker/nginx/default-http.conf docker/nginx/default.conf
-              
-              # Stop any running containers
-              $COMPOSE_CMD -f docker-compose.prod.yml down || true
-              
-              # Start services
-              $COMPOSE_CMD -f docker-compose.prod.yml up -d
-              
-              # Wait for services
-              sleep 60
-              
-              # Generate SSL certificates
-              echo "Generating SSL certificates..."
-              $COMPOSE_CMD -f docker-compose.prod.yml exec -T certbot \
-                  certbot certonly \
-                  --webroot \
-                  --webroot-path=/var/www/certbot \
-                  --email $PROD_MAIL \
-                  --agree-tos \
-                  --no-eff-email \
-                  --non-interactive \
-                  -d $PROD_DOMAIN
-              
-              if [ $? -eq 0 ]; then
-                  echo "SSL certificates generated successfully!"
-                  # Switch to HTTPS configuration
-                  cp docker/nginx/default-https.conf docker/nginx/default.conf
-                  $COMPOSE_CMD -f docker-compose.prod.yml restart frontend
-              else
-                  echo "SSL certificate generation failed!"
-                  exit 1
-              fi
-          else
-              echo "SSL certificates found. Using HTTPS configuration..."
-              cp docker/nginx/default-https.conf docker/nginx/default.conf
-          fi
-          
-          # Final deployment
-          $COMPOSE_CMD -f docker-compose.prod.yml down --timeout 30 || true
-          $COMPOSE_CMD -f docker-compose.prod.yml up -d
-          
-          # Clean up old images
-          docker image prune -f
-          EOF
-          chmod +x deploy.sh
-
       - name: Copy files to production VM
         uses: appleboy/scp-action@v0.1.5
         with:
           host: ${{ secrets.PROD_HOST }}
           username: ${{ secrets.PROD_USER }}
           key: ${{ secrets.PROD_SSH_KEY }}
-          source: "docker-compose.prod.yml,deploy.sh,docker/,keycloak/,certbot/"
+          source: "docker-compose.prod.yml,docker/,keycloak/,certbot/"
           target: "~/app/"
           strip_components: 0
 
@@ -168,12 +91,48 @@ jobs:
           key: ${{ secrets.PROD_SSH_KEY }}
           script: |
             cd ~/app
+
+            export REGISTRY=ghcr.io
+
+            export GITHUB_REPOSITORY_OWNER=${{ github.repository_owner }}
+
+            export GITHUB_USER=${{ github.actor }}
+
+            export GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }}
+
             
-            # Set environment variables from GitHub Secrets
+
+            # Production environment variables
+
             export PROD_DOMAIN=${{ secrets.PROD_DOMAIN }}
+
             export PROD_MAIL=${{ secrets.PROD_MAIL }}
+
             export DB_USER=${{ secrets.DB_USER }}
-            # ... alle anderen secrets
+
+            export DB_PASSWORD=${{ secrets.DB_PASSWORD }}
+
+            export KEYCLOAK_ADMIN=${{ secrets.KEYCLOAK_ADMIN }}
+
+            export KEYCLOAK_ADMIN_PASSWORD=${{ secrets.KEYCLOAK_ADMIN_PASSWORD }}
+
+            export KEYCLOAK_CLIENT_SECRET=${{ secrets.KEYCLOAK_CLIENT_SECRET }}
+
+            export KEYCLOAK_ADMIN_CLIENT_SECRET=${{ secrets.KEYCLOAK_ADMIN_CLIENT_SECRET }}
+
+            export TG_API_ID=${{ secrets.TG_API_ID }}
+
+            export TG_API_HASH=${{ secrets.TG_API_HASH }}
+
+            export TG_PHONE=${{ secrets.TG_PHONE }}
+
+            export POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}
+
+            export NEO4J_PASSWORD=${{ secrets.NEO4J_PASSWORD }}
+
+            export JOB_SECRET_TOKEN=${{ secrets.JOB_SECRET_TOKEN }}
+
+            export ENVIRONMENT=prod
             
             # Determine Docker Compose command
             if command -v docker-compose &> /dev/null; then
