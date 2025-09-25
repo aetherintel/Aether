@@ -93,45 +93,25 @@ jobs:
             cd ~/app
 
             export REGISTRY=ghcr.io
-
             export GITHUB_REPOSITORY_OWNER=${{ github.repository_owner }}
-
             export GITHUB_USER=${{ github.actor }}
-
             export GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }}
-
             
-
             # Production environment variables
-
             export PROD_DOMAIN=${{ secrets.PROD_DOMAIN }}
-
             export PROD_MAIL=${{ secrets.PROD_MAIL }}
-
             export DB_USER=${{ secrets.DB_USER }}
-
             export DB_PASSWORD=${{ secrets.DB_PASSWORD }}
-
             export KEYCLOAK_ADMIN=${{ secrets.KEYCLOAK_ADMIN }}
-
             export KEYCLOAK_ADMIN_PASSWORD=${{ secrets.KEYCLOAK_ADMIN_PASSWORD }}
-
             export KEYCLOAK_CLIENT_SECRET=${{ secrets.KEYCLOAK_CLIENT_SECRET }}
-
             export KEYCLOAK_ADMIN_CLIENT_SECRET=${{ secrets.KEYCLOAK_ADMIN_CLIENT_SECRET }}
-
             export TG_API_ID=${{ secrets.TG_API_ID }}
-
             export TG_API_HASH=${{ secrets.TG_API_HASH }}
-
             export TG_PHONE=${{ secrets.TG_PHONE }}
-
             export POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}
-
             export NEO4J_PASSWORD=${{ secrets.NEO4J_PASSWORD }}
-
             export JOB_SECRET_TOKEN=${{ secrets.JOB_SECRET_TOKEN }}
-
             export ENVIRONMENT=prod
             
             # Determine Docker Compose command
@@ -144,8 +124,38 @@ jobs:
             # Login to GitHub Container Registry
             echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
             
-            # Pull latest images
-            $COMPOSE_CMD -f docker-compose.prod.yml pull
+            # Define stateful services (don't recreate these)
+            STATEFUL_SERVICES="postgres neo4j keycloak"
+            # Define stateless services (safe to recreate)
+            STATELESS_SERVICES="frontend backend job-launcher telegram-job certbot"
+            
+            echo "=== GRACEFUL DEPLOYMENT STARTING ==="
+            
+            # Pull latest images first
+            echo "Pulling latest images..."
+            $COMPOSE_CMD -f docker-compose.prod.yml pull $STATELESS_SERVICES
+            
+            # Function to handle container conflicts gracefully
+            handle_container_conflicts() {
+              local service_name=$1
+              echo "Checking for conflicts with $service_name..."
+              
+              # Get container ID if exists
+              CONTAINER_ID=$(docker ps -aq --filter "name=${service_name}")
+              if [ ! -z "$CONTAINER_ID" ]; then
+                echo "Found existing container for $service_name, stopping gracefully..."
+                docker stop "$CONTAINER_ID" --time 10 || true
+                docker rm "$CONTAINER_ID" || true
+              fi
+              
+              # Clean up any network endpoints
+              docker network ls --filter "name=aether-network" --format "{{.Name}}" | xargs -I {} docker network disconnect {} "$service_name" 2>/dev/null || true
+            }
+            
+            # Handle conflicts for stateless services only
+            for service in $STATELESS_SERVICES; do
+              handle_container_conflicts "$service"
+            done
             
             # Check if SSL certificates exist on host
             if [ ! -f "/etc/letsencrypt/live/$PROD_DOMAIN/fullchain.pem" ]; then
@@ -154,8 +164,8 @@ jobs:
               # Update docker-compose to mount host certificates
               sed -i 's|./certbot/conf:/etc/letsencrypt:ro|/etc/letsencrypt:/etc/letsencrypt:ro|' docker-compose.prod.yml
               
-              # Start containers first (with HTTP-only nginx config)
-              $COMPOSE_CMD -f docker-compose.prod.yml up -d
+              # Start just the frontend for certificate generation
+              $COMPOSE_CMD -f docker-compose.prod.yml up -d frontend
               
               # Wait for nginx to be ready
               sleep 30
@@ -172,8 +182,6 @@ jobs:
               
               if [ $? -eq 0 ]; then
                 echo "SSL certificates generated successfully!"
-                # Restart frontend to load SSL certificates
-                $COMPOSE_CMD -f docker-compose.prod.yml restart frontend
               else
                 echo "SSL generation failed, continuing with HTTP"
               fi
@@ -183,10 +191,39 @@ jobs:
               sed -i 's|./certbot/conf:/etc/letsencrypt:ro|/etc/letsencrypt:/etc/letsencrypt:ro|' docker-compose.prod.yml
             fi
             
-            # Final deployment
-            $COMPOSE_CMD -f docker-compose.prod.yml up -d
+            # Start/ensure stateful services are running (these should already exist)
+            echo "Ensuring stateful services are running..."
+            for service in $STATEFUL_SERVICES; do
+              if ! docker ps --filter "name=$service" --filter "status=running" | grep -q "$service"; then
+                echo "Starting $service..."
+                $COMPOSE_CMD -f docker-compose.prod.yml up -d "$service"
+              else
+                echo "$service is already running, keeping it as-is"
+              fi
+            done
             
-            echo "Deployment completed!"
+            # Deploy stateless services (these get updated)
+            echo "Deploying updated stateless services..."
+            $COMPOSE_CMD -f docker-compose.prod.yml up -d $STATELESS_SERVICES
+            
+            # Wait a moment for services to stabilize
+            sleep 10
+            
+            # Health check
+            echo "=== DEPLOYMENT HEALTH CHECK ==="
+            $COMPOSE_CMD -f docker-compose.prod.yml ps
+            
+            # Check if critical services are healthy
+            for service in frontend backend; do
+              if $COMPOSE_CMD -f docker-compose.prod.yml ps "$service" | grep -q "Up"; then
+                echo "✅ $service is running"
+              else
+                echo "❌ $service failed to start"
+                $COMPOSE_CMD -f docker-compose.prod.yml logs --tail=20 "$service"
+              fi
+            done
+            
+            echo "=== GRACEFUL DEPLOYMENT COMPLETED ==="
 
   # # Optional: Clean up old packages
   # cleanup-packages:
