@@ -140,16 +140,49 @@ jobs:
               local service_name=$1
               echo "Checking for conflicts with $service_name..."
               
-              # Get container ID if exists
-              CONTAINER_ID=$(docker ps -aq --filter "name=${service_name}")
-              if [ ! -z "$CONTAINER_ID" ]; then
-                echo "Found existing container for $service_name, stopping gracefully..."
-                docker stop "$CONTAINER_ID" --time 10 || true
-                docker rm "$CONTAINER_ID" || true
+              # Find all containers with this name (including stopped ones)
+              CONTAINER_IDS=$(docker ps -aq --filter "name=${service_name}")
+              
+              if [ ! -z "$CONTAINER_IDS" ]; then
+                echo "Found existing containers for $service_name, cleaning up..."
+                for container_id in $CONTAINER_IDS; do
+                  echo "Processing container: $container_id"
+                  
+                  # Disconnect from all networks first
+                  NETWORKS=$(docker inspect "$container_id" --format '{{range $net, $conf := .NetworkSettings.Networks}}{{$net}} {{end}}' 2>/dev/null || echo "")
+                  for network in $NETWORKS; do
+                    if [ ! -z "$network" ] && [ "$network" != "<no" ]; then
+                      echo "Disconnecting from network: $network"
+                      docker network disconnect "$network" "$container_id" --force 2>/dev/null || true
+                    fi
+                  done
+                  
+                  # Stop and remove container
+                  docker stop "$container_id" --time 5 2>/dev/null || true
+                  docker rm "$container_id" --force 2>/dev/null || true
+                done
               fi
               
-              # Clean up any network endpoints
-              docker network ls --filter "name=aether-network" --format "{{.Name}}" | xargs -I {} docker network disconnect {} "$service_name" 2>/dev/null || true
+              # Additional cleanup: remove any dangling network endpoints
+              docker network ls --filter "name=aether-network" --format "{{.Name}}" | while read network; do
+                if [ ! -z "$network" ]; then
+                  echo "Pruning network: $network"
+                  # Try to remove and recreate the network if it has issues
+                  docker network inspect "$network" >/dev/null 2>&1 && {
+                    # Check if network has dangling endpoints
+                    ENDPOINTS=$(docker network inspect "$network" --format '{{range $id, $config := .Containers}}{{$id}} {{end}}' 2>/dev/null || echo "")
+                    for endpoint in $ENDPOINTS; do
+                      if [ ! -z "$endpoint" ]; then
+                        # Check if container still exists
+                        if ! docker ps -aq | grep -q "$endpoint"; then
+                          echo "Found dangling endpoint: $endpoint"
+                          docker network disconnect "$network" "$endpoint" --force 2>/dev/null || true
+                        fi
+                      fi
+                    done
+                  }
+                fi
+              done
             }
             
             # Handle conflicts for stateless services only
