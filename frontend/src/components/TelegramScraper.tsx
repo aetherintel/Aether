@@ -60,6 +60,7 @@ interface ContainerInfo {
   channels?: string;
   mode?: string;
   session?: string;
+  runtime?: string;
 }
 
 // Update your component props interface if needed
@@ -150,7 +151,7 @@ const TelegramScraper: React.FC<TelegramScraperProps> = ({ case_id }) => {
 
   const handleContainerControl = async (
     containerId: string,
-    action: 'start' | 'stop' | 'restart' | 'remove'
+    action: 'start' | 'remove'
   ): Promise<void> => {
     setControlLoading((prev: any) => ({ ...prev, [containerId]: true }));
 
@@ -209,29 +210,65 @@ const TelegramScraper: React.FC<TelegramScraperProps> = ({ case_id }) => {
     };
   };
 
-  const fetchStatus = async (): Promise<void> => {
-    try {
-      const base = apiUrl ?? 'http://localhost:8000/api';
-      const response = await authFetch(`${base}/auth/telegram/status`, {
-        method: 'POST', // Changed from GET to POST
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${localStorage.getItem('token') || ''}`,
-        },
-        body: JSON.stringify({ case_id: String(case_id) || null }),
-      });
+  // Status mapping: RQ -> Container-ähnlich
+const mapJobStatus = (status: string): string => {
+  switch (status) {
+    case 'queued': return 'created';  // Wartend
+    case 'started': return 'running'; // Läuft
+    case 'finished': return 'exited'; // Fertig
+    case 'failed': return 'exited';   // Fehlgeschlagen
+    default: return status;
+  }
+};
 
-      if (!response.ok) {
-        throw new Error('Failed to fetch status');
-      }
+// TelegramScraper.tsx
 
-      const data = await response.json();
-      // The response now has a different structure
-      setStatus(data.containers || []);
-    } catch (error) {
-      console.error('Error fetching status:', error);
-    }
-  };
+useEffect(() => {
+  fetchSessions();
+  fetchStatus();
+  
+  // Auto-refresh alle 10 Sekunden wenn Jobs laufen
+  const interval = setInterval(() => {
+    fetchStatus();
+  }, 10000); // 10 Sekunden
+  
+  return () => clearInterval(interval);
+}, [case_id]);
+
+const fetchStatus = async (): Promise<void> => {
+  try {
+    const response = await authFetch(`${apiUrl}/auth/telegram/status`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ case_id: case_id || null }),
+    });
+    
+    if (!response.ok) throw new Error('Failed to fetch status');
+    
+    const data = await response.json();
+    
+    const mappedContainers = data.containers.map((job: any) => ({
+      ...job,
+      status: mapJobStatus(job.status),
+      // Zeige zusätzlich wie lange der Job läuft
+      runtime: job.started_at ? 
+        formatRuntime(new Date(job.started_at)) : null
+    }));
+    
+    setStatus(mappedContainers);
+  } catch (error) {
+    console.error('Error fetching status:', error);
+  }
+};
+
+// Helper: Runtime anzeigen
+const formatRuntime = (startTime: Date): string => {
+  const now = new Date();
+  const diff = now.getTime() - startTime.getTime();
+  const hours = Math.floor(diff / 3600000);
+  const minutes = Math.floor((diff % 3600000) / 60000);
+  return `${hours}h ${minutes}m`;
+};
 
   const handleSubmit = async (): Promise<void> => {
     if (!channel.trim()) {
@@ -463,8 +500,14 @@ const TelegramScraper: React.FC<TelegramScraperProps> = ({ case_id }) => {
               </Group>
 
               <Stack gap="sm">
-                {status.map((container, index) => {
-                  const actions = getContainerActions(container);
+                {status.map((container: ContainerInfo, index: number) => {
+                  interface ContainerActions {
+                    canStart: boolean;
+                    canStop: boolean;
+                    canRemove: boolean;
+                    loading: boolean;
+                  }
+                  const actions: ContainerActions = getContainerActions(container);
 
                   return (
                     <Card key={container.id || index} padding="sm" withBorder>
@@ -472,20 +515,20 @@ const TelegramScraper: React.FC<TelegramScraperProps> = ({ case_id }) => {
                         <Stack gap="xs" style={{ flex: 1 }}>
                           <Group align="center" gap="xs">
                             <Text fw={500}>
-                              {container.name} [{container.labels?.CHANNELS || container.channels}]
+                              [{container.labels?.CHANNELS || container.channels}]
                             </Text>
-                            <Badge
-                              color={
-                                container.status === 'running'
-                                  ? 'green'
-                                  : container.status === 'exited'
-                                    ? 'gray'
-                                    : 'yellow'
-                              }
-                              variant="light"
-                            >
+                            <Badge color={container.status === 'running'
+                              ? 'green'
+                              : container.status === 'exited'
+                                ? 'gray'
+                                : 'yellow'} variant="light">
                               {container.status}
                             </Badge>
+                            {container.runtime && (
+                              <Text size="xs" c="dimmed">
+                                Running: {container.runtime}
+                              </Text>
+                            )}
                           </Group>
                           <Text size="sm" c="dimmed">
                             {container.image}
@@ -501,46 +544,6 @@ const TelegramScraper: React.FC<TelegramScraperProps> = ({ case_id }) => {
                         </Stack>
 
                         <Stack gap="xs" align="flex-end">
-                          <Group gap="xs">
-                            {actions.canStart && (
-                              <Button
-                                size="xs"
-                                variant="light"
-                                color="green"
-                                leftSection={<IconPlayerPlay size="0.75rem" />}
-                                onClick={() => handleContainerControl(container.id, 'start')}
-                                loading={actions.loading}
-                              >
-                                Start
-                              </Button>
-                            )}
-
-                            {actions.canStop && (
-                              <Button
-                                size="xs"
-                                variant="light"
-                                color="orange"
-                                leftSection={<IconPlayerPause size="0.75rem" />}
-                                onClick={() => handleContainerControl(container.id, 'stop')}
-                                loading={actions.loading}
-                              >
-                                Stop
-                              </Button>
-                            )}
-
-                            {actions.canRestart && (
-                              <Button
-                                size="xs"
-                                variant="light"
-                                color="blue"
-                                leftSection={<IconRefresh size="0.75rem" />}
-                                onClick={() => handleContainerControl(container.id, 'restart')}
-                                loading={actions.loading}
-                              >
-                                Restart
-                              </Button>
-                            )}
-                          </Group>
 
                           <Button
                             size="xs"
