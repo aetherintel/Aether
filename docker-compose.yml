@@ -1,3 +1,4 @@
+# docker-compose.yml
 services:
   postgres:
     image: postgres:15
@@ -57,6 +58,8 @@ services:
       KEYCLOAK_URL: http://${KEYCLOAK_HOSTNAME}:8080/realms/Aether
       SWAGGER_TOKEN_URL: http://localhost:8080/realms/Aether/protocol/openid-connect/token
       ENVIRONMENT: ${ENVIRONMENT}
+      JOB_LAUNCHER_URL: http://job-launcher:9001
+      JOB_SECRET_TOKEN: ${JOB_SECRET_TOKEN}   
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - tg_sessions:/app/sessions
@@ -99,15 +102,45 @@ services:
       interval: 10s
       retries: 10
     
+# docker-compose.yml
   telegram-job:
     build:
       context: ./telegram_scraper
     image: telegram-job:latest
-    #entrypoint: ["sleep", "infinity"]  # Keeps image warm but does nothing unless called
+    command: rq worker --url redis://redis:6379 telegram-jobs
+    environment:
+      # Telegram API
+      TG_API_ID: ${TG_API_ID}
+      TG_API_HASH: ${TG_API_HASH}
+      # Neo4j
+      NEO4J_URI: ${NEO4J_URI}
+      NEO4J_USER: ${NEO4J_USER}
+      NEO4J_PASSWORD: ${NEO4J_PASSWORD}
+      # Postgres
+      POSTGRES_HOST: ${POSTGRES_HOST}
+      POSTGRES_PORT: ${POSTGRES_PORT}
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      # Job Launcher (für rekursive Calls)
+      JOB_LAUNCHER_URL: ${JOB_LAUNCHER_URL}
+      JOB_SECRET_TOKEN: ${JOB_SECRET_TOKEN}
+      # Media
+      MEDIA_ROOT: /shared/media
+      # Redis
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
     volumes:
       - tg_sessions:/app/sessions
       - ./shared/media:/shared/media
-    # profiles: ["scraper"] 
+    deploy:
+      replicas: 5 
+    depends_on:
+      - redis
+      - postgres
+      - neo4j
+    networks:
+      - default  # oder aether-network falls definiert
   job-launcher:
     build: ./job_launcher
     ports:
@@ -115,6 +148,8 @@ services:
     env_file:
       - .env.dev
     environment:
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
       JOB_SECRET_TOKEN: ${JOB_SECRET_TOKEN}
       NEO4J_URI: bolt://neo4j:7687
       NEO4J_USER: ${NEO4J_USER}
@@ -126,9 +161,18 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - tg_sessions:/app/sessions
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    
 volumes:
   pgdata:
   neo4j_data:
   neo4j_logs:
   keycloak_data:
   tg_sessions:
+  redis_data:

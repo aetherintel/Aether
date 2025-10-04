@@ -10,6 +10,9 @@ from pydantic import BaseModel
 import docker
 from services.auth_ctx import user_ctx, is_admin, UserCtx
 
+JOB_LAUNCHER_URL = os.getenv("JOB_LAUNCHER_URL", "http://job-launcher:9001")
+JOB_SECRET_TOKEN = os.getenv("JOB_SECRET_TOKEN", "changeme")
+
 router = APIRouter(prefix="/auth", tags=["auth"])
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 docker_client = docker.from_env()
@@ -244,104 +247,49 @@ def telegram_status(
     user: UserCtx = Depends(user_ctx)
 ):
     """
-    Get telegram job containers filtered by case_id and user ownership
+    Get RQ job status filtered by case_id and user ownership
     """
-    containers = docker_client.containers.list(all=True)
-    container_list = []
-
-    image_name = (
-    f"ghcr.io/{os.getenv('GITHUB_REPOSITORY_OWNER')}/aether-telegram-scraper:latest"
-    if os.getenv("ENVIRONMENT") == "prod"
-    else "telegram-job"
-)
-    
-    for c in containers:
-        try:
-            image_tags = c.image.tags if c.image and c.image.tags else []
-            
-            is_telegram_job = False
-            if image_tags:
-                is_telegram_job = any(image_name in tag for tag in image_tags)
-            
-            if is_telegram_job:
-                # Check if container belongs to the current user
-                container_owner = c.labels.get("OWNER_ID")
-                if container_owner != user["id"]:
-                    continue  # Skip containers not owned by current user
-                
-                # Check case_id filter if provided
-                if req.case_id is not None and c.labels.get("case_id") is not None:
-                    container_case_id = c.labels.get("case_id")
-                    print(c.labels)
-                    # Convert to int for comparison, skip if no case_id or doesn't match
-                    try:
-                        if container_case_id is None or int(container_case_id) != req.case_id:
-                            continue
-                    except (ValueError, TypeError):
-                        continue  # Skip if case_id is not a valid integer
-                
-                container_info = {
-                    "id": c.id,
-                    "name": c.name,
-                    "image": image_tags[0] if image_tags else None,
-                    "status": c.status,
-                    "labels": c.labels,
-                    "created": c.attrs['Created'],
-                    # Extract useful info from labels for frontend
-                    "case_id": c.labels.get("case_id"),
-                    "owner_id": c.labels.get("owner_id"),
-                    "channels": c.labels.get("channels", ""),
-                    "mode": c.labels.get("mode", "unknown"),
-                    "session": c.labels.get("tg_session", "unknown")
-                }
-                container_list.append(container_info)
-                
-        except (docker.errors.ImageNotFound, docker.errors.APIError) as e:
-            print(f"Warning: Container {c.id} references a missing image: {e}")
-            
-            # For containers with missing images, still check if they're telegram jobs
-            if (c.labels and "telegram" in str(c.labels).lower()) or \
-               (c.name and "telegram" in c.name.lower()):
-                
-                # Apply same filtering logic
-                container_owner = c.labels.get("owner_id")
-                if container_owner != user["id"]:
-                    continue
-                
-                if req.case_id is not None:
-                    container_case_id = c.labels.get("case_id")
-                    try:
-                        if container_case_id is None or int(container_case_id) != req.case_id:
-                            continue
-                    except (ValueError, TypeError):
-                        continue
-                
-                container_info = {
-                    "id": c.id,
-                    "name": c.name,
-                    "image": "Image not found",
-                    "status": c.status,
-                    "labels": c.labels,
-                    "created": c.attrs['Created'],
-                    "case_id": c.labels.get("case_id"),
-                    "owner_id": c.labels.get("owner_id"),
-                    "channels": c.labels.get("channels", ""),
-                    "mode": c.labels.get("mode", "unknown"),
-                    "session": c.labels.get("tg_session", "unknown")
-                }
-                container_list.append(container_info)
-            continue
-        except Exception as e:
-            print(f"Unexpected error processing container {c.id}: {e}")
-            continue
-    
-    return {
-        "containers": container_list,
-        "total": len(container_list),
-        "filtered_by_case": req.case_id,
-        "user_id": user["id"]
-    }
-
+    try:
+        # Call job-launcher to get job status
+        response = requests.post(
+            f"{JOB_LAUNCHER_URL}/jobs",
+            headers={"Authorization": f"Bearer {JOB_SECRET_TOKEN}"},
+            json={"owner_id": user["id"], "case_id": req.case_id},
+            timeout=5
+        )
+        response.raise_for_status()
+        data = response.json()
+        
+        # Transform job data to match old container format
+        jobs = []
+        for job in data.get("jobs", []):
+            jobs.append({
+                "id": job["id"],
+                "name": f"{job['mode']}_{job['id'][:8]}",
+                "status": job["status"],  # queued, started, finished, failed
+                "labels": {
+                    "case_id": str(job.get("case_id", "")),
+                    "owner_id": job.get("owner_id"),
+                    "channels": ",".join(job.get("channels", [])),
+                    "mode": job.get("mode", "unknown")
+                },
+                "created": job.get("created_at"),
+                "case_id": job.get("case_id"),
+                "owner_id": job.get("owner_id"),
+                "channels": ",".join(job.get("channels", [])),
+                "mode": job.get("mode", "unknown"),
+                "session": job.get("session_name", "unknown")
+            })
+        
+        return {
+            "containers": jobs,  # Keep "containers" key for frontend compatibility
+            "total": len(jobs),
+            "filtered_by_case": req.case_id,
+            "user_id": user["id"]
+        }
+    except requests.RequestException as e:
+        print(f"Error fetching jobs from launcher: {e}")
+        raise HTTPException(status_code=503, detail="Job launcher unavailable")
 
 # Add this to your existing FastAPI router in the auth module
 
@@ -362,63 +310,47 @@ def start_telegram_container(
         raise  # Re-raise HTTPExceptions from the helper
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
+# backend/controller/auth_controller.py
 
-@router.post("/telegram/container/{container_id}/stop")
-def stop_telegram_container(
-    container_id: str, 
-    user: UserCtx = Depends(user_ctx)
-):
-    """Stop a specific telegram container via job_launcher"""
+@router.post("/telegram/container/{job_id}/stop")
+def stop_telegram_job(job_id: str, user: UserCtx = Depends(user_ctx)):
+    """Cancel/stop a running job"""
     try:
-        result = stop_container(container_id, user["id"])
-        return {
-            "message": result.get("message", f"Container {container_id[:12]} stopped successfully"),
-            "status": result.get("status", "exited"),
-            "container_id": container_id
-        }
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
+        response = requests.delete(
+            f"{JOB_LAUNCHER_URL}/jobs/{job_id}",
+            headers={"Authorization": f"Bearer {JOB_SECRET_TOKEN}"},
+            json={"owner_id": user["id"]},
+            timeout=5
+        )
+        response.raise_for_status()
+        return {"message": f"Job cancelled", "status": "cancelled"}
+    except requests.HTTPError as e:
+        if e.response.status_code == 404:
+            raise HTTPException(404, "Job not found")
+        raise HTTPException(500, str(e))
 
-@router.post("/telegram/container/{container_id}/restart")
-def restart_telegram_container(
-    container_id: str, 
-    user: UserCtx = Depends(user_ctx)
-):
-    """Restart a specific telegram container via job_launcher"""
-    try:
-        print(f"Restarting container {container_id} for user {user['id']}")
-        result = restart_container(container_id, user["id"])
-        return {
-            "message": result.get("message", f"Container {container_id[:12]} restarted successfully"),
-            "status": result.get("status", "running"),
-            "container_id": container_id
-        }
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
 
-@router.delete("/telegram/container/{container_id}/remove")
-def remove_telegram_container(
-    container_id: str, 
+
+@router.delete("/telegram/container/{job_id}/remove")
+def remove_telegram_job(
+    job_id: str, 
     user: UserCtx = Depends(user_ctx),
     force: bool = False
 ):
-    """Remove a specific telegram container via job_launcher"""
+    """Cancel and remove a job"""
     try:
-        result = remove_container(container_id, user["id"], force)
-        print(f"Removing container {container_id} for user {user['id']} with force={force}")
-        return {
-            "message": result.get("message", f"Container {container_id[:12]} removed successfully"),
-            "status": "removed",
-            "container_id": container_id
-        }
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
+        response = requests.delete(
+            f"{JOB_LAUNCHER_URL}/jobs/{job_id}",
+            headers={"Authorization": f"Bearer {JOB_SECRET_TOKEN}"},
+            json={"owner_id": user["id"], "force": force},
+            timeout=5
+        )
+        response.raise_for_status()
+        return {"message": "Job cancelled and removed", "status": "removed"}
+    except requests.HTTPError as e:
+        if e.response.status_code == 404:
+            raise HTTPException(404, "Job not found")
+        raise HTTPException(500, str(e))
 @router.post("/telegram/similar")
 def telegram_similar(req: ChannelInput, user: UserCtx = Depends(user_ctx)):
     result = run_similarity(req.channel,
