@@ -55,40 +55,24 @@ async def get_media_by_message_id(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Fehler beim Abrufen der Medien: {str(e)}")
     
+async def fetch_channels(owner: str | None, usernames: list[str] | None = None):
+    all_channels = await get_channel_list(owner, usernames=usernames or [])
+    if usernames:
+        filtered = [
+            ch for ch in all_channels
+            if ch.get('username', '').lower() in [u.lower() for u in usernames]
+        ]
+        return filtered
+    return all_channels
+
 @router.get("/channels", response_model=List[ChannelListItem])
 async def list_channels(
-    usernames: Optional[str] = Query(None, description="Comma-separated channel usernames to filter by"),
-    user: UserCtx = Depends(user_ctx)
+    usernames: Optional[str] = Query(None),
+    user: UserCtx = Depends(user_ctx),
 ):
     owner = None if is_admin(user) else user["id"]
-    try:
-        # Get all channels for the owner
-        all_channels = await get_channel_list(owner)
-        
-        # If usernames filter is provided, filter the results
-        if usernames:
-            username_list = [u.strip().lower() for u in usernames.split(',') if u.strip()]
-            channels = [
-                ch for ch in all_channels 
-                if ch.get('username', '').lower() in username_list
-            ]
-            print(f"[DEBUG] Filtered {len(all_channels)} channels to {len(channels)} based on usernames: {username_list}")
-            
-            # If requested channels don't exist yet (not scraped), return empty list
-            # This is normal when channels are added to a case but not yet scraped
-            if len(channels) == 0:
-                print(f"[INFO] No channels found for usernames: {username_list}. They may not be scraped yet.")
-                return []
-        else:
-            channels = all_channels
-            
-        # Transform the response
-        for channel in channels:
-            channel["last_message_date"] = channel.pop("last_active", None)
-            
-        return channels
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Fehler beim Abrufen der Channel-Liste: {str(e)}")
+    username_list = [u.strip() for u in usernames.split(',')] if usernames else None
+    return await fetch_channels(owner, username_list)
 
 @router.get("/channels/expand", response_model=Dict[str, List[str]])
 async def expand_channels_with_recommendations(
@@ -178,6 +162,7 @@ async def get_channel_messages(
     user: UserCtx = Depends(user_ctx),
 ):
     owner = None if is_admin(user) else user["id"]
+    print(f"[DEBUG] Fetching messages for channel {channel_id} with limit={limit}, before={before}, query={q}")
     try:
         messages = await get_messages_for_channel(
             str(channel_id),

@@ -230,5 +230,159 @@ def test_extract_links():
     for link in links:
         print(f"  - {link}")
 
+# Updated utils.py functions for audio/voice support
+
+def get_media_type(media) -> str:
+    """Determine media type for file naming - WITH VOICE SUPPORT"""
+    try:
+        # Use type name string comparison to avoid import issues
+        media_type_name = type(media).__name__
+        
+        if media_type_name == "MessageMediaPhoto":
+            return "photo"
+        elif media_type_name == "MessageMediaDocument":
+            # Check for voice messages first
+            if hasattr(media, 'document') and media.document:
+                doc = media.document
+                
+                # Check attributes for voice flag
+                if hasattr(doc, 'attributes'):
+                    for attr in doc.attributes:
+                        # Voice messages have a 'voice' attribute
+                        if hasattr(attr, 'voice') and attr.voice:
+                            return "voice"
+                        # Video notes (round video messages) 
+                        if hasattr(attr, 'round_message') and attr.round_message:
+                            return "video_note"
+                
+                # Then check MIME type
+                mime_type = getattr(doc, 'mime_type', '')
+                if isinstance(mime_type, str):
+                    mime_lower = mime_type.lower()
+                    if mime_lower.startswith('video/'):
+                        return "video"
+                    elif mime_lower.startswith('audio/'):
+                        return "audio"
+                    elif mime_lower.startswith('image/'):
+                        return "image"
+            return "document"
+        elif media_type_name == "MessageMediaWebPage":
+            # Web pages don't have downloadable media
+            return "webpage"
+        elif hasattr(media, 'video'):
+            return "video"
+        elif hasattr(media, 'audio'):
+            return "audio"
+        else:
+            print(f"[DEBUG] Unknown media type: {media_type_name}")
+            return "unknown"
+    except Exception as e:
+        print(f"[WARN] Error determining media type: {e}")
+        return "unknown"
+
+
+def generate_media_path(username: str, msg_id: int, media_type: str, message=None) -> str:
+    """Generate predictable media path before download - WITH VOICE SUPPORT"""
+    # Use MEDIA_ROOT consistently
+    channel_dir = MEDIA_ROOT / username
+    
+    # Try to get the original filename if available
+    original_name = None
+    if message and hasattr(message, 'file') and message.file:
+        original_name = getattr(message.file, 'name', None)
+    
+    # Generate filename with message ID and type
+    if original_name:
+        base_name = Path(original_name).stem
+        ext = Path(original_name).suffix
+        filename = f"msg_{msg_id}_{base_name}{ext}"
+    elif media_type == "photo":
+        filename = f"msg_{msg_id}_photo.jpg"
+    elif media_type == "video":
+        filename = f"msg_{msg_id}_video.mp4"
+    elif media_type == "voice":
+        # Voice messages are typically OGG format with Opus codec
+        filename = f"msg_{msg_id}_voice.ogg"
+    elif media_type == "video_note":
+        # Round video messages
+        filename = f"msg_{msg_id}_videonote.mp4"
+    elif media_type == "audio":
+        filename = f"msg_{msg_id}_audio.mp3"
+    elif media_type == "document":
+        filename = f"msg_{msg_id}_document"
+    elif media_type == "webpage":
+        return None
+    else:
+        filename = f"msg_{msg_id}_media"
+    
+    return str(channel_dir / filename)
+
+
+def is_media_audio_capable(media_type: str) -> bool:
+    """Check if media type can contain audio for transcription"""
+    return media_type in ["audio", "voice", "video", "video_note"]
+
+
+def should_queue_transcription(msg, media_type: str) -> bool:
+    """
+    Determine if message should be queued for audio transcription
+    
+    Args:
+        msg: Telegram message object
+        media_type: Detected media type
+    
+    Returns:
+        True if message should be transcribed
+    """
+    # Always transcribe voice messages and audio files
+    if media_type in ["voice", "audio"]:
+        return True
+    
+    # For videos, check if it's not just an animation/GIF
+    if media_type in ["video", "video_note"]:
+        # Skip if it's marked as animation (GIFs)
+        if hasattr(msg, 'media') and hasattr(msg.media, 'document'):
+            doc = msg.media.document
+            if hasattr(doc, 'attributes'):
+                for attr in doc.attributes:
+                    # Skip animated content without sound
+                    if hasattr(attr, 'animated') and attr.animated:
+                        # Check if it has audio track
+                        if not (hasattr(attr, 'has_audio') and attr.has_audio):
+                            return False
+        return True
+    
+    return False
+
+
+def get_audio_file_info(file_path: str) -> dict:
+    """
+    Get audio file information for logging
+    
+    Args:
+        file_path: Path to audio/video file
+    
+    Returns:
+        Dictionary with file info
+    """
+    import os
+    from pathlib import Path
+    
+    if not os.path.exists(file_path):
+        return {"exists": False}
+    
+    path = Path(file_path)
+    size_bytes = path.stat().st_size
+    size_mb = size_bytes / (1024 * 1024)
+    
+    return {
+        "exists": True,
+        "name": path.name,
+        "extension": path.suffix,
+        "size_bytes": size_bytes,
+        "size_mb": round(size_mb, 2),
+        "path": str(path)
+    }
+
 if __name__ == "__main__":
     test_extract_links()

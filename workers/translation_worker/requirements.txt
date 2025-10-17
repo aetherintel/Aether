@@ -1,0 +1,13 @@
+# Core ML libraries - must be compatible versions
+torch>=2.0.0
+transformers==4.37.2
+tokenizers==0.15.2
+sentencepiece==0.1.99
+accelerate
+# Other dependencies
+redis
+rq
+neo4j
+python-dotenv
+requests
+langdetect

@@ -1,5 +1,4 @@
-# docker-compose.yml
-services:
+services:  
   postgres:
     image: postgres:15
     container_name: postgres
@@ -11,11 +10,45 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./docker/db-init:/docker-entrypoint-initdb.d
+    networks:
+      - aether-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  neo4j:
+    image: neo4j:5.18
+    container_name: neo4j
+    restart: unless-stopped
+    ports:
+      - "7474:7474"
+      - "7687:7687"
+    environment:
+      NEO4J_AUTH: ${NEO4J_USER}/${NEO4J_PASSWORD}
+      NEO4J_PLUGINS: '["apoc","graph-data-science"]'
+    volumes:
+      - neo4j_data:/data
+      - neo4j_logs:/logs
+    networks:
+      - aether-network
+    healthcheck:
+      test: ["CMD", "cypher-shell", "-u", "${NEO4J_USER}", "-p", "${NEO4J_PASSWORD}", "RETURN 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # ============================================================================
+  # AUTHENTICATION & BACKEND
+  # ============================================================================
+
   keycloak:
     image: quay.io/keycloak/keycloak:24.0.2
     container_name: keycloak
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
     command: 
       - start-dev 
       - --import-realm
@@ -28,26 +61,23 @@ services:
       - "8080:8080"
     restart: always
     environment:
-      # Database
       KC_DB: postgres
       KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
       KC_DB_USERNAME: ${DB_USER}
       KC_DB_PASSWORD: ${DB_PASSWORD}
-      
-      # Admin
       KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN}
       KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
-      
-      # Hostname Config für Email Links
       KC_HOSTNAME: localhost
       KC_HOSTNAME_PORT: 8080
       KC_HOSTNAME_STRICT: "false"
       KC_HOSTNAME_STRICT_HTTPS: "false"
       KC_HTTP_ENABLED: "true"
-      
     volumes:
       - keycloak_data:/opt/keycloak/data
       - ./keycloak/exports:/opt/keycloak/data/import
+    networks:
+      - aether-network
+
   backend:
     build: ./backend/app
     restart: on-failure
@@ -59,16 +89,27 @@ services:
       SWAGGER_TOKEN_URL: http://localhost:8080/realms/Aether/protocol/openid-connect/token
       ENVIRONMENT: ${ENVIRONMENT}
       JOB_LAUNCHER_URL: http://job-launcher:9001
-      JOB_SECRET_TOKEN: ${JOB_SECRET_TOKEN}   
+      JOB_SECRET_TOKEN: ${JOB_SECRET_TOKEN}
+      PYTHONPATH: /app:/app/lib
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - tg_sessions:/app/sessions
       - ${MEDIA_PATH}:/shared/media
+      - ./aether_lib:/app/aether_lib:ro
     depends_on:
-      - postgres
-      - keycloak
+      postgres:
+        condition: service_healthy
+      keycloak:
+        condition: service_started
     ports:
       - "8000:8000"
+    networks:
+      - aether-network
+
+  # ============================================================================
+  # FRONTEND
+  # ============================================================================
+
   frontend:
     build:
       context: ./frontend
@@ -84,30 +125,19 @@ services:
     restart: always
     depends_on:
       - backend
-  neo4j:
-    image: neo4j:5.18
-    container_name: neo4j
-    restart: unless-stopped
-    ports:
-      - "7474:7474"   # HTTP browser (optional)
-      - "7687:7687"   # Bolt (for drivers like your scraper)
-    environment:
-      NEO4J_AUTH: ${NEO4J_USER}/${NEO4J_PASSWORD}
-      NEO4J_PLUGINS: '["apoc","graph-data-science"]'
-    volumes:
-      - neo4j_data:/data
-      - neo4j_logs:/logs
-    healthcheck:
-      test: ["CMD", "cypher-shell", "-u", "${NEO4J_USER}", "-p", "${NEO4J_PASSWORD}", "RETURN 1"]
-      interval: 10s
-      retries: 10
-    
-# docker-compose.yml
-  telegram-job:
+    networks:
+      - aether-network
+
+  # ============================================================================
+  # TELEGRAM SCRAPER (Updated with lib/)
+  # ============================================================================
+
+  telegram-worker:
     build:
       context: ./telegram_scraper
     image: telegram-job:latest
     command: rq worker --url redis://redis:6379 telegram-jobs
+    restart: unless-stopped
     environment:
       # Telegram API
       TG_API_ID: ${TG_API_ID}
@@ -122,7 +152,7 @@ services:
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      # Job Launcher (für rekursive Calls)
+      # Job Launcher
       JOB_LAUNCHER_URL: ${JOB_LAUNCHER_URL}
       JOB_SECRET_TOKEN: ${JOB_SECRET_TOKEN}
       # Media
@@ -130,19 +160,154 @@ services:
       # Redis
       REDIS_HOST: redis
       REDIS_PORT: 6379
+      # Owner ID
+      OWNER_ID: ${OWNER_ID:-unknown}
+      # Python path for lib/
+      PYTHONPATH: /app:/app/lib
     volumes:
       - tg_sessions:/app/sessions
       - ./shared/media:/shared/media
+      - ./aether_lib:/app/aether_lib:ro
     deploy:
-      replicas: 5 
+      replicas: 5
     depends_on:
-      - redis
-      - postgres
-      - neo4j
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      neo4j:
+        condition: service_healthy
+      keycloak:
+        condition: service_started
     networks:
-      - default  # oder aether-network falls definiert
+      - aether-network
+
+  # ============================================================================
+  # TRANSLATION WORKER (NEW)
+  # ============================================================================
+
+  redis:
+    image: redis:7-alpine
+    container_name: aether-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - aether-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Translation worker (multiple instances for parallelism)
+  translation-worker:
+    build:
+      context: .
+      dockerfile: workers/translation_worker/Dockerfile
+    depends_on:
+      keycloak:
+        condition: service_started
+    environment:
+      - DATABASE_URL=postgresql://${DB_USER}:${DB_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - MODELS_PATH=/app/models
+      - USE_QUANTIZATION=true
+      - NEO4J_URI=bolt://neo4j:7687
+      - NEO4J_USER=${NEO4J_USER}
+      - NEO4J_PASSWORD=${NEO4J_PASSWORD}
+    volumes:
+      # Mount local models directory
+      - ./aether_lib:/app/aether_lib:ro
+      - ./models/translation:/app/models/translation
+    networks:
+      - aether-network
+    deploy:
+      replicas: 2  # Run 2 worker instances for parallel processing
+      resources:
+        limits:
+          cpus: '2'
+          memory: 4G
+        reservations:
+          cpus: '1'
+          memory: 2G
+  # ============================================================================
+  # IMAGE ANALYSIS WORKER (NEW)
+  # ============================================================================
+  image-worker:
+    build:
+      context: .
+      dockerfile: workers/image_worker/Dockerfile
+    environment:
+      # CRITICAL: These must match the mounted volume path
+      HOME: /app/models/image
+      PADDLEX_HOME: /app/models/image
+      MODEL_BASE_DIR: /app/models/image
+      JOB_LAUNCHER_URL: ${JOB_LAUNCHER_URL}
+      JOB_SECRET_TOKEN: ${JOB_SECRET_TOKEN}
+      NEO4J_URI: ${NEO4J_URI}
+      NEO4J_USER: ${NEO4J_USER}
+      NEO4J_PASSWORD: ${NEO4J_PASSWORD}
+    volumes:
+      # Mount shared media directory for accessing images
+      - ${MEDIA_PATH}:/shared/media:ro
+      # Mount shared library
+      - ./aether_lib:/app/aether_lib:ro
+    networks:
+      - aether-network
+    depends_on:
+      keycloak:
+        condition: service_started
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+        reservations:
+          memory: 1G
+
+  # ===========================================================================
+  # AUDIO TRANSCRIPTION WORKER
+  # ============================================================================
+  audio-worker:
+    build:
+      context: .
+      dockerfile: workers/audio_worker/Dockerfile
+    environment:
+      JOB_LAUNCHER_URL: ${JOB_LAUNCHER_URL}
+      JOB_SECRET_TOKEN: ${JOB_SECRET_TOKEN}
+      NEO4J_URI: ${NEO4J_URI}
+      NEO4J_USER: ${NEO4J_USER}
+      NEO4J_PASSWORD: ${NEO4J_PASSWORD}
+      MODELS_PATH: /app/models
+      USE_QUANTIZATION: "true"
+    volumes:
+      - ./aether_lib:/app/aether_lib:ro
+      - ./models/audio:/app/models/audio
+      - ${MEDIA_PATH}:/shared/media:ro
+    networks:
+      - aether-network
+    depends_on:
+      keycloak:
+        condition: service_started
+    restart: unless-stopped
+    mem_limit: 6g
+    deploy:
+      resources:
+        limits:
+          memory: 6G
+        reservations:
+          memory: 1G
+  # ============================================================================
+  # JOB LAUNCHER (Central Queue Manager)
+  # ============================================================================
+
   job-launcher:
     build: ./job_launcher
+    container_name: job_launcher
+    restart: unless-stopped
     ports:
       - "9001:9001"
     env_file:
@@ -158,16 +323,20 @@ services:
       TG_API_HASH: ${TG_API_HASH}
       MEDIA_PATH: ${MEDIA_PATH}
       ENVIRONMENT: ${ENVIRONMENT}
+      OWNER_ID: ${OWNER_ID:-unknown}
+      PYTHONPATH: /app:/app/lib
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - tg_sessions:/app/sessions
-
-  redis:
-    image: redis:7-alpine
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis_data:/data
+      - ./shared/media:/shared/media
+      - ./aether_lib:/app/aether_lib:ro
+    depends_on:
+      redis:
+        condition: service_healthy
+      keycloak:
+        condition: service_started 
+    networks:
+      - aether-network
     
 volumes:
   pgdata:
@@ -175,4 +344,13 @@ volumes:
   neo4j_logs:
   keycloak_data:
   tg_sessions:
-  redis_data:
+  redis-data:
+  translation_models:
+
+# ============================================================================
+# NETWORKS
+# ============================================================================
+
+networks:
+  aether-network:
+    driver: bridge

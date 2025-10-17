@@ -18,6 +18,7 @@ import { ImageLightbox } from '@/components/ImageLightbox';
 import { authFetch } from '@/utils/authFetch';
 import classes from './MessagesTab.module.css';
 
+
 const apiUrl = import.meta.env.VITE_API_URL;
 
 interface MessagesTabProps {
@@ -192,27 +193,60 @@ const MessagesTab: React.FC<MessagesTabProps> = ({
     loadMessages(true);
   };
 
-  const MessageContent = ({
-    message,
-    isExpanded,
-    onToggleExpand,
-  }: {
-    message: any;
-    isExpanded: boolean;
-    onToggleExpand: () => void;
-  }) => {
-    const { measureRef, needsTruncation } = useMeasureText();
 
-    return (
-      <div className={classes.messageContent}>
-        <div
-          ref={measureRef}
-          className={`${classes.messageText} ${
-            isExpanded ? classes.messageTextExpanded : classes.messageTextTruncated
-          }`}
-        >
-          {highlightText(message.text, searchQuery)}
-        </div>
+interface MessageContentProps {
+  message: {
+    original_text: string;
+    translated_text?: string | null;
+    original_language?: string;
+    translation_status?: string;
+  };
+  searchQuery?: string;
+  isExpanded: boolean;
+  onToggleExpand: () => void;
+}
+
+ const MessageContent = ({
+  message,
+  searchQuery = "",
+  isExpanded,
+  onToggleExpand,
+}: MessageContentProps) => {
+  const { measureRef, needsTruncation } = useMeasureText();
+  const [showOriginal, setShowOriginal] = useState(false);
+
+  const hasTranslation =
+    !!message.translated_text &&
+    message.translated_text.trim().length > 0 &&
+    message.translation_status === "completed";
+
+  // ✅ Safely coerce possibly-null values into empty strings
+  const displayedText =
+    (showOriginal || !hasTranslation
+      ? message.original_text
+      : message.translated_text) || "";
+
+  const handleToggleLanguage = () => setShowOriginal((prev) => !prev);
+
+  // ✅ Safely format original language
+  const languageLabel =
+    message.original_language && message.original_language.length > 0
+      ? message.original_language.toUpperCase()
+      : "N/A";
+
+  return (
+    <div className={classes.messageContent}>
+      <div
+        ref={measureRef}
+        className={`${classes.messageText} ${
+          isExpanded ? classes.messageTextExpanded : classes.messageTextTruncated
+        }`}
+      >
+        {highlightText(displayedText, searchQuery || "")}
+      </div>
+
+      <div className={classes.actionsRow}>
+        {/* Expand / collapse button */}
         {needsTruncation && (
           <Button
             variant="subtle"
@@ -220,12 +254,28 @@ const MessagesTab: React.FC<MessagesTabProps> = ({
             onClick={onToggleExpand}
             className={classes.expandButton}
           >
-            {isExpanded ? 'Show less' : 'Show more'}
+            {isExpanded ? "Show less" : "Show more"}
+          </Button>
+        )}
+
+        {/* Language toggle */}
+        {hasTranslation && (
+          <Button
+            variant="subtle"
+            size="xs"
+            onClick={handleToggleLanguage}
+            className={classes.languageToggle}
+          >
+            {showOriginal
+              ? "View German translation"
+              : `View original (${languageLabel})`}
           </Button>
         )}
       </div>
-    );
-  };
+      
+    </div>
+  );
+};
 
   // Function to deduplicate messages based on message_id
   const deduplicateMessages = useCallback((messages: any[]) => {
@@ -343,6 +393,7 @@ const MessagesTab: React.FC<MessagesTabProps> = ({
   const messageRows = messages.map((message) => {
     const isExpanded = expandedMessages.has(message.message_id);
 
+
     return (
       <Table.Tr
         key={message.message_id}
@@ -367,20 +418,25 @@ const MessagesTab: React.FC<MessagesTabProps> = ({
           <Box>
             <div className={classes.authorRow}>
               <Text size="sm" fw={500} className={classes.authorName}>
-                <Anchor onClick={() => onUpdateGraph('user', message.author.name)}>
-                  {message.author.name}
+                <Anchor
+                  onClick={() => message.author?.name && onUpdateGraph('user', message.author.name)}
+                >
+                  {message.author?.name || 'Unknown Author'}
                 </Anchor>
                 <span className={classes.channelName} style={{ marginLeft: '0.25rem' }}>
                   [
                   <Anchor
-                    onClick={() => onUpdateGraph('channel', message.channel.username)}
+                    onClick={() =>
+                      message.channel?.username && onUpdateGraph('channel', message.channel.username)
+                    }
                     className={classes.channelName}
                   >
-                    {message.channel.username}
+                    {message.channel?.username || 'Unknown Channel'}
                   </Anchor>
                   ]
                 </span>
               </Text>
+
               <Text size="xs" className={classes.timestamp}>
                 {formatRelativeTime(message.date)}
               </Text>

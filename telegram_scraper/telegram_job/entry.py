@@ -5,7 +5,8 @@ import os, json, sys, asyncio
 # GEÄNDERT: Relative Imports verwenden
 from similar import similar_channels_flexible as similar_channels
 from scraper import run_scraper, run_live_listener_only
-from neo4j_client import write_recommendations, is_scraped
+from aether_lib.neo4j_client.channels import write_recommendations, is_scraped
+from aether_lib.neo4j_client.connection import init_driver, close_driver
 from telegram_client import login
 
 # ========================================
@@ -17,7 +18,10 @@ def run_job(**kwargs):
     Wird vom Job-Launcher via Queue aufgerufen.
     """
     print(f"[RQ] Starting job with kwargs: {kwargs}")
-    
+
+    owner_id = kwargs.get('owner_id', 'unknown')
+    case_id = kwargs.get('case_id')
+
     # Setze ENV-Variablen aus kwargs
     os.environ['MODE'] = kwargs.get('mode', 'scrape')
     os.environ['CHANNELS'] = ','.join(kwargs.get('channels', []))
@@ -38,7 +42,7 @@ def run_job(**kwargs):
     
     # Führe main() aus (ENV vars sind jetzt gesetzt)
     try:
-        result = asyncio.run(main())
+        result = asyncio.run(main(owner_id=owner_id, case_id=case_id))
         print(f"[RQ] Job completed successfully")
         return {
             "status": "completed", 
@@ -77,9 +81,10 @@ def get_env_vars():
         'SKIP_HISTORY': SKIP_HISTORY
     }
 
-async def main():
+from aether_lib.neo4j_client.connection import init_driver, close_driver
+
+async def main(owner_id=None, case_id=None):
     """Hauptlogik - liest ENV vars zur Laufzeit"""
-    # Lese ENV vars HIER (nicht beim Import!)
     env = get_env_vars()
     MODE = env['MODE']
     CHANNELS = env['CHANNELS']
@@ -88,62 +93,74 @@ async def main():
     RECURSIVE = env['RECURSIVE']
     NEO4J_WRITE = env['NEO4J_WRITE']
     SKIP_HISTORY = env['SKIP_HISTORY']
-    
+    if owner_id is None:
+        owner_id = os.getenv('OWNER_ID', 'unknown')
+    if case_id is None:
+        case_id_env = os.getenv('CASE_ID')
+        case_id = int(case_id_env) if case_id_env and case_id_env.isdigit() else None
     if not MODE:
         sys.exit("MODE environment variable is required")
-    
+
     if not SESSION_STRING:
         raise ValueError("SESSION_STRING environment variable is required but not set.")
-    
-    await login()
-    print(f"[DEBUG] Logged in with {MODE}")
-    if not CHANNELS:
-        print("[]")
-        return
-    
-    if MODE == "similar":
-        root = CHANNELS[0]
-        if await is_scraped(root):
+
+    # ✅ Initialize Neo4j driver once at startup
+    await init_driver()
+    print("[INIT] Neo4j driver initialized")
+
+    try:
+        await login()
+        print(f"[DEBUG] Logged in with {MODE}")
+        if not CHANNELS:
+            print("[]")
             return
-        recs = await similar_channels(root)
-        print(json.dumps(recs, ensure_ascii=False))
-        if NEO4J_WRITE:
-            await write_recommendations(root, recs)
-        usernames = [c["username"] for c in recs if c.get("username")]
-        if usernames:
-            await run_scraper(usernames, SESSION_NAME, recursive=RECURSIVE, skip_history=SKIP_HISTORY)
-    
-    elif MODE == "scrape":
-        for ch in CHANNELS:
-            if await is_scraped(ch):
-                continue
-            await run_scraper([ch], SESSION_NAME, recursive=RECURSIVE, skip_history=SKIP_HISTORY)
-    
-    elif MODE == "full":
-        for root in CHANNELS:
-            # Step 1: Scrape the root channel
-            await run_scraper([root], SESSION_NAME, recursive=RECURSIVE, skip_history=SKIP_HISTORY)
-            # Step 2: Find similar channels and scrape them
+
+        if MODE == "similar":
+            root = CHANNELS[0]
+            if await is_scraped(root):
+                return
             recs = await similar_channels(root)
+            print(json.dumps(recs, ensure_ascii=False))
             if NEO4J_WRITE:
                 await write_recommendations(root, recs)
             usernames = [c["username"] for c in recs if c.get("username")]
             if usernames:
-                await run_scraper(usernames, SESSION_NAME, recursive=False, skip_history=SKIP_HISTORY)
-    
-    elif MODE == "live":
-        print("[LIVE] Listening for new messages only...")
-        try:
-            await run_live_listener_only(CHANNELS)
-        except Exception as e:
-            print("[ERROR] Exception in live listener:", e)
-            import traceback
-            traceback.print_exc()
-        print("[DEBUG] Live listener finished.")
-    
-    else:
-        print(f"[ERROR] Unknown MODE: {MODE!r}")
-        sys.exit("unknown MODE")
+                await run_scraper(usernames, SESSION_NAME, recursive=RECURSIVE, skip_history=SKIP_HISTORY, case_id=case_id, owner_id=owner_id)
+
+        elif MODE == "scrape":
+            for ch in CHANNELS:
+                if await is_scraped(ch):
+                    continue
+                await run_scraper([ch], SESSION_NAME, recursive=RECURSIVE, skip_history=SKIP_HISTORY, case_id=case_id, owner_id=owner_id)
+
+        elif MODE == "full":
+            for root in CHANNELS:
+                await run_scraper([root], SESSION_NAME, recursive=RECURSIVE, skip_history=SKIP_HISTORY, case_id=case_id, owner_id=owner_id)
+                recs = await similar_channels(root)
+                if NEO4J_WRITE:
+                    await write_recommendations(root, recs)
+                usernames = [c["username"] for c in recs if c.get("username")]
+                if usernames:
+                    await run_scraper(usernames, SESSION_NAME, recursive=False, skip_history=SKIP_HISTORY, owner_id=owner_id)
+
+        elif MODE == "live":
+            print("[LIVE] Listening for new messages only...")
+            try:
+                await run_live_listener_only(CHANNELS, owner_id=owner_id, case_id=case_id)
+            except Exception as e:
+                print("[ERROR] Exception in live listener:", e)
+                import traceback
+                traceback.print_exc()
+            print("[DEBUG] Live listener finished.")
+
+        else:
+            print(f"[ERROR] Unknown MODE: {MODE!r}")
+            sys.exit("unknown MODE")
+
+    finally:
+        # ✅ Always close the driver cleanly
+        await close_driver()
+        print("[CLOSE] Neo4j driver closed")
 
 # Für direkten Aufruf (alte Docker-Container)
 if __name__ == "__main__":
