@@ -48,3 +48,5 @@ volumes/
 postgres_data/
 
 shared/
+
+models/*

@@ -11,6 +11,7 @@ from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy.sql import func
 import os
 from controller.message_controller import (
+    fetch_channels,
     list_channels
 )
 from services.neo4j_backend_client import (
@@ -221,7 +222,10 @@ async def read_casefile(
     owner = None if is_admin(user) else user["id"]
     channel_usernames = obj.tgchannels if obj.tgchannels else []
     expanded_channels = await get_case_channels_with_recommendations(channel_usernames, owner)
-    flattened = [item for sublist in expanded_channels.values() for item in sublist]
+    flattened = list(expanded_channels.keys()) + [
+    rec for recs in expanded_channels.values() for rec in recs
+]
+
 
     print(f"read_casefile: expanded_channels={flattened}")
 
@@ -229,7 +233,8 @@ async def read_casefile(
     usernames_str = ','.join(flattened) if flattened else None
     
     # Get channel details using the existing list_channels function
-    channels = await list_channels(usernames=usernames_str, user=user)
+    channels = await fetch_channels(owner, flattened)
+
     
     # Extract channel IDs from the channels
     channel_ids = [ch['channel_id'] for ch in channels if ch.get('channel_id')]

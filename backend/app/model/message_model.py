@@ -13,11 +13,15 @@ class Channel(BaseModel):
 
 class Message(BaseModel):
     message_id: str
-    text: Optional[str] = None
+    text: Optional[str] = None  # backward compatibility
+    original_text: Optional[str] = None
+    translated_text: Optional[str] = None
+    original_language: Optional[str] = None
+    translation_status: Optional[str] = None
     date: Optional[datetime] = None
-    media_type: Optional[str]
-    media_path: Optional[str]
-    reply_to_id: Optional[str]
+    media_type: Optional[str] = None
+    media_path: Optional[str] = None
+    reply_to_id: Optional[str] = None
     author: Author
     channel: Channel
 

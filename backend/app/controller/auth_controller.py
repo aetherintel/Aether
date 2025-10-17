@@ -4,15 +4,17 @@ from fastapi.security import OAuth2PasswordRequestForm
 from fastapi.security import OAuth2PasswordBearer
 import os
 import requests
+import logging
 from services.keycloak_service import get_current_user, has_role
 from controller.telegram_controller import remove_container, restart_container, run_similarity, start_container, start_scraper, launch_full_scrape_job, launch_live_scrape_job, stop_container
 from pydantic import BaseModel
 import docker
 from services.auth_ctx import user_ctx, is_admin, UserCtx
-
 JOB_LAUNCHER_URL = os.getenv("JOB_LAUNCHER_URL", "http://job-launcher:9001")
 JOB_SECRET_TOKEN = os.getenv("JOB_SECRET_TOKEN", "changeme")
 
+logger = logging.getLogger(__name__)
+router = APIRouter(prefix="/auth", tags=["auth"])
 router = APIRouter(prefix="/auth", tags=["auth"])
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 docker_client = docker.from_env()
@@ -241,54 +243,171 @@ def resend_verification(email_address: str):  # Parameter umbenannt
 def get_user(token: str = Depends(oauth2_scheme)):
     return {"token": token}
 
+# backend/app/routers/auth.py - Update telegram_status endpoint
+
 @router.post("/telegram/status")
 def telegram_status(
     req: StatusRequest, 
     user: UserCtx = Depends(user_ctx)
 ):
     """
-    Get RQ job status filtered by case_id and user ownership
+    Get ALL job statuses (telegram, translation, image) filtered by case_id and user
     """
     try:
-        # Call job-launcher to get job status
-        response = requests.post(
+        # Call job-launcher to get ALL jobs
+        params = {
+            "owner_id": user["id"],
+        }
+        
+        if req.case_id:
+            params["case_id"] = req.case_id
+        
+        response = requests.get(
             f"{JOB_LAUNCHER_URL}/jobs",
             headers={"Authorization": f"Bearer {JOB_SECRET_TOKEN}"},
-            json={"owner_id": user["id"], "case_id": req.case_id},
-            timeout=5
+            params=params,  # Use params instead of json for GET
+            timeout=10
         )
         response.raise_for_status()
         data = response.json()
         
-        # Transform job data to match old container format
-        jobs = []
+        # Transform job data to match frontend container format
+        containers = []
         for job in data.get("jobs", []):
-            jobs.append({
-                "id": job["id"],
-                "name": f"{job['mode']}_{job['id'][:8]}",
-                "status": job["status"],  # queued, started, finished, failed
+            # Map job status to container status
+            status_map = {
+                "queued": "pending",
+                "started": "running",
+                "finished": "exited",
+                "failed": "failed"
+            }
+            
+            # Format channels display
+            channels_display = ", ".join(job.get("channels", [])) if job.get("channels") else job.get("message_id", "N/A")
+            
+            # Determine image/name based on queue
+            queue = job.get("queue", "unknown")
+            if "telegram" in queue:
+                image = "telegram-scraper"
+            elif "translation" in queue:
+                image = "translation-worker"
+            elif "image" in queue:
+                image = "image-worker"
+            else:
+                image = "unknown-worker"
+            
+            containers.append({
+                "id": job.get("job_id", "unknown"),
+                "name": f"{job.get('mode', 'job')}_{job.get('job_id', 'unknown')[:8]}",
+                "status": status_map.get(job.get("status", "unknown"), "unknown"),
+                "image": image,
                 "labels": {
                     "case_id": str(job.get("case_id", "")),
-                    "owner_id": job.get("owner_id"),
-                    "channels": ",".join(job.get("channels", [])),
-                    "mode": job.get("mode", "unknown")
+                    "owner_id": job.get("owner_id", ""),
+                    "channels": channels_display,
+                    "mode": job.get("mode", "unknown"),
+                    "queue": queue
                 },
                 "created": job.get("created_at"),
                 "case_id": job.get("case_id"),
                 "owner_id": job.get("owner_id"),
-                "channels": ",".join(job.get("channels", [])),
+                "channels": channels_display,
                 "mode": job.get("mode", "unknown"),
-                "session": job.get("session_name", "unknown")
+                "session": job.get("session_name", "N/A"),
+                "runtime": job.get("runtime"),
+                "queue": queue
             })
         
         return {
-            "containers": jobs,  # Keep "containers" key for frontend compatibility
-            "total": len(jobs),
+            "containers": containers,
+            "total": len(containers),
             "filtered_by_case": req.case_id,
-            "user_id": user["id"]
+            "user_id": user["id"],
+            "queues": data.get("queues", [])
         }
+        
     except requests.RequestException as e:
-        print(f"Error fetching jobs from launcher: {e}")
+        logger.error(f"Error fetching jobs from launcher: {e}")
+        raise HTTPException(status_code=503, detail="Job launcher unavailable")
+
+
+@router.delete("/telegram/job/{job_id}")
+def cancel_telegram_job(
+    job_id: str,
+    user: UserCtx = Depends(user_ctx)
+):
+    """
+    Cancel/remove a specific job (works for all job types)
+    """
+    try:
+        response = requests.delete(
+            f"{JOB_LAUNCHER_URL}/jobs/{job_id}",
+            headers={"Authorization": f"Bearer {JOB_SECRET_TOKEN}"},
+            timeout=10
+        )
+        response.raise_for_status()
+        
+        return response.json()
+        
+    except requests.RequestException as e:
+        logger.error(f"Error cancelling job {job_id}: {e}")
+        if e.response and e.response.status_code == 404:
+            raise HTTPException(status_code=404, detail="Job not found")
+        raise HTTPException(status_code=503, detail="Job launcher unavailable")
+
+
+@router.post("/telegram/job/{job_id}/requeue")
+def requeue_failed_job(
+    job_id: str,
+    user: UserCtx = Depends(user_ctx)
+):
+    """
+    Requeue a failed job
+    """
+    try:
+        response = requests.post(
+            f"{JOB_LAUNCHER_URL}/jobs/{job_id}/requeue",
+            headers={"Authorization": f"Bearer {JOB_SECRET_TOKEN}"},
+            timeout=10
+        )
+        response.raise_for_status()
+        
+        return response.json()
+        
+    except requests.RequestException as e:
+        logger.error(f"Error requeuing job {job_id}: {e}")
+        if e.response and e.response.status_code == 404:
+            raise HTTPException(status_code=404, detail="Job not found")
+        elif e.response and e.response.status_code == 400:
+            raise HTTPException(status_code=400, detail="Job is not failed")
+        raise HTTPException(status_code=503, detail="Job launcher unavailable")
+
+
+@router.get("/telegram/stats")
+def get_job_stats(
+    case_id: Optional[int] = None,
+    user: UserCtx = Depends(user_ctx)
+):
+    """
+    Get job statistics
+    """
+    try:
+        params = {"owner_id": user["id"]}
+        if case_id:
+            params["case_id"] = case_id
+        
+        response = requests.get(
+            f"{JOB_LAUNCHER_URL}/jobs/stats",
+            headers={"Authorization": f"Bearer {JOB_SECRET_TOKEN}"},
+            params=params,
+            timeout=10
+        )
+        response.raise_for_status()
+        
+        return response.json()
+        
+    except requests.RequestException as e:
+        logger.error(f"Error fetching job stats: {e}")
         raise HTTPException(status_code=503, detail="Job launcher unavailable")
 
 # Add this to your existing FastAPI router in the auth module
@@ -368,7 +487,7 @@ def telegram_scrape(
         channels=req.channels,
         tg_session=req.tg_session,
         owner_id=user["id"],                       
-        case_id=req.case_id or None,               # ← NEW
+        case_id=req.case_id or None,        
     )
     return {"message": "Scraper started", "container_id": container_id}
 
