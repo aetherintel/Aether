@@ -39,7 +39,14 @@ def run_job(**kwargs):
     os.environ['RECURSIVE'] = '1' if kwargs.get('recursive', False) else '0'
     os.environ['NEO4J_WRITE'] = '1' if kwargs.get('neo4j_write', False) else '0'
     os.environ['SKIP_HISTORY'] = '0'
+    os.environ['ENABLE_TRANSLATION'] = '1' if kwargs.get('enable_translation', True) else '0'
+    os.environ['ENABLE_IMAGE_ANALYSIS'] = '1' if kwargs.get('enable_image_analysis', True) else '0'
+    os.environ['ENABLE_AUDIO_TRANSCRIPTION'] = '1' if kwargs.get('enable_audio_transcription', True) else '0'
+    os.environ['ENABLE_EMOTION_ANALYSIS'] = '1' if kwargs.get('enable_emotion_analysis', False) else '0'
+    os.environ['ENABLE_LABEL_CLASSIFIER'] = '1' if kwargs.get('enable_label_classifier', False) else '0'
+    os.environ['ENABLE_GEOLOCATION_EXTRACTION'] = '1' if kwargs.get('enable_geolocation_extraction', False) else '0'
     
+
     if kwargs.get('parent_container_id'):
         os.environ['PARENT_CONTAINER_ID'] = kwargs['parent_container_id']
     if kwargs.get('depth') is not None:

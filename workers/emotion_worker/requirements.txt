@@ -1,0 +1,20 @@
+# Core ML libraries - must match your other workers for consistency
+torch>=2.0.0,<3.0.0
+transformers==4.36.2
+tokenizers==0.15.1
+sentencepiece==0.1.99
+accelerate>=0.20.0
+
+# IMPORTANT: tokenizers 0.15.2 has compatibility issues with XLM-RoBERTa
+# Use 0.15.1 or downgrade transformers to 4.36.x
+
+# Worker infrastructure (Redis Queue)
+redis>=4.5.0
+rq>=1.15.0
+
+# Neo4j database
+neo4j>=5.8.0
+
+# Utilities
+python-dotenv>=1.0.0
+requests>=2.31.0

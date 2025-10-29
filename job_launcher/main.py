@@ -16,18 +16,23 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Aether Job Launcher", version="2.0")
 
-# Redis Connection
-image_redis_conn = Redis(host=os.getenv("REDIS_HOST", "redis"), port=6379, db=2)
-translation_redis_conn = Redis(host=os.getenv("REDIS_HOST", "redis"), port=6379, db=1)
+# Redis Connections for different queues
 default_redis_conn = Redis(host=os.getenv("REDIS_HOST", "redis"), port=6379, db=0)
+translation_redis_conn = Redis(host=os.getenv("REDIS_HOST", "redis"), port=6379, db=1)
+image_redis_conn = Redis(host=os.getenv("REDIS_HOST", "redis"), port=6379, db=2)
 audio_redis_conn = Redis(host=os.getenv("REDIS_HOST", "redis"), port=6379, db=3)
+emotion_redis_conn = Redis(host=os.getenv("REDIS_HOST", "redis"), port=6379, db=4)
+classification_redis_conn = Redis(host=os.getenv("REDIS_HOST", "redis"), port=6379, db=5)
+geolocation_redis_conn = Redis(host=os.getenv("REDIS_HOST", "redis"), port=6379, db=6)
 
 queues = {
     'translation': Queue('translation-jobs', connection=translation_redis_conn),
     'image': Queue('image-jobs', connection=image_redis_conn),
     'audio': Queue('audio-jobs', connection=audio_redis_conn),
-    'sentiment': Queue('sentiment-jobs', connection=default_redis_conn),
+    'emotion': Queue('emotion-jobs', connection=emotion_redis_conn),
     'telegram': Queue('telegram-jobs', connection=default_redis_conn),
+    'classification': Queue('classification-jobs', connection=classification_redis_conn),
+    'geolocation': Queue('geolocation-jobs', connection=geolocation_redis_conn),
 }
 
 SECRET = os.getenv("JOB_SECRET_TOKEN", "changeme")
@@ -65,6 +70,16 @@ class AudioJobRequest(BaseModel):
     case_id: Optional[int] = None
     translate_transcript: bool = True  # NEW: Auto-translate transcription
 
+class EmotionJobRequest(BaseModel):
+    message_id: str
+    text: str
+    owner_id: Optional[str] = None
+    case_id: Optional[int] = None
+    threshold: float = 0.3
+    top_k: int = 3
+    chained_from: Optional[str] = None
+    parent_job_id: Optional[str] = None
+
 class JobListRequest(BaseModel):
     owner_id: Optional[str] = None
     case_id: Optional[int] = None
@@ -81,6 +96,12 @@ class ScrapeRequest(BaseModel):
     depth: int = 0
     max_discover_messages: int = 200
     case_id: Optional[int] = None
+    enable_translation: bool = True
+    enable_image_analysis: bool = True
+    enable_audio_transcription: bool = True
+    enable_emotion_analysis: bool = False
+    enable_label_classifier: bool = False
+    enable_geolocation_extraction: bool = False
 
 # Audio transcription job model
 class AudioTranscriptionJob(BaseModel):
@@ -93,6 +114,13 @@ class AudioTranscriptionJob(BaseModel):
     case_id: Optional[int] = None
     parent_job_id: Optional[str] = None
     chained_from: Optional[str] = None
+
+# Geolocation extraction job model
+class GeolocationRequest(BaseModel):
+    message_id: str
+    text: str
+    owner_id: Optional[str] = None
+    case_id: Optional[int] = None
 
 # ============================================================================
 #  HELPER FUNCTIONS
@@ -168,13 +196,11 @@ def queue_translation_job(req: TranslationJobRequest, request: Request):
             'case_id': req.case_id,
             'parent_job_id': req.parent_job_id,
             'chained_from': req.chained_from,
-            'image_text': is_image_text  # Include in metadata
+            'image_text': is_image_text,  # Include in metadata
+            'audio_text': is_audio_text  # Include in metadata
+        
         }
     )
-    print(f"[QUEUE] ✅ Audio transcription job queued successfully")
-    print(f"[QUEUE] Job meta: owner_id={job.meta.get('owner_id')}, case_id={job.meta.get('case_id')} from request: {req.owner_id}, {req.case_id}")
-    print(f"[QUEUE] Job kwargs: {job.kwargs}")
-    
     return {
         "job_id": job.id,
         "queue": "translation-jobs",
@@ -297,6 +323,137 @@ def queue_audio_transcription(req: AudioTranscriptionJob, request: Request):
         "queued_at": str(job.enqueued_at)
     }
 
+# ============================================================================
+#  EMOTION ANALYSIS QUEUE
+# ===========================================================================
+@app.post("/queue/emotion")
+def queue_emotion_job(req: EmotionJobRequest, request: Request):
+    """
+    Queue an emotion analysis job
+    Can be called by scraper (German text) OR translation worker (after translation)
+    """
+    _check_auth(request)
+    
+    job_id = f"emotion_{req.message_id}_{uuid.uuid4().hex[:6]}"
+    
+    print(f"[QUEUE] Emotion analysis job for message {req.message_id}")
+    
+    if req.chained_from:
+        print(f"[QUEUE] Chained from: {req.chained_from} (parent: {req.parent_job_id})")
+    
+    # Queue the job
+    job = queues['emotion'].enqueue(
+        'workers.emotion_worker.worker.classify_emotion_job',
+        message_id=req.message_id,
+        text=req.text,
+        neo4j_uri=os.getenv('NEO4J_URI'),
+        neo4j_user=os.getenv('NEO4J_USER'),
+        neo4j_password=os.getenv('NEO4J_PASSWORD'),
+        threshold=req.threshold,
+        top_k=req.top_k,
+        job_timeout='5m',
+        result_ttl=600,
+        failure_ttl=86400,
+        ttl=None,
+        meta={
+            'owner_id': req.owner_id,
+            'case_id': req.case_id,
+            'parent_job_id': req.parent_job_id,
+            'chained_from': req.chained_from
+        }
+    )
+    
+    print(f"[QUEUE] ✅ Emotion analysis job queued successfully")
+    print(f"[QUEUE] Job ID: {job.id}")
+    
+    return {
+        "job_id": job.id,
+        "queue": "emotion-jobs",
+        "status": job.get_status(),
+        "message_id": req.message_id,
+        "queued_at": str(job.enqueued_at)
+    }
+
+# =============================
+# Classification queue endpoint
+# =============================
+@app.post("/queue/classification")
+def queue_classification_job(req: EmotionJobRequest, request: Request):
+    """
+    Queue a text classification job
+    Can be called by scraper (German text) OR translation worker (after translation)
+    """
+    _check_auth(request)
+    
+    job_id = f"classification_{req.message_id}_{uuid.uuid4().hex[:6]}"
+    
+    print(f"[QUEUE] Text classification job for message {req.message_id}")
+    
+    if req.chained_from:
+        print(f"[QUEUE] Chained from: {req.chained_from} (parent: {req.parent_job_id})")
+    
+    # Queue the job
+    job = queues['classification'].enqueue(
+        'workers.classification_worker.worker.classify_post_job',
+        message_id=req.message_id,
+        text=req.text,
+        neo4j_uri=os.getenv('NEO4J_URI'),
+        neo4j_user=os.getenv('NEO4J_USER'),
+        neo4j_password=os.getenv('NEO4J_PASSWORD'),
+        job_timeout='5m',
+        result_ttl=600,
+        failure_ttl=86400,
+        ttl=None,
+        meta={
+            'owner_id': req.owner_id,
+            'case_id': req.case_id,
+            'parent_job_id': req.parent_job_id,
+            'chained_from': req.chained_from
+        }
+    )
+    
+    print(f"[QUEUE] ✅ Text classification job queued successfully")
+    print(f"[QUEUE] Job ID: {job.id}")
+    
+    return {
+        "job_id": job.id,
+        "queue": "emotion-jobs",
+        "status": job.get_status(),
+        "message_id": req.message_id,
+        "queued_at": str(job.enqueued_at)
+    }
+
+# Add to job_launcher/main.py
+
+@app.post("/queue/geolocation")
+def launch_geolocation_job(req: GeolocationRequest, request: Request):
+    """Queue geolocation extraction job"""
+    _check_auth(request)
+    
+    job_id = f"geo_{uuid.uuid4().hex[:6]}"
+    
+    job = queues['geolocation'].enqueue(
+        'workers.geolocation_worker.worker.extract_and_update_location',
+        message_id=req.message_id,
+        text=req.text,
+        owner_id=req.owner_id,
+        case_id=req.case_id,
+        job_timeout='5m',
+        result_ttl=86400,
+        failure_ttl=86400,
+        meta={
+            'owner_id': req.owner_id,
+            'case_id': req.case_id,
+            'message_id': req.message_id
+        }
+    )
+    
+    return {
+        "job_id": job.id,
+        "queue": "geolocation-jobs",
+        "status": job.get_status(),
+        "message_id": req.message_id
+    }
 
 # ============================================================================
 #  TELEGRAM SCRAPER QUEUE (Your existing endpoint)
@@ -323,6 +480,12 @@ def launch_scraper(req: ScrapeRequest, request: Request):
             'neo4j_write': req.neo4j,
             'owner_id': req.owner_id,
             'case_id': req.case_id,
+            'enable_translation': req.enable_translation,
+            'enable_image_analysis': req.enable_image_analysis,
+            'enable_audio_transcription': req.enable_audio_transcription,
+            'enable_emotion_analysis': req.enable_emotion_analysis,
+            'enable_label_classifier': req.enable_label_classifier,
+            'enable_geolocation_extraction': req.enable_geolocation_extraction,
         },
         job_id=job_id,
         timeout='6h',
@@ -360,10 +523,6 @@ def list_all_jobs(
     """
     _check_auth(request)
     
-    # Debug logging
-    print(f"[DEBUG] === LIST JOBS REQUEST ===")
-    print(f"[DEBUG] owner_id={owner_id}, case_id={case_id}, queue_name={queue_name}")
-    
     all_jobs = []
     
     # Determine which queues to check
@@ -376,13 +535,10 @@ def list_all_jobs(
         queues_to_check = queues
     
     for queue_name, queue in queues_to_check.items():
-        print(f"[DEBUG] Checking queue: {queue_name}")
         try:
             # 1. Queued jobs (waiting to be processed)
             queued_jobs = list(queue.jobs)
-            print(f"[DEBUG] Found {len(queued_jobs)} queued jobs in {queue_name}")
             for job in queued_jobs:
-                print(f"[DEBUG] Checking queued job: {job.id if job else 'None'}")
                 if job:
                     job_owner = job.meta.get('owner_id') if hasattr(job, 'meta') and job.meta else None
                     if not job_owner and hasattr(job, 'kwargs') and job.kwargs:
@@ -390,17 +546,14 @@ def list_all_jobs(
                     job_case = job.meta.get('case_id') if hasattr(job, 'meta') and job.meta else None
                     if not job_case and hasattr(job, 'kwargs') and job.kwargs:
                         job_case = job.kwargs.get('case_id')
-                    print(f"[DEBUG] Job {job.id}: owner={job_owner}, case={job_case}")
                 
                 if _job_matches_filter(job, owner_id, case_id):
-                    print(f"[DEBUG] Job {job.id} MATCHES filter")
                     all_jobs.append(_format_job(job, "queued", queue_name))
                 else:
                     print(f"[DEBUG] Job {job.id} DOES NOT MATCH filter")
             
             # 2. Started jobs (currently processing)
             started_job_ids = list(queue.started_job_registry.get_job_ids())
-            print(f"[DEBUG] Found {len(started_job_ids)} started jobs in {queue_name}")
             for job_id in started_job_ids:
                 try:
                     job = queue.fetch_job(job_id)
@@ -411,10 +564,7 @@ def list_all_jobs(
                         job_case = job.meta.get('case_id') if hasattr(job, 'meta') and job.meta else None
                         if not job_case and hasattr(job, 'kwargs') and job.kwargs:
                             job_case = job.kwargs.get('case_id')
-                        print(f"[DEBUG] Started job {job.id}: owner={job_owner}, case={job_case}")
-                        
                         if _job_matches_filter(job, owner_id, case_id):
-                            print(f"[DEBUG] Started job {job.id} MATCHES")
                             all_jobs.append(_format_job(job, "started", queue_name))
                         else:
                             print(f"[DEBUG] Started job {job.id} DOES NOT MATCH")
@@ -444,8 +594,6 @@ def list_all_jobs(
     
     # Sort by creation time (newest first)
     all_jobs.sort(key=lambda x: x.get('created_at', ''), reverse=True)
-    
-    print(f"[DEBUG] === RETURNING {len(all_jobs)} TOTAL JOBS ===")
     
     return {
         "total": len(all_jobs),
@@ -516,8 +664,8 @@ def _format_job(job, status, queue_name) -> dict:
             mode = 'image-analysis'
         elif 'audio' in queue_name:
             mode = 'audio-transcription'
-        elif 'sentiment' in queue_name:
-            mode = 'sentiment-analysis'
+        elif 'emotion' in queue_name:
+            mode = 'emotion-analysis'
     
     # Calculate runtime for started jobs
     runtime = None

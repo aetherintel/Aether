@@ -8,7 +8,7 @@ import sys
 import whisper
 from pathlib import Path
 
-def download_whisper_models(output_dir: str = "./models/audio/whisper"):
+def download_whisper_models(output_dir: str = "./audio/whisper"):
     """Download Whisper models for offline use"""
     
     output_path = Path(output_dir)

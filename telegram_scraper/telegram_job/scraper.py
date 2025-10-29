@@ -21,6 +21,13 @@ JOB_LAUNCHER_URL = os.getenv("JOB_LAUNCHER_URL", "http://job-launcher:9001")
 JOB_SECRET_TOKEN = os.getenv("JOB_SECRET_TOKEN")
 OWNER_ID = os.getenv("OWNER_ID", "unknown")
 
+ENABLE_TRANSLATION = os.getenv('ENABLE_TRANSLATION', '1') == '1'
+ENABLE_IMAGE_ANALYSIS = os.getenv('ENABLE_IMAGE_ANALYSIS', '1') == '1'
+ENABLE_AUDIO_TRANSCRIPTION = os.getenv('ENABLE_AUDIO_TRANSCRIPTION', '1') == '1'
+ENABLE_EMOTION_ANALYSIS = os.getenv('ENABLE_EMOTION_ANALYSIS', '0') == '1'
+ENABLE_LABEL_CLASSIFIER = os.getenv('ENABLE_LABEL_CLASSIFIER', '0') == '1'
+ENABLE_GEOLOCATION_EXTRACTION = os.getenv('ENABLE_GEOLOCATION_EXTRACTION', '0') == '1'
+
 # Translation Configuration
 SUPPORTED_TRANSLATION_LANGUAGES = ['ru', 'ar', 'trk', 'en']
 
@@ -49,12 +56,13 @@ def detect_language(text: str) -> str:
 def needs_translation(text: str) -> tuple[bool, str]:
     """
     Check if text needs translation
-    Returns: (needs_translation, detected_language)
+    Returns: (needs_translation, detected_language, to_english)
     """
     detected_lang = detect_language(text)
     
     # Already German
     if detected_lang == 'de':
+        # translate to english for better NLP results
         return False, 'de'
     
     # Supported language - needs translation
@@ -134,6 +142,36 @@ def queue_image_analysis(
         return None
 
 
+def queue_geolocation_extraction(
+    message_id: str,
+    text: str,
+    case_id: int = None,
+    owner_id: str = None
+) -> str:
+    """
+    Queue geolocation extraction job via job-launcher
+    Returns job ID or None if failed
+    """
+    try:
+        response = requests.post(
+            f"{JOB_LAUNCHER_URL}/queue/geolocation",
+            json={
+                "message_id": message_id,
+                "text": text,
+                "owner_id": owner_id,
+                "case_id": case_id
+            },
+            headers={"Authorization": f"Bearer {JOB_SECRET_TOKEN}"},
+            timeout=10
+        )
+        response.raise_for_status()
+        job_data = response.json()
+        print(f"[GEOLOCATION] ✓ Queued extraction job {job_data['job_id']} for message {message_id}")
+        return job_data['job_id']
+    except Exception as e:
+        print(f"[GEOLOCATION] ✗ Failed to queue geolocation extraction: {e}")
+        return None
+
 
 # ============================================================================
 #  MESSAGE PROCESSING (Updated with Translation)
@@ -161,11 +199,21 @@ async def process_message(msg, username, found_channels, recursive=False, case_i
         needs_trans = False
         detected_lang = None
         translation_status = 'none'
-        
+        geolocation_status = 'none'
         if text:
-            needs_trans, detected_lang = needs_translation(text)
-            translation_status = 'pending' if needs_trans else 'none'
-        
+            if len(text) >= 10 and ENABLE_TRANSLATION:
+                needs_trans, detected_lang = needs_translation(text)
+                translation_status = 'pending' if needs_trans else 'none'
+            # Geolocation extraction status
+            if len(text) >= 10 and ENABLE_GEOLOCATION_EXTRACTION:
+                geolocation_status = 'pending'
+                # Queue geolocation extraction
+                job_id = queue_geolocation_extraction(
+                    message_id=f"{msg.chat_id}-{msg.id}",
+                    text=text,
+                    owner_id=owner_id,
+                    case_id=case_id
+                )
         # Initialize processing statuses
         image_analysis_status = 'none'
         audio_transcription_status = 'none'
@@ -194,7 +242,7 @@ async def process_message(msg, username, found_channels, recursive=False, case_i
                         # Process based on media type
                         
                         # 1. IMAGE PROCESSING (existing)
-                        if media_type == "photo" and os.path.exists(media_path):
+                        if media_type == "photo" and os.path.exists(media_path) and ENABLE_IMAGE_ANALYSIS:
                             image_analysis_status = 'pending'
                             
                             job_id = queue_image_analysis(
@@ -209,7 +257,7 @@ async def process_message(msg, username, found_channels, recursive=False, case_i
                             print(f"[QUEUE] Image analysis queued for {full_message_id}, job: {job_id}")
                         
                         # 2. AUDIO PROCESSING (new)
-                        elif media_type == "audio" and os.path.exists(media_path):
+                        elif media_type == "audio" and os.path.exists(media_path) and ENABLE_AUDIO_TRANSCRIPTION:
                             audio_transcription_status = 'pending'
                             
                             job_id = queue_audio_transcription(
@@ -223,7 +271,7 @@ async def process_message(msg, username, found_channels, recursive=False, case_i
                             print(f"[QUEUE] Audio transcription queued for {full_message_id}, job: {job_id}")
                         
                         # 3. VIDEO PROCESSING (check for audio track)
-                        elif media_type == "video" and os.path.exists(media_path):
+                        elif media_type == "video" and os.path.exists(media_path) and ENABLE_AUDIO_TRANSCRIPTION:
                             # Queue for audio extraction and transcription
                             # Videos often contain speech that needs transcription
                             audio_transcription_status = 'pending'
@@ -241,7 +289,7 @@ async def process_message(msg, username, found_channels, recursive=False, case_i
                         # 4. DOCUMENT PROCESSING (check if it's audio/video file)
                         elif media_type == "document" and os.path.exists(media_path):
                             # Check if document is actually an audio/video file
-                            if await is_audio_video_document(msg, media_path):
+                            if await is_audio_video_document(msg, media_path) and ENABLE_AUDIO_TRANSCRIPTION:
                                 audio_transcription_status = 'pending'
                                 
                                 # Detect if it's audio or video based on mime type or extension
@@ -277,7 +325,7 @@ async def process_message(msg, username, found_channels, recursive=False, case_i
                                         print(f"[DOWNLOAD] {username}: Downloading voice message {msg.id}")
                                         await download_media_to_path(username, msg, client, media_path)
                                     
-                                    if os.path.exists(media_path):
+                                    if os.path.exists(media_path) and ENABLE_AUDIO_TRANSCRIPTION:
                                         full_message_id = f"{msg.chat_id}-{msg.id}"
                                         audio_transcription_status = 'pending'
                                         
@@ -308,13 +356,14 @@ async def process_message(msg, username, found_channels, recursive=False, case_i
             original_language=detected_lang,
             translation_status=translation_status,
             image_analysis_status=image_analysis_status,
-            audio_transcription_status=audio_transcription_status
+            audio_transcription_status=audio_transcription_status,
+            geolocation_status=geolocation_status
         )
-        
-        print(f"[SAVE] {username}: Saved message {msg.id} (lang: {detected_lang}, translation: {translation_status}, audio: {audio_transcription_status})")
-        
+
+        print(f"[SAVE] {username}: Saved message {msg.id} (lang: {detected_lang}, translation: {translation_status}, audio: {audio_transcription_status}, geolocation: {geolocation_status})")
+
         # Queue text translation if needed (existing logic)
-        if needs_trans:
+        if needs_trans and ENABLE_TRANSLATION:
             job_id = queue_translation(
                 message_id=full_message_id,
                 text=text,
@@ -322,7 +371,21 @@ async def process_message(msg, username, found_channels, recursive=False, case_i
                 case_id=case_id,
                 owner_id=owner_id
             )
-        
+        else:
+            if text and len(text.strip()) > 10 and ENABLE_EMOTION_ANALYSIS:  # Only if meaningful text
+                print(f"🎭 Text is German, triggering emotion analysis directly")
+                await trigger_emotion_from_scraper(
+                    message_id=f"{msg.chat_id}-{msg.id}",
+                    text=text,
+                    owner_id=owner_id
+                )
+            if text and len(text.strip()) > 10 and ENABLE_LABEL_CLASSIFIER:
+                print(f"🏷️ Text is German, triggering label classification directly")
+                await trigger_label_classification(
+                    message_id=f"{msg.chat_id}-{msg.id}",
+                    text=text,
+                    owner_id=owner_id
+                )
         # Extract invite links for recursive processing (existing logic)
         if recursive and text:
             links = extract_invite_links([text])
@@ -402,6 +465,63 @@ async def get_document_media_type(msg, file_path: str) -> str:
     # Default to audio if unsure
     return "audio"
 
+async def trigger_emotion_from_scraper(message_id: str, text: str, owner_id: str):
+    """
+    Trigger emotion analysis from scraper (async version)
+    """
+    
+    JOB_LAUNCHER_URL = os.getenv("JOB_LAUNCHER_URL", "http://job-launcher:9001")
+    JOB_SECRET_TOKEN = os.getenv("JOB_SECRET_TOKEN")
+    
+    try:
+        response = requests.post(
+            f"{JOB_LAUNCHER_URL}/queue/emotion",
+            json={
+            "message_id": message_id,
+            "text": text,
+            "owner_id": owner_id,
+            "chained_from": "scraper",
+            "threshold": 0.3,
+            "top_k": 3
+            },
+            headers={"Authorization": f"Bearer {JOB_SECRET_TOKEN}"},
+            timeout=10
+        )
+        response.raise_for_status()
+        job_data = response.json()
+        print(f"✅ Emotion analysis queued: {job_data.get('job_id')}")
+        return job_data.get('job_id')
+    except Exception as e:
+        print(f"❌ Failed to trigger emotion analysis: {e}")
+        return None
+
+async def trigger_label_classification(message_id: str, text: str, owner_id: str):
+    """
+    Trigger label classification from scraper (async version)
+    """
+    
+    JOB_LAUNCHER_URL = os.getenv("JOB_LAUNCHER_URL", "http://job-launcher:9001")
+    JOB_SECRET_TOKEN = os.getenv("JOB_SECRET_TOKEN")
+    
+    try:
+        response = requests.post(
+            f"{JOB_LAUNCHER_URL}/queue/classification",
+            json={
+                "message_id": message_id,
+                "text": text,
+                "owner_id": owner_id,
+                "chained_from": "scraper"
+            },
+            headers={"Authorization": f"Bearer {JOB_SECRET_TOKEN}"},
+            timeout=10
+        )
+        response.raise_for_status()
+        job_data = response.json()
+        print(f"✅ Label classification queued: {job_data.get('job_id')}")
+        return job_data.get('job_id')
+    except Exception as e:
+        print(f"❌ Failed to trigger label classification: {e}")
+        return None
 
 def queue_audio_transcription(
     message_id: str,

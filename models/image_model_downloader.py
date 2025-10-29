@@ -8,7 +8,7 @@ from pathlib import Path
 import shutil
 
 # Model directory
-MODEL_DIR = Path("./models/image/easyocr")
+MODEL_DIR = Path("./image/easyocr")
 MODEL_DIR.mkdir(parents=True, exist_ok=True)
 
 print("=" * 80)

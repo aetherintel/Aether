@@ -1,4 +1,3 @@
-// src/components/TelegramScraper.tsx
 import React, { useEffect, useState } from 'react';
 import {
   IconActivity,
@@ -6,6 +5,10 @@ import {
   IconPlayerPlay,
   IconRefresh,
   IconTrash,
+  IconPhoto,
+  IconVolume,
+  IconLanguage,
+  IconMoodSmile,
 } from '@tabler/icons-react';
 import {
   Alert,
@@ -22,16 +25,14 @@ import {
   Text,
   TextInput,
   Title,
+  Checkbox,
+  Divider,
 } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { authFetch } from '@/utils/authFetch';
 import GroupedJobs from './GroupedJobs/GroupedJobs';
 
 const apiUrl = import.meta.env.VITE_API_URL;
-
-// ============================================================================
-// TYPES
-// ============================================================================
 
 interface UserInfo {
   id: number;
@@ -74,10 +75,6 @@ interface TelegramScraperProps {
 
 type ScraperMode = 'full' | 'live';
 
-// ============================================================================
-// HELPER FUNCTIONS
-// ============================================================================
-
 const mapJobStatus = (status: string): string => {
   const statusMap: Record<string, string> = {
     queued: 'pending',
@@ -109,25 +106,7 @@ const getStatusColor = (status: string): string => {
   }
 };
 
-const getQueueIcon = (queue?: string): string => {
-  if (!queue) return '⚙️';
-  if (queue.includes('telegram')) return '📱';
-  if (queue.includes('translation')) return '🌍';
-  if (queue.includes('image')) return '🖼️';
-  return '⚙️';
-};
-
-const formatRuntime = (runtime?: string): string => {
-  if (!runtime) return '';
-  return runtime;
-};
-
-// ============================================================================
-// MAIN COMPONENT
-// ============================================================================
-
 const TelegramScraper: React.FC<TelegramScraperProps> = ({ case_id }) => {
-  // State
   const [sessions, setSessions] = useState<TelegramSession[]>([]);
   const [activeSessions, setActiveSessions] = useState<TelegramSession[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
@@ -141,25 +120,24 @@ const TelegramScraper: React.FC<TelegramScraperProps> = ({ case_id }) => {
   const [recursive, setRecursive] = useState<boolean>(true);
   const [selectedSession, setSelectedSession] = useState<string>('');
 
-  // ============================================================================
-  // EFFECTS
-  // ============================================================================
+  // Worker options
+  const [enableTranslation, setEnableTranslation] = useState<boolean>(true);
+  const [enableImageAnalysis, setEnableImageAnalysis] = useState<boolean>(true);
+  const [enableAudioTranscription, setEnableAudioTranscription] = useState<boolean>(true);
+  const [enableEmotionAnalysis, setEnableEmotionAnalysis] = useState<boolean>(false);
+  const [enableLabelClassifier, setEnableLabelClassifier] = useState<boolean>(false);
+  const [enableGeolocationExtraction, setEnableGeolocationExtraction] = useState<boolean>(false);
 
   useEffect(() => {
     fetchSessions();
     fetchStatus();
 
-    // Auto-refresh every 10 seconds
     const interval = setInterval(() => {
       fetchStatus();
     }, 10000);
 
     return () => clearInterval(interval);
   }, [case_id]);
-
-  // ============================================================================
-  // API FUNCTIONS
-  // ============================================================================
 
   const fetchSessions = async (): Promise<void> => {
     try {
@@ -203,7 +181,6 @@ const TelegramScraper: React.FC<TelegramScraperProps> = ({ case_id }) => {
       }
 
       const data = await response.json();
-      console.log('Fetched status:', data);
       const mappedContainers = data.containers.map((job: any) => ({
         ...job,
         status: mapJobStatus(job.status),
@@ -320,6 +297,12 @@ const TelegramScraper: React.FC<TelegramScraperProps> = ({ case_id }) => {
             recursive,
             neo4j: true,
             case_id: case_id || undefined,
+            enable_translation: enableTranslation,
+            enable_image_analysis: enableImageAnalysis,
+            enable_audio_transcription: enableAudioTranscription,
+            enable_emotion_analysis: enableEmotionAnalysis,
+            enable_label_classifier: enableLabelClassifier,
+            enable_geolocation_extraction: enableGeolocationExtraction,
           };
           break;
         case 'live':
@@ -328,6 +311,11 @@ const TelegramScraper: React.FC<TelegramScraperProps> = ({ case_id }) => {
             channels: [channel.trim()],
             tg_session: selectedSession,
             case_id: case_id || undefined,
+            enable_translation: enableTranslation,
+            enable_image_analysis: enableImageAnalysis,
+            enable_audio_transcription: enableAudioTranscription,
+            enable_emotion_analysis: enableEmotionAnalysis,
+            enable_label_classifier: enableLabelClassifier,
           };
           break;
       }
@@ -351,15 +339,11 @@ const TelegramScraper: React.FC<TelegramScraperProps> = ({ case_id }) => {
         color: 'green',
       });
 
-      // Add channel to case if case_id exists
       if (case_id) {
         await addChannelToCase(case_id, channel.trim());
       }
 
-      // Clear form
       setChannel('');
-
-      // Refresh status
       setTimeout(fetchStatus, 1000);
     } catch (error: any) {
       notifications.show({
@@ -372,16 +356,10 @@ const TelegramScraper: React.FC<TelegramScraperProps> = ({ case_id }) => {
     }
   };
 
-  // ============================================================================
-  // RENDER HELPERS
-  // ============================================================================
-
   const getSessionOptions = () => {
     return activeSessions.map((session) => {
       const user = session.user || session.user_info;
-      const name = user
-        ? `${user.first_name} ${user.last_name}`.trim()
-        : 'Unknown';
+      const name = user ? `${user.first_name} ${user.last_name}`.trim() : 'Unknown';
       return {
         value: session.name,
         label: `${session.name} (${name})`,
@@ -403,10 +381,6 @@ const TelegramScraper: React.FC<TelegramScraperProps> = ({ case_id }) => {
     return status === 'failed';
   };
 
-  // ============================================================================
-  // RENDER
-  // ============================================================================
-
   if (loading) {
     return (
       <Container size="md" py="xl">
@@ -420,14 +394,12 @@ const TelegramScraper: React.FC<TelegramScraperProps> = ({ case_id }) => {
 
   return (
     <Stack gap="lg">
-      {/* No Active Sessions Warning */}
       {activeSessions.length === 0 && (
         <Alert icon={<IconExclamationCircle size="1rem" />} color="yellow">
           No active Telegram sessions found. Please authenticate first.
         </Alert>
       )}
 
-      {/* Start Scraper Form */}
       <Paper p="lg" withBorder>
         <Stack gap="md">
           <Title order={3}>Start Scraper</Title>
@@ -469,6 +441,80 @@ const TelegramScraper: React.FC<TelegramScraperProps> = ({ case_id }) => {
             />
           )}
 
+          <Divider label="Worker Options" labelPosition="center" />
+
+          <Stack gap="xs">
+            <Checkbox
+              label={
+                <Group gap="xs">
+                  <IconLanguage size={16} />
+                  <Text size="sm">Enable Translation</Text>
+                </Group>
+              }
+              description="Automatically translate messages to German"
+              checked={enableTranslation}
+              onChange={(e) => setEnableTranslation(e.currentTarget.checked)}
+            />
+
+            <Checkbox
+              label={
+                <Group gap="xs">
+                  <IconPhoto size={16} />
+                  <Text size="sm">Enable Image Analysis</Text>
+                </Group>
+              }
+              description="Extract text from images using OCR"
+              checked={enableImageAnalysis}
+              onChange={(e) => setEnableImageAnalysis(e.currentTarget.checked)}
+            />
+
+            <Checkbox
+              label={
+                <Group gap="xs">
+                  <IconVolume size={16} />
+                  <Text size="sm">Enable Audio Transcription</Text>
+                </Group>
+              }
+              description="Transcribe audio and video files"
+              checked={enableAudioTranscription}
+              onChange={(e) => setEnableAudioTranscription(e.currentTarget.checked)}
+            />
+
+            <Checkbox
+              label={
+                <Group gap="xs">
+                  <IconMoodSmile size={16} />
+                  <Text size="sm">Enable Emotion Analysis</Text>
+                </Group>
+              }
+              description="Analyze sentiment and emotions in messages"
+              checked={enableEmotionAnalysis}
+              onChange={(e) => setEnableEmotionAnalysis(e.currentTarget.checked)}
+            />
+            <Checkbox
+              label={
+                <Group gap="xs">
+                  <IconActivity size={16} />
+                  <Text size="sm">Enable Label Classifier</Text>
+                </Group>
+              }
+              description="Classify messages using label classifier"
+              checked={enableLabelClassifier}
+              onChange={(e) => setEnableLabelClassifier(e.currentTarget.checked)}
+            />
+            <Checkbox
+              label={
+                <Group gap="xs">
+                  <IconExclamationCircle size={16} />
+                  <Text size="sm">Enable Geolocation Extraction</Text>
+                </Group>
+              }
+              description="Extract geolocation data from messages"
+              checked={enableGeolocationExtraction}
+              onChange={(e) => setEnableGeolocationExtraction(e.currentTarget.checked)}
+            />
+          </Stack>
+
           <Group justify="flex-end">
             <Button
               leftSection={<IconPlayerPlay size="1rem" />}
@@ -482,18 +528,16 @@ const TelegramScraper: React.FC<TelegramScraperProps> = ({ case_id }) => {
         </Stack>
       </Paper>
 
-      {/* Active Jobs */}
       {status.length > 0 && (
-  <GroupedJobs
-    status={status}
-    controlLoading={controlLoading}
-    onJobControl={handleJobControl}
-    canRemoveJob={canRemoveJob}
-    canRequeueJob={canRequeueJob}
-  />
-)}
+        <GroupedJobs
+          status={status}
+          controlLoading={controlLoading}
+          onJobControl={handleJobControl}
+          canRemoveJob={canRemoveJob}
+          canRequeueJob={canRequeueJob}
+        />
+      )}
 
-      {/* Available Sessions */}
       {sessions.length > 0 && (
         <Paper p="lg" withBorder>
           <Stack gap="md">
