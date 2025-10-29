@@ -83,7 +83,9 @@ const GroupedJobsDisplay: React.FC<GroupedJobsDisplayProps> = ({
     if (queue.includes('translation')) return <IconLanguage size="1.2rem" />;
     if (queue.includes('image')) return <IconPhoto size="1.2rem" />;
     if (queue.includes('audio')) return <IconVolume size="1.2rem" />;
-    if (queue.includes('sentiment')) return <IconMoodSmile size="1.2rem" />;
+    if (queue.includes('emotion')) return <IconMoodSmile size="1.2rem" />;
+    if (queue.includes('classification')) return <IconActivity size="1.2rem" />;
+
     return '⚙️';
   };
 
@@ -92,7 +94,8 @@ const GroupedJobsDisplay: React.FC<GroupedJobsDisplayProps> = ({
     if (queue.includes('translation')) return 'violet';
     if (queue.includes('image')) return 'teal';
     if (queue.includes('audio')) return 'orange';
-    if (queue.includes('sentiment')) return 'pink';
+    if (queue.includes('emotion')) return 'pink';
+    if (queue.includes('classification')) return 'cyan';
     return 'gray';
   };
 

@@ -8,7 +8,7 @@ tokenizer = M2M100Tokenizer.from_pretrained("facebook/m2m100_418M")
 model = M2M100ForConditionalGeneration.from_pretrained("facebook/m2m100_418M")
 
 # Save to mounted volume
-output_path = "models/translation/m2m100_418M"
+output_path = "translation/m2m100_418M"
 os.makedirs(output_path, exist_ok=True)
 
 tokenizer.save_pretrained(output_path)

@@ -17,7 +17,9 @@ async def save_message_with_processing_status(
     original_language=None,
     translation_status='none',
     image_analysis_status='none',
-    audio_transcription_status='none'
+    audio_transcription_status='none',
+    geolocation_status='none'
+
 ):
     """Save message with all processing status fields"""
     async with get_driver().session() as session:
@@ -33,6 +35,7 @@ async def save_message_with_processing_status(
             translation_status,
             image_analysis_status,
             audio_transcription_status
+            ,geolocation_status
         )
 
 
@@ -47,7 +50,8 @@ async def _save_message_tx(
     original_language,
     translation_status,
     image_analysis_status,
-    audio_transcription_status
+    audio_transcription_status,
+    geolocation_status
 ):
     """Transaction function for saving message"""
     cypher = """
@@ -67,7 +71,8 @@ async def _save_message_tx(
         m.image_text = null,
         m.image_labels = null,
         m.audio_transcription_status = $audio_transcription_status,
-        m.audio_transcript = null
+        m.audio_transcript = null,
+        m.geolocation_status = $geolocation_status
     
     MERGE (ch)-[:HAS_MESSAGE]->(m)
     
@@ -122,6 +127,7 @@ async def _save_message_tx(
         audio_transcription_status=audio_transcription_status,
         reply_to=message.reply_to_msg_id,
         reply_to_mid=reply_to_mid,
+        geolocation_status=geolocation_status
     )
 
 

@@ -1,5 +1,4 @@
-# telegram_job/entry.py
-print("[DEBUG] entry.py loaded.")
+
 import os, json, sys, asyncio
 
 # GEÄNDERT: Relative Imports verwenden

@@ -63,7 +63,7 @@ def load_models():
         logger.info("⏳ Initializing EasyOCR Reader...")
         
         OCR_ENGINE = easyocr.Reader(
-            ['en'],
+            ['en', 'de', 'fr', 'it', 'es'],  # Languages
             model_storage_directory=str(model_storage),
             download_enabled=True,  # Allow download as fallback if models missing
             gpu=False,  # Force CPU for stability
@@ -71,7 +71,7 @@ def load_models():
         )
         
         logger.info("✅ EasyOCR loaded successfully!")
-        logger.info("   Language: English")
+        logger.info("   Language: English, German, Russian, Arabic, Turkish")
         logger.info("   Works with: Posters, infographics, screenshots, memes")
         logger.info("   Speed: ~2-3s per image")
         logger.info("   Stability: Excellent (no segfaults)")
@@ -99,75 +99,139 @@ class FastOCRService:
         else:
             logger.info("✅ OCR engine ready")
     
+    def preprocess_image(self, img):
+        """Adaptive preprocessing based on image characteristics"""
+        from PIL import ImageEnhance, ImageOps
+        import numpy as np
+        
+        # Convert to RGB
+        if img.mode != 'RGB':
+            img = img.convert('RGB')
+        
+        # Calculate image statistics
+        img_array = np.array(img)
+        mean_brightness = np.mean(img_array)
+        std_brightness = np.std(img_array)
+        
+        # Only enhance if image is low contrast
+        if std_brightness < 50:  # Low contrast
+            enhancer = ImageEnhance.Contrast(img)
+            img = enhancer.enhance(2.0)  # Stronger enhancement
+        
+        # Only sharpen if image is blurry
+        if std_brightness < 40:
+            enhancer = ImageEnhance.Sharpness(img)
+            img = enhancer.enhance(1.5)
+        
+        return img
+    def adaptive_threshold(self, img):
+        """Apply adaptive thresholding for documents"""
+        import cv2
+        import numpy as np
+        from PIL import Image
+        
+        # Convert PIL to OpenCV
+        img_cv = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
+        gray = cv2.cvtColor(img_cv, cv2.COLOR_BGR2GRAY)
+        
+        # Adaptive thresholding
+        binary = cv2.adaptiveThreshold(
+            gray, 255, 
+            cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+            cv2.THRESH_BINARY,
+            11, 2
+        )
+        
+        # Convert back to PIL
+        return Image.fromarray(binary)
     def extract_text(self, image_path: str) -> str:
         """Extract ALL text from image using EasyOCR"""
         if OCR_ENGINE is None:
             logger.warning("⚠️ OCR engine not loaded, skipping text extraction")
             return ""
-        
+
         try:
             logger.info(f"🔍 Extracting text: {image_path}")
-            
+
             # Load image and check size
             from PIL import Image
             img = Image.open(image_path)
             width, height = img.size
             logger.info(f"   Image size: {width}x{height}")
-            
-            # Resize if too large (saves memory)
-            max_dimension = 2048
+
+            # INCREASED max dimension for documents - preserve more detail
+            max_dimension = 3840  # 4K resolution - much better for documents
             if width > max_dimension or height > max_dimension:
                 scale = max_dimension / max(width, height)
                 new_width = int(width * scale)
                 new_height = int(height * scale)
                 # Use LANCZOS (same as old ANTIALIAS)
                 img = img.resize((new_width, new_height), Image.LANCZOS)
-                logger.info(f"   Resized to: {new_width}x{new_height} (memory optimization)")
-                
-                # Save temporarily
-                import tempfile
-                with tempfile.NamedTemporaryFile(suffix='.jpg', delete=False) as tmp:
-                    img.save(tmp.name, 'JPEG', quality=95)
-                    temp_path = tmp.name
-                
-                # Use resized image
-                image_path = temp_path
-            
-            # Run OCR with memory optimization
+                logger.info(f"   Resized to: {new_width}x{new_height} (preserving detail)")
+
+            # Apply preprocessing to improve OCR
+            logger.info("   Preprocessing image (contrast/sharpness enhancement)...")
+            img = self.preprocess_image(img)
+
+            # Save preprocessed image temporarily
+            import tempfile
+            with tempfile.NamedTemporaryFile(suffix='.jpg', delete=False) as tmp:
+                img.save(tmp.name, 'JPEG', quality=98)  # Higher quality
+                temp_path = tmp.name
+
+            # Run OCR with MAXIMUM accuracy settings
+            logger.info("   Running EasyOCR with maximum accuracy settings...")
             result = OCR_ENGINE.readtext(
-                image_path,
-                batch_size=1,  # Process one at a time to save memory
-                workers=0      # Disable multiprocessing to save memory
+                temp_path,
+                detail=1,
+                paragraph=True,  # Change to True - better for document layout
+                contrast_ths=0.01,  # Even lower (was 0.05)
+                adjust_contrast=0.7,  # Higher adjustment
+                text_threshold=0.3,  # Lower (was 0.5)
+                low_text=0.2,  # Lower (was 0.3)
+                link_threshold=0.2,  # Lower (was 0.3)
+                canvas_size=4096,  # Increase
+                mag_ratio=2.0,  # Increase (was 1.5)
+                width_ths=0.5,  # Add: helps with narrow text
+                height_ths=0.5  # Add: helps with small text
             )
-            
-            # Clean up temp file if created
-            if 'temp_path' in locals():
-                import os
-                os.unlink(temp_path)
-            
-            # Extract all text with confidence > 0.3
+
+            # Clean up temp file
+            import os
+            os.unlink(temp_path)
+
+            # Extract all text with VERY low confidence threshold
             if result:
                 text_lines = []
+                low_confidence_lines = []
+
                 for detection in result:
                     # detection = (bbox, text, confidence)
-                    text = detection[1]
+                    text = detection[1].strip()
                     confidence = detection[2]
-                    
-                    if confidence > 0.3:  # Lower threshold for more text
+
+                    if confidence > 0.3:  # High confidence
                         text_lines.append(text)
-                
+                    elif confidence > 0.05:  # Low but possibly valid
+                        low_confidence_lines.append(text)
+                        logger.debug(f"   Low confidence ({confidence:.2f}): {text[:50]}")
+
+                # Include low confidence text too - better to have extra than miss important text
+                all_lines = text_lines + low_confidence_lines
+
                 # Join all lines with newlines
-                extracted_text = "\n".join(text_lines)
-                
-                logger.info(f"✅ Extracted {len(text_lines)} text lines ({len(extracted_text)} chars)")
+                extracted_text = "\n".join(all_lines)
+
+                logger.info(f"✅ Extracted {len(text_lines)} high-conf + {len(low_confidence_lines)} low-conf text lines")
+                logger.info(f"   Total: {len(extracted_text)} characters")
                 if extracted_text:
-                    logger.info(f"   Preview: {extracted_text[:100]}...")
-                
+                    logger.info(f"   Preview: {extracted_text[:150]}...")
+
                 return extracted_text.strip()
             else:
                 logger.info("ℹ️ No text found in image")
                 return ""
-            
+
         except Exception as e:
             logger.error(f"❌ OCR error: {e}")
             logger.exception("Full traceback:")

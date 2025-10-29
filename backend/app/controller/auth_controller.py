@@ -25,6 +25,12 @@ class ExtendedScrapeRequest(BaseModel):
     recursive: bool = True
     neo4j: bool = True
     case_id: Optional[int] = None
+    enable_translation: bool = True
+    enable_image_analysis: bool = True
+    enable_audio_transcription: bool = True
+    enable_emotion_analysis: bool = False
+    enable_label_classifier: bool = False
+    enable_geolocation_extraction: bool = False
 
 class LoginRequest(BaseModel):
     username: str
@@ -51,6 +57,12 @@ class ChannelListInput(BaseModel):
     tg_session: str
     neo4j: bool = True
     case_id: Optional[int] = None  # Optional case ID for tracking
+    enable_translation: bool = True
+    enable_image_analysis: bool = True
+    enable_audio_transcription: bool = True
+    enable_emotion_analysis: bool = False
+    enable_label_classifier: bool = False
+    enable_geolocation_extraction: bool = False
 
 class StatusRequest(BaseModel):
     case_id: Optional[int] = None
@@ -498,9 +510,30 @@ def telegram_full_scrape(req: ExtendedScrapeRequest, user: UserCtx = Depends(use
         tg_session=req.tg_session,
         recursive=req.recursive,
         neo4j=req.neo4j,
-        owner_id=user["id"],  # ← NEW
-        case_id=req.case_id or None  # ← NEW
+        owner_id=user["id"],
+        case_id=req.case_id or None,
+        # NEU: Flags weitergeben
+        enable_translation=req.enable_translation,
+        enable_image_analysis=req.enable_image_analysis,
+        enable_audio_transcription=req.enable_audio_transcription,
+        enable_emotion_analysis=req.enable_emotion_analysis,
+        enable_label_classifier=req.enable_label_classifier,
+        enable_geolocation_extraction=req.enable_geolocation_extraction,
     )
+
 @router.post("/telegram/live")
 def telegram_live_scrape(req: ChannelListInput, user: UserCtx = Depends(user_ctx)):
-    return launch_live_scrape_job(channels=req.channels,tg_session=req.tg_session, neo4j=req.neo4j, owner_id=user["id"], case_id= req.case_id or None)
+    return launch_live_scrape_job(
+        channels=req.channels,
+        tg_session=req.tg_session,
+        neo4j=req.neo4j,
+        owner_id=user["id"],
+        case_id=req.case_id or None,
+        # NEU: Flags weitergeben
+        enable_translation=req.enable_translation,
+        enable_image_analysis=req.enable_image_analysis,
+        enable_audio_transcription=req.enable_audio_transcription,
+        enable_emotion_analysis=req.enable_emotion_analysis,
+        enable_label_classifier=req.enable_label_classifier,
+        enable_geolocation_extraction=req.enable_geolocation_extraction,
+    )

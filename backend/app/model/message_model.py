@@ -24,6 +24,12 @@ class Message(BaseModel):
     reply_to_id: Optional[str] = None
     author: Author
     channel: Channel
+    image_text: Optional[str] = None
+    image_text_translated: Optional[str] = None
+    audio_text: Optional[str] = None
+    audio_text_translated: Optional[str] = None
+    emotion: Optional[str] = None
+
 
     @root_validator(pre=True)
     def check_message_id(values):

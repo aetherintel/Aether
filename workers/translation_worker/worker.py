@@ -178,7 +178,9 @@ def translate_and_update(
     original_text: str,
     source_language: str,
     owner_id: str = None,
-    image_text: bool = False
+    image_text: bool = False,
+    audio_text: bool = False,
+    target_language: str = "de"
 ):
     """
     Main translation worker function
@@ -201,7 +203,7 @@ def translate_and_update(
     try:
         # Step 1: Translate
         logger.info("📝 Step 1: Translating...")
-        translated_text = translation_service.translate(original_text, source_language, "de")
+        translated_text = translation_service.translate(original_text, source_language, target_language)
         logger.info(f"✅ Step 1: {translated_text[:60]}...")
         
         # Step 2: Update Neo4j with appropriate field
@@ -215,7 +217,8 @@ def translate_and_update(
             update_message_translation,
             message_id=message_id,
             translated_text=translated_text,
-            image_text=image_text  # NEW: Pass the flag
+            image_text=image_text,  # NEW: Pass the flag
+            audio_text=audio_text  # NEW: Pass the flag
         )
         
         if result:
@@ -223,7 +226,37 @@ def translate_and_update(
             logger.info(f"✅ Step 2: Neo4j updated ({field_name})")
         else:
             logger.warning("⚠️ Step 2: Update returned False")
-        
+
+        if translated_text and len(translated_text.strip()) > 10:
+            # Step 3: Trigger emotion analysis
+            logger.info("🎭 Step 3: Triggering emotion analysis...")
+            try:
+                emotion_job_id = trigger_emotion_analysis(
+                message_id=message_id,
+                text=translated_text,
+                owner_id=owner_id
+            )
+                if emotion_job_id:
+                    logger.info(f"✅ Step 3: Emotion analysis queued: {emotion_job_id}")
+                else:
+                    logger.warning("⚠️ Step 3: Emotion analysis not queued")
+            except Exception as e:
+                logger.error(f"❌ Step 3: Failed to trigger emotion analysis: {e}")
+            
+            # Step 4: Trigger classification (runs independently)
+            logger.info("🏷️ Step 4: Triggering classification...")
+            try:
+                classification_job_id = trigger_classification(
+                message_id=message_id,
+                text=translated_text,
+                owner_id=owner_id
+            )
+                if classification_job_id:
+                    logger.info(f"✅ Step 4: Classification queued: {classification_job_id}")
+                else:
+                    logger.warning("⚠️ Step 4: Classification not queued")
+            except Exception as e:
+                logger.error(f"❌ Step 4: Failed to trigger classification: {e}")
         logger.info("=" * 80)
         logger.info(f"✅ Job completed: {message_id}")
         logger.info("=" * 80)
@@ -252,3 +285,81 @@ def enqueue_translation(message_id: str, original_text: str, source_language: st
     )
     logger.info(f"📤 Enqueued job {job.id} for {message_id}")
     return job
+
+def trigger_emotion_analysis(message_id: str, text: str, owner_id: str = None) -> str:
+    """
+    Trigger emotion analysis job via job-launcher
+    
+    Args:
+        message_id: Message ID
+        text: German text (already translated)
+        owner_id: Owner ID for tracking
+        
+    Returns:
+        Job ID or None
+    """
+    import requests
+    
+    JOB_LAUNCHER_URL = os.getenv("JOB_LAUNCHER_URL", "http://job-launcher:9001")
+    JOB_SECRET_TOKEN = os.getenv("JOB_SECRET_TOKEN")
+    
+    try:
+        response = requests.post(
+            f"{JOB_LAUNCHER_URL}/queue/emotion",
+            json={
+                "message_id": message_id,
+                "text": text,
+                "owner_id": owner_id,
+                "chained_from": "translation",
+                "threshold": 0.3,
+                "top_k": 3
+            },
+            headers={"Authorization": f"Bearer {JOB_SECRET_TOKEN}"},
+            timeout=10
+        )
+        response.raise_for_status()
+        
+        job_data = response.json()
+        return job_data.get('job_id')
+        
+    except Exception as e:
+        logger.error(f"❌ Failed to trigger emotion analysis: {e}")
+        return None
+
+def trigger_classification(message_id: str, text: str, owner_id: str = None) -> str:
+    """
+    Trigger classification job via job-launcher
+    
+    Args:
+        message_id: Message ID
+        text: German text (already translated)
+        owner_id: Owner ID for tracking
+        
+    Returns:
+        Job ID or None
+    """
+    import requests
+    
+    JOB_LAUNCHER_URL = os.getenv("JOB_LAUNCHER_URL", "http://job-launcher:9001")
+    JOB_SECRET_TOKEN = os.getenv("JOB_SECRET_TOKEN")
+    
+    try:
+        response = requests.post(
+            f"{JOB_LAUNCHER_URL}/queue/classification",
+            json={
+                "message_id": message_id,
+                "text": text,
+                "owner_id": owner_id,
+                "chained_from": "translation"
+            },
+            headers={"Authorization": f"Bearer {JOB_SECRET_TOKEN}"},
+            timeout=10
+        )
+        response.raise_for_status()
+        
+        job_data = response.json()
+        return job_data.get('job_id')
+        
+    except Exception as e:
+        logger.error(f"❌ Failed to trigger classification: {e}")
+        return None

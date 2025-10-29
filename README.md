@@ -1,6 +1,6 @@
-![Æther Logo](/frontend/src/assets/images/ReadmeLogo.svg)
+![Æthery Logo](/frontend/src/assets/images/ReadmeLogo.svg)
 
-# Æther - Telegram Monitoring and Analysis Tool
+# Æthery - Telegram Monitoring and Analysis Tool
 
 Aether is an OSINT (Open Source Intelligence) web application for creating and managing Telegram-based monitoring projects. It enables users to define cases, add and track Telegram channels/groups, collect messages automatically via scrapers, and analyze the data using full-text search and Neo4j-based graph visualizations.
 
@@ -128,7 +128,7 @@ ENVIRONMENT=dev
 
 **Getting started:**
 
-1. Register or login here: [https://æther.tech](https://æther.tech) or if running locally here: [http://localhost](https://localhost)
+1. Register or login here: [https://æthery.cloud](https://æthery.cloud) or if running locally here: [http://localhost](https://localhost)
 2. Go to `Settings` and create a new telegram session
 3. Enter your phone number and type in your `2FA-Code` that you will recieve on your `Telegram-App`
 4. Switch to `Cases` and create a `new case` using the corresponding button

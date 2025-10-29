@@ -300,6 +300,128 @@ services:
           memory: 6G
         reservations:
           memory: 1G
+
+  emotion-worker:
+    build:
+      context: .
+      dockerfile: workers/emotion_worker/Dockerfile
+    environment:
+      JOB_LAUNCHER_URL: ${JOB_LAUNCHER_URL}
+      JOB_SECRET_TOKEN: ${JOB_SECRET_TOKEN}
+      NEO4J_URI: ${NEO4J_URI}
+      NEO4J_USER: ${NEO4J_USER}
+      NEO4J_PASSWORD: ${NEO4J_PASSWORD}
+      MODELS_PATH: /app/models
+      USE_QUANTIZATION: "true"
+    volumes:
+      - ./aether_lib:/app/aether_lib:ro
+      - ./models/emotion:/app/models/emotion
+    networks:
+      - aether-network
+    depends_on:
+      keycloak:
+        condition: service_started
+    restart: unless-stopped
+    mem_limit: 4g
+    deploy:
+      replicas: 2 
+      resources:
+        limits:
+          memory: 4G
+        reservations:
+          memory: 1G
+
+  # ============================================================================
+  # Classification WORKER
+  # ============================================================================
+  classification-worker:
+    build:
+      context: .
+      dockerfile: workers/classification_worker/Dockerfile
+    environment:
+      JOB_LAUNCHER_URL: ${JOB_LAUNCHER_URL}
+      JOB_SECRET_TOKEN: ${JOB_SECRET_TOKEN}
+      NEO4J_URI: ${NEO4J_URI}
+      NEO4J_USER: ${NEO4J_USER}
+      NEO4J_PASSWORD: ${NEO4J_PASSWORD}
+      MODELS_PATH: /app/models
+      USE_QUANTIZATION: "true"
+    volumes:
+      - ./aether_lib:/app/aether_lib:ro
+      - ./models/classifier:/app/models/classifier
+      - ${MEDIA_PATH}:/shared/media:ro
+    networks:
+      - aether-network
+    depends_on:
+      keycloak:
+        condition: service_started
+    restart: unless-stopped
+    mem_limit: 3G
+    deploy:
+      resources:
+        limits:
+          memory: 3G
+        reservations:
+          memory: 1G
+
+  # Add to docker-compose.yml
+  geolocation-worker:
+    build:
+      context: .
+      dockerfile: workers/geolocation_worker/Dockerfile
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - NEO4J_URI=${NEO4J_URI}
+      - NEO4J_USER=${NEO4J_USER}
+      - NEO4J_PASSWORD=${NEO4J_PASSWORD}
+      - POSTGRES_HOST=${POSTGRES_HOST}
+      - POSTGRES_PORT=${POSTGRES_PORT}
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - JOB_LAUNCHER_URL=${JOB_LAUNCHER_URL}
+      - JOB_SECRET_TOKEN=${JOB_SECRET_TOKEN}
+      - PHOTON_URL=http://photon:2322
+    volumes:
+      - ./aether_lib:/app/aether_lib:ro
+      - ./models/geolocation:/app/models/geolocation  # Cache for libpostal data
+    networks:
+      - aether-network
+    depends_on:
+      keycloak:
+        condition: service_started
+    restart: unless-stopped
+    deploy:
+      replicas: 3  # Parallel processing
+      resources:
+        limits:
+          memory: 2G
+        reservations:
+          memory: 512M
+  photon:
+    build:
+      context: .
+      dockerfile: docker/photon/Dockerfile
+    container_name: aether-photon
+    ports:
+      - "2322:2322"
+    volumes:
+      - ./models/geocoding/photon/photon_data:/photon/photon_data
+    environment:
+      - JAVA_OPTS=-Xmx2g
+    networks:
+      - aether-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:2322/api?q=Berlin"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    depends_on:
+      - postgres
+
   # ============================================================================
   # JOB LAUNCHER (Central Queue Manager)
   # ============================================================================
