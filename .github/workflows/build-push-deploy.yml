@@ -1,4 +1,4 @@
-name: CI/CD Pipeline
+name: CI/CD Pipeline with Model Initialization
 
 on:
   push:
@@ -107,11 +107,11 @@ jobs:
           host: ${{ secrets.PROD_HOST }}
           username: ${{ secrets.PROD_USER }}
           key: ${{ secrets.PROD_SSH_KEY }}
-          source: "docker-compose.prod.yml,docker/,keycloak/,certbot/"
+          source: "docker-compose.prod.yml,docker/,keycloak/,certbot/,scripts/"
           target: "~/app/"
           strip_components: 0
 
-      - name: Deploy to Production VM with Host Certbot
+      - name: Deploy to Production VM
         uses: appleboy/ssh-action@v1.0.0
         with:
           host: ${{ secrets.PROD_HOST }}
@@ -277,6 +277,37 @@ jobs:
             # Wait a moment for services to stabilize
             sleep 10
             
+            # ═══════════════════════════════════════════════════════════════
+            # 🤖 AI MODEL INITIALIZATION - NEW SECTION
+            # ═══════════════════════════════════════════════════════════════
+            echo ""
+            echo "═══════════════════════════════════════════════════════════════"
+            echo "🤖 Initializing AI Worker Models"
+            echo "═══════════════════════════════════════════════════════════════"
+            
+            # Make script executable
+            chmod +x scripts/init_models.sh
+            
+            # Run model initialization in background (non-blocking)
+            # The script will trigger downloads for all workers sequentially
+            echo "Starting model initialization script in background..."
+            nohup ./scripts/init_models.sh docker-compose.prod.yml > logs/model-init-main.log 2>&1 &
+            MODEL_INIT_PID=$!
+            
+            echo "✅ Model initialization started (PID: $MODEL_INIT_PID)"
+            echo "📝 Main log: logs/model-init-main.log"
+            echo "📁 Individual logs: logs/model-downloads/"
+            echo ""
+            echo "💡 Models are being initialized in the background"
+            echo "💡 Workers will continue to start and will use models once ready"
+            echo "💡 This does not block the deployment!"
+            echo ""
+            echo "🔍 Monitor progress with:"
+            echo "   tail -f logs/model-init-main.log"
+            echo "   tail -f logs/model-downloads/*.log"
+            echo ""
+            echo "═══════════════════════════════════════════════════════════════"
+            
             # Health check
             echo "=== DEPLOYMENT HEALTH CHECK ==="
             $COMPOSE_CMD -f docker-compose.prod.yml ps
@@ -301,8 +332,12 @@ jobs:
             echo "  - Classification Worker"
             echo "  - Geolocation Worker (replicas: 3)"
             echo "  - Photon Geocoding Service"
+            echo ""
+            echo "📦 Model initialization is running in the background"
+            echo "⏱️  Initial model downloads may take 10-30 minutes"
+            echo "💾 Expected total model size: ~3-4 GB"
 
-  # # Optional: Clean up old packages
+  # Optional: Clean up old packages
   # cleanup-packages:
   #   needs: deploy-to-vm
   #   runs-on: ubuntu-latest
