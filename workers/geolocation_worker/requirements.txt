@@ -1,0 +1,8 @@
+# workers/geolocation_worker/requirements.txt
+rq==1.16.2
+redis==5.0.1
+neo4j==5.14.1
+requests==2.31.0
+spacy==3.7.2
+# Direct spaCy model download
+https://github.com/explosion/spacy-models/releases/download/de_core_news_sm-3.7.0/de_core_news_sm-3.7.0-py3-none-any.whl

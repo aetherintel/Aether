@@ -15,3 +15,4 @@ pydantic
 aiohttp
 rq>=1.15.0
 redis>=5.0.0
+langdetect==1.0.9

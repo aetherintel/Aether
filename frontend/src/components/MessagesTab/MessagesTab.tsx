@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { IconRefresh, IconSearch } from '@tabler/icons-react';
+import { IconRefresh, IconSearch, IconVolume, IconPhoto } from '@tabler/icons-react';
 import {
   ActionIcon,
   Anchor,
@@ -13,7 +13,12 @@ import {
   Table,
   Text,
   Tooltip,
+  Switch,
+  Popover,
+  Textarea,
+  Badge,
 } from '@mantine/core';
+import { notifications } from '@mantine/notifications';
 import { ImageLightbox } from '@/components/ImageLightbox';
 import { authFetch } from '@/utils/authFetch';
 import classes from './MessagesTab.module.css';
@@ -38,6 +43,8 @@ const MessagesTab: React.FC<MessagesTabProps> = ({
 
   const [selectedRows, setSelectedRows] = useState<number[]>([]);
   const [expandedMessages, setExpandedMessages] = useState<Set<string>>(new Set());
+  const [showImageTranscripts, setShowImageTranscripts] = useState(false);
+  const [showAudioTranscripts, setShowAudioTranscripts] = useState(false);
 
   const [messages, setMessages] = useState<any[]>([]);
   const [hasMore, setHasMore] = useState(true);
@@ -60,7 +67,6 @@ const MessagesTab: React.FC<MessagesTabProps> = ({
     });
   };
 
-  // Custom hook to measure if text needs truncation
   const useMeasureText = () => {
     const measureRef = useRef<HTMLDivElement>(null);
     const [needsTruncation, setNeedsTruncation] = useState(false);
@@ -71,8 +77,6 @@ const MessagesTab: React.FC<MessagesTabProps> = ({
         const computedStyle = window.getComputedStyle(element);
         const lineHeight = parseFloat(computedStyle.lineHeight);
         const actualHeight = element.scrollHeight;
-
-        // Calculate number of lines (add small tolerance for rounding)
         const lineCount = Math.round(actualHeight / lineHeight);
         setNeedsTruncation(lineCount > 3);
       }
@@ -81,7 +85,6 @@ const MessagesTab: React.FC<MessagesTabProps> = ({
     return { measureRef, needsTruncation };
   };
 
-  // Function to format relative time
   const formatRelativeTime = (dateString: string) => {
     const now = new Date();
     const messageDate = new Date(dateString);
@@ -105,15 +108,11 @@ const MessagesTab: React.FC<MessagesTabProps> = ({
   function highlightText(text: string, query: string) {
     const urlRegex = /https?:\/\/[^\s]+/gi;
     const queryRegex = query ? new RegExp(`(${escapeRegExp(query)})`, 'gi') : null;
-
-    // Split by URLs
     const urlParts = text.split(urlRegex);
     const urls = text.match(urlRegex);
-
     const result: React.ReactNode[] = [];
 
     urlParts.forEach((part, i) => {
-      // Highlight regular text part (if query is present)
       if (queryRegex) {
         const highlighted = part
           .split(queryRegex)
@@ -125,7 +124,6 @@ const MessagesTab: React.FC<MessagesTabProps> = ({
         result.push(part);
       }
 
-      // If there's a corresponding URL, render it with optional highlighting
       if (urls && urls[i]) {
         const url = urls[i];
         if (queryRegex) {
@@ -166,7 +164,6 @@ const MessagesTab: React.FC<MessagesTabProps> = ({
     return result;
   }
 
-  // Utility to escape RegExp special characters from the query string
   function escapeRegExp(str: string) {
     return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   }
@@ -185,6 +182,11 @@ const MessagesTab: React.FC<MessagesTabProps> = ({
     return videoExtensions.some((ext: string) => path.toLowerCase().endsWith(ext));
   };
 
+  const isAudioFile = (path: string): boolean => {
+    const audioExtensions: string[] = ['.mp3', '.wav', '.ogg', '.m4a', '.aac', '.flac'];
+    return audioExtensions.some((ext: string) => path.toLowerCase().endsWith(ext));
+  };
+
   const handleSearchSubmit = () => {
     setMessages([]);
     setHasMore(true);
@@ -192,16 +194,41 @@ const MessagesTab: React.FC<MessagesTabProps> = ({
     loadMessages(true);
   };
 
-  const MessageContent = ({
-    message,
-    isExpanded,
-    onToggleExpand,
-  }: {
-    message: any;
+  interface MessageContentProps {
+    message: {
+      original_text: string;
+      translated_text?: string | null;
+      original_language?: string;
+      translation_status?: string;
+    };
+    searchQuery?: string;
     isExpanded: boolean;
     onToggleExpand: () => void;
-  }) => {
+  }
+
+  const MessageContent = ({
+    message,
+    searchQuery = '',
+    isExpanded,
+    onToggleExpand,
+  }: MessageContentProps) => {
     const { measureRef, needsTruncation } = useMeasureText();
+    const [showOriginal, setShowOriginal] = useState(false);
+
+    const hasTranslation =
+      !!message.translated_text &&
+      message.translated_text.trim().length > 0 &&
+      message.translation_status === 'completed';
+
+    const displayedText =
+      (showOriginal || !hasTranslation ? message.original_text : message.translated_text) || '';
+
+    const handleToggleLanguage = () => setShowOriginal((prev) => !prev);
+
+    const languageLabel =
+      message.original_language && message.original_language.length > 0
+        ? message.original_language.toUpperCase()
+        : 'N/A';
 
     return (
       <div className={classes.messageContent}>
@@ -211,23 +238,578 @@ const MessagesTab: React.FC<MessagesTabProps> = ({
             isExpanded ? classes.messageTextExpanded : classes.messageTextTruncated
           }`}
         >
-          {highlightText(message.text, searchQuery)}
+          {highlightText(displayedText, searchQuery || '')}
         </div>
-        {needsTruncation && (
-          <Button
-            variant="subtle"
-            size="xs"
-            onClick={onToggleExpand}
-            className={classes.expandButton}
-          >
-            {isExpanded ? 'Show less' : 'Show more'}
-          </Button>
-        )}
+
+        <div className={classes.actionsRow}>
+          {needsTruncation && (
+            <Button
+              variant="subtle"
+              size="xs"
+              onClick={onToggleExpand}
+              className={classes.expandButton}
+            >
+              {isExpanded ? 'Show less' : 'Show more'}
+            </Button>
+          )}
+
+          {hasTranslation && (
+            <Button
+              variant="subtle"
+              size="xs"
+              onClick={handleToggleLanguage}
+              className={classes.languageToggle}
+            >
+              {showOriginal ? 'View German translation' : `View original (${languageLabel})`}
+            </Button>
+          )}
+        </div>
       </div>
     );
   };
 
-  // Function to deduplicate messages based on message_id
+  const ImageWithTranscript = ({ mediaPath, imageText, imageTextTranslated, imageAnalysisStatus, messageId }: any) => {
+    const [opened, setOpened] = useState(false);
+    const [isPinned, setIsPinned] = useState(false);
+    const [showOriginal, setShowOriginal] = useState(false);
+    const [isTriggering, setIsTriggering] = useState(false);
+
+    const hasTranscript = imageText && imageText.trim().length > 0;
+    const hasTranslation = imageTextTranslated && imageTextTranslated.trim().length > 0;
+    const needsProcessing = imageAnalysisStatus === 'none';
+    const isProcessing = imageAnalysisStatus === 'pending';
+
+    const handleMouseEnter = () => {
+      if (!isPinned) setOpened(true);
+    };
+
+    const handleMouseLeave = () => {
+      if (!isPinned) setOpened(false);
+    };
+
+    const handleClick = () => {
+      setIsPinned(!isPinned);
+      setOpened(true);
+    };
+
+    const handleClose = () => {
+      setIsPinned(false);
+      setOpened(false);
+    };
+
+    const handleTriggerImageAnalysis = async () => {
+      setIsTriggering(true);
+      try {
+        const response = await authFetch(`${apiUrl}/queue/image`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            message_id: messageId,
+            image_path: mediaPath,
+            extract_text: true,
+            detect_objects: false,
+            translate_extracted_text: true,
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to trigger image analysis');
+        }
+
+        notifications.show({
+          title: 'Success',
+          message: 'Image analysis job queued',
+          color: 'green',
+        });
+      } catch (error: any) {
+        notifications.show({
+          title: 'Error',
+          message: error.message || 'Failed to trigger image analysis',
+          color: 'red',
+        });
+      } finally {
+        setIsTriggering(false);
+      }
+    };
+
+    return (
+      <Box style={{ position: 'relative' }}>
+        <ImageLightbox image={mediaPath} thumbnailWidth={200} thumbnailHeight={120} />
+        
+        {showImageTranscripts && needsProcessing && (
+          <Box
+            onClick={handleTriggerImageAnalysis}
+            style={{
+              position: 'absolute',
+              top: 4,
+              right: 4,
+              cursor: 'pointer',
+            }}
+          >
+            <Badge
+              leftSection={<IconPhoto size={12} />}
+              color="orange"
+              variant="filled"
+              size="sm"
+            >
+              {isTriggering ? 'Starting...' : 'No Transcript'}
+            </Badge>
+          </Box>
+        )}
+
+        {showImageTranscripts && isProcessing && (
+          <Box
+            style={{
+              position: 'absolute',
+              top: 4,
+              right: 4,
+            }}
+          >
+            <Badge
+              leftSection={<IconPhoto size={12} />}
+              color="yellow"
+              variant="filled"
+              size="sm"
+            >
+              Processing...
+            </Badge>
+          </Box>
+        )}
+        
+        {showImageTranscripts && hasTranscript && (
+          <Popover width={300} position="bottom" withArrow shadow="md" opened={opened} onChange={setOpened}>
+            <Popover.Target>
+              <Box
+                onMouseEnter={handleMouseEnter}
+                onMouseLeave={handleMouseLeave}
+                onClick={handleClick}
+                style={{
+                  position: 'absolute',
+                  top: 4,
+                  right: 4,
+                  cursor: 'pointer',
+                }}
+              >
+                <Badge
+                  leftSection={<IconPhoto size={12} />}
+                  color={isPinned ? 'teal' : 'blue'}
+                  variant="filled"
+                  size="sm"
+                >
+                  Transcript
+                </Badge>
+              </Box>
+            </Popover.Target>
+            <Popover.Dropdown style={{ maxHeight: 400, overflowY: 'auto' }}>
+              <Box>
+                <Group justify="space-between" mb="xs">
+                  <Text size="sm" fw={500}>
+                    Image Transcript
+                  </Text>
+                  <Group gap="xs">
+                    {hasTranslation && (
+                      <Button
+                        variant="subtle"
+                        size="xs"
+                        onClick={() => setShowOriginal(!showOriginal)}
+                      >
+                        {showOriginal ? 'DE' : 'Original'}
+                      </Button>
+                    )}
+                    {isPinned && (
+                      <Button
+                        variant="subtle"
+                        size="xs"
+                        onClick={handleClose}
+                      >
+                        Close
+                      </Button>
+                    )}
+                  </Group>
+                </Group>
+                <Textarea
+                  value={showOriginal || !hasTranslation ? imageText : imageTextTranslated}
+                  readOnly
+                  autosize
+                  minRows={3}
+                  maxRows={15}
+                  styles={{
+                    input: {
+                      fontSize: '0.875rem',
+                      backgroundColor: 'var(--mantine-color-gray-0)',
+                    },
+                  }}
+                />
+              </Box>
+            </Popover.Dropdown>
+          </Popover>
+        )}
+      </Box>
+    );
+  };
+
+  const AudioPlayer = ({ mediaPath, audioText, audioTextTranslated, audioTranscriptionStatus, messageId, mediaType }: any) => {
+    const [opened, setOpened] = useState(false);
+    const [isPinned, setIsPinned] = useState(false);
+    const [showOriginal, setShowOriginal] = useState(false);
+    const [isTriggering, setIsTriggering] = useState(false);
+
+    const hasTranscript = audioText && audioText.trim().length > 0;
+    const hasTranslation = audioTextTranslated && audioTextTranslated.trim().length > 0;
+    const needsProcessing = audioTranscriptionStatus === 'none';
+    const isProcessing = audioTranscriptionStatus === 'pending';
+
+    const handleMouseEnter = () => {
+      if (!isPinned) setOpened(true);
+    };
+
+    const handleMouseLeave = () => {
+      if (!isPinned) setOpened(false);
+    };
+
+    const handleClick = () => {
+      setIsPinned(!isPinned);
+      setOpened(true);
+    };
+
+    const handleClose = () => {
+      setIsPinned(false);
+      setOpened(false);
+    };
+
+    const handleTriggerAudioTranscription = async () => {
+      setIsTriggering(true);
+      try {
+        const response = await authFetch(`${apiUrl}/queue/audio-transcription`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            message_id: messageId,
+            media_path: mediaPath,
+            media_type: mediaType || 'audio',
+            translate_transcription: true,
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to trigger audio transcription');
+        }
+
+        notifications.show({
+          title: 'Success',
+          message: 'Audio transcription job queued',
+          color: 'green',
+        });
+      } catch (error: any) {
+        notifications.show({
+          title: 'Error',
+          message: error.message || 'Failed to trigger audio transcription',
+          color: 'red',
+        });
+      } finally {
+        setIsTriggering(false);
+      }
+    };
+
+    return (
+      <Box style={{ position: 'relative', minWidth: 200 }}>
+        <audio src={mediaPath} controls style={{ width: '100%', maxWidth: 300 }}>
+          Your browser does not support the audio element.
+        </audio>
+
+        {showAudioTranscripts && needsProcessing && (
+          <Box
+            onClick={handleTriggerAudioTranscription}
+            style={{
+              position: 'absolute',
+              top: -8,
+              right: 4,
+              cursor: 'pointer',
+            }}
+          >
+            <Badge
+              leftSection={<IconVolume size={12} />}
+              color="orange"
+              variant="filled"
+              size="sm"
+            >
+              {isTriggering ? 'Starting...' : 'No Transcript'}
+            </Badge>
+          </Box>
+        )}
+
+        {showAudioTranscripts && isProcessing && (
+          <Box
+            style={{
+              position: 'absolute',
+              top: -8,
+              right: 4,
+            }}
+          >
+            <Badge
+              leftSection={<IconVolume size={12} />}
+              color="yellow"
+              variant="filled"
+              size="sm"
+            >
+              Processing...
+            </Badge>
+          </Box>
+        )}
+
+        {showAudioTranscripts && hasTranscript && (
+          <Popover width={300} position="bottom" withArrow shadow="md" opened={opened} onChange={setOpened}>
+            <Popover.Target>
+              <Box
+                onMouseEnter={handleMouseEnter}
+                onMouseLeave={handleMouseLeave}
+                onClick={handleClick}
+                style={{
+                  position: 'absolute',
+                  top: -8,
+                  right: 4,
+                  cursor: 'pointer',
+                }}
+              >
+                <Badge
+                  leftSection={<IconVolume size={12} />}
+                  color={isPinned ? 'teal' : 'grape'}
+                  variant="filled"
+                  size="sm"
+                >
+                  Transcript
+                </Badge>
+              </Box>
+            </Popover.Target>
+            <Popover.Dropdown style={{ maxHeight: 400, overflowY: 'auto' }}>
+              <Box>
+                <Group justify="space-between" mb="xs">
+                  <Text size="sm" fw={500}>
+                    Audio Transcript
+                  </Text>
+                  <Group gap="xs">
+                    {hasTranslation && (
+                      <Button
+                        variant="subtle"
+                        size="xs"
+                        onClick={() => setShowOriginal(!showOriginal)}
+                      >
+                        {showOriginal ? 'DE' : 'Original'}
+                      </Button>
+                    )}
+                    {isPinned && (
+                      <Button
+                        variant="subtle"
+                        size="xs"
+                        onClick={handleClose}
+                      >
+                        Close
+                      </Button>
+                    )}
+                  </Group>
+                </Group>
+                <Textarea
+                  value={showOriginal || !hasTranslation ? audioText : audioTextTranslated}
+                  readOnly
+                  autosize
+                  minRows={3}
+                  maxRows={15}
+                  styles={{
+                    input: {
+                      fontSize: '0.875rem',
+                      backgroundColor: 'var(--mantine-color-gray-0)',
+                    },
+                  }}
+                />
+              </Box>
+            </Popover.Dropdown>
+          </Popover>
+        )}
+      </Box>
+    );
+  };
+
+  const VideoPlayer = ({ mediaPath, audioText, audioTextTranslated, audioTranscriptionStatus, messageId }: any) => {
+    const [opened, setOpened] = useState(false);
+    const [isPinned, setIsPinned] = useState(false);
+    const [showOriginal, setShowOriginal] = useState(false);
+    const [isTriggering, setIsTriggering] = useState(false);
+
+    const hasTranscript = audioText && audioText.trim().length > 0;
+    const hasTranslation = audioTextTranslated && audioTextTranslated.trim().length > 0;
+    const needsProcessing = audioTranscriptionStatus === 'none';
+    const isProcessing = audioTranscriptionStatus === 'pending';
+
+    const handleMouseEnter = () => {
+      if (!isPinned) setOpened(true);
+    };
+
+    const handleMouseLeave = () => {
+      if (!isPinned) setOpened(false);
+    };
+
+    const handleClick = () => {
+      setIsPinned(!isPinned);
+      setOpened(true);
+    };
+
+    const handleClose = () => {
+      setIsPinned(false);
+      setOpened(false);
+    };
+
+    const handleTriggerAudioTranscription = async () => {
+      setIsTriggering(true);
+      try {
+        const response = await authFetch(`${apiUrl}/queue/audio-transcription`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            message_id: messageId,
+            media_path: mediaPath,
+            media_type: 'video',
+            translate_transcription: true,
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to trigger audio transcription');
+        }
+
+        notifications.show({
+          title: 'Success',
+          message: 'Video audio transcription job queued',
+          color: 'green',
+        });
+      } catch (error: any) {
+        notifications.show({
+          title: 'Error',
+          message: error.message || 'Failed to trigger audio transcription',
+          color: 'red',
+        });
+      } finally {
+        setIsTriggering(false);
+      }
+    };
+
+    return (
+      <Box style={{ position: 'relative', minWidth: 200 }}>
+        <video src={mediaPath} className={classes.messageVideo} controls>
+          Your browser does not support the video tag.
+        </video>
+
+        {showAudioTranscripts && needsProcessing && (
+          <Box
+            onClick={handleTriggerAudioTranscription}
+            style={{
+              position: 'absolute',
+              top: 4,
+              right: 4,
+              cursor: 'pointer',
+            }}
+          >
+            <Badge
+              leftSection={<IconVolume size={12} />}
+              color="orange"
+              variant="filled"
+              size="sm"
+            >
+              {isTriggering ? 'Starting...' : 'No Audio Transcript'}
+            </Badge>
+          </Box>
+        )}
+
+        {showAudioTranscripts && isProcessing && (
+          <Box
+            style={{
+              position: 'absolute',
+              top: 4,
+              right: 4,
+            }}
+          >
+            <Badge
+              leftSection={<IconVolume size={12} />}
+              color="yellow"
+              variant="filled"
+              size="sm"
+            >
+              Processing...
+            </Badge>
+          </Box>
+        )}
+
+        {showAudioTranscripts && hasTranscript && (
+          <Popover width={300} position="bottom" withArrow shadow="md" opened={opened} onChange={setOpened}>
+            <Popover.Target>
+              <Box
+                onMouseEnter={handleMouseEnter}
+                onMouseLeave={handleMouseLeave}
+                onClick={handleClick}
+                style={{
+                  position: 'absolute',
+                  top: 4,
+                  right: 4,
+                  cursor: 'pointer',
+                }}
+              >
+                <Badge
+                  leftSection={<IconVolume size={12} />}
+                  color={isPinned ? 'teal' : 'grape'}
+                  variant="filled"
+                  size="sm"
+                >
+                  Audio Transcript
+                </Badge>
+              </Box>
+            </Popover.Target>
+            <Popover.Dropdown style={{ maxHeight: 400, overflowY: 'auto' }}>
+              <Box>
+                <Group justify="space-between" mb="xs">
+                  <Text size="sm" fw={500}>
+                    Video Audio Transcript
+                  </Text>
+                  <Group gap="xs">
+                    {hasTranslation && (
+                      <Button
+                        variant="subtle"
+                        size="xs"
+                        onClick={() => setShowOriginal(!showOriginal)}
+                      >
+                        {showOriginal ? 'DE' : 'Original'}
+                      </Button>
+                    )}
+                    {isPinned && (
+                      <Button
+                        variant="subtle"
+                        size="xs"
+                        onClick={handleClose}
+                      >
+                        Close
+                      </Button>
+                    )}
+                  </Group>
+                </Group>
+                <Textarea
+                  value={showOriginal || !hasTranslation ? audioText : audioTextTranslated}
+                  readOnly
+                  autosize
+                  minRows={3}
+                  maxRows={15}
+                  styles={{
+                    input: {
+                      fontSize: '0.875rem',
+                      backgroundColor: 'var(--mantine-color-gray-0)',
+                    },
+                  }}
+                />
+              </Box>
+            </Popover.Dropdown>
+          </Popover>
+        )}
+      </Box>
+    );
+  };
+
   const deduplicateMessages = useCallback((messages: any[]) => {
     const seen = new Set();
     return messages.filter((msg) => {
@@ -256,14 +838,6 @@ const MessagesTab: React.FC<MessagesTabProps> = ({
         const results = await Promise.all(
           selectedTgChannelIds.map(async (channelId) => {
             const before = currentLastDates[channelId];
-
-            /**
-             * So könnte man eine richtige Timeline nicht nach channeln sortiert haben:
-             * const url = new URL(`${base}/messages/timeline`);
-             * url.searchParams.set('channel_ids', selectedTgChannelIds.join(','));
-             *
-             */
-
             const url = new URL(`${base}/messages/channels/${channelId}/messages`);
             url.searchParams.set('limit', `${LIMIT}`);
             if (searchQuery) {
@@ -281,17 +855,14 @@ const MessagesTab: React.FC<MessagesTabProps> = ({
 
         const newMessages = results.flatMap((r) => r.messages);
 
-        // Update messages with deduplication and proper sorting
         setMessages((prev) => {
           const combined = reset ? newMessages : [...prev, ...newMessages];
           const deduplicated = deduplicateMessages(combined);
-          // Sort the entire combined array to maintain proper chronological order
           return deduplicated.sort(
             (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
           );
         });
 
-        // Update last dates for pagination
         const newDates = { ...currentLastDates };
         results.forEach(({ channelId, messages }) => {
           const last = messages[messages.length - 1];
@@ -301,7 +872,6 @@ const MessagesTab: React.FC<MessagesTabProps> = ({
         });
         setChannelLastDates(newDates);
 
-        // Check if there are more messages to load
         const more = results.some((r) => r.messages.length === LIMIT);
         setHasMore(more);
       } catch (error) {
@@ -313,7 +883,6 @@ const MessagesTab: React.FC<MessagesTabProps> = ({
     [selectedTgChannelIds, searchQuery, channelLastDates, isLoadingMore, deduplicateMessages]
   );
 
-  // Simple full refresh function - moved after loadMessages declaration
   const handleRefresh = useCallback(() => {
     if (isRefreshing || selectedTgChannelIds.length === 0) {
       return;
@@ -324,13 +893,11 @@ const MessagesTab: React.FC<MessagesTabProps> = ({
     setHasMore(true);
     setChannelLastDates(Object.fromEntries(selectedTgChannelIds.map((id) => [id, null])));
 
-    // Just reload all messages from the beginning
     loadMessages(true).finally(() => {
       setIsRefreshing(false);
     });
   }, [selectedTgChannelIds, loadMessages, isRefreshing]);
 
-  // Reset and load initial messages when channels or search query changes
   useEffect(() => {
     if (selectedTgChannelIds.length > 0) {
       setMessages([]);
@@ -342,6 +909,43 @@ const MessagesTab: React.FC<MessagesTabProps> = ({
 
   const messageRows = messages.map((message) => {
     const isExpanded = expandedMessages.has(message.message_id);
+
+    const renderMedia = () => {
+      if (!message.media_path) return null;
+
+      if (isVideoFile(message.media_path)) {
+        return (
+          <VideoPlayer
+            mediaPath={message.media_path}
+            audioText={message.audio_text}
+            audioTextTranslated={message.audio_text_translated}
+            audioTranscriptionStatus={message.audio_transcription_status}
+            messageId={message.message_id}
+          />
+        );
+      } else if (isAudioFile(message.media_path)) {
+        return (
+          <AudioPlayer
+            mediaPath={message.media_path}
+            audioText={message.audio_text}
+            audioTextTranslated={message.audio_text_translated}
+            audioTranscriptionStatus={message.audio_transcription_status}
+            messageId={message.message_id}
+            mediaType={message.media_type}
+          />
+        );
+      } else {
+        return (
+          <ImageWithTranscript
+            mediaPath={message.media_path}
+            imageText={message.image_text}
+            imageTextTranslated={message.image_text_translated}
+            imageAnalysisStatus={message.image_analysis_status}
+            messageId={message.message_id}
+          />
+        );
+      }
+    };
 
     return (
       <Table.Tr
@@ -367,20 +971,25 @@ const MessagesTab: React.FC<MessagesTabProps> = ({
           <Box>
             <div className={classes.authorRow}>
               <Text size="sm" fw={500} className={classes.authorName}>
-                <Anchor onClick={() => onUpdateGraph('user', message.author.name)}>
-                  {message.author.name}
+                <Anchor
+                  onClick={() => message.author?.name && onUpdateGraph('user', message.author.name)}
+                >
+                  {message.author?.name || 'Unknown Author'}
                 </Anchor>
                 <span className={classes.channelName} style={{ marginLeft: '0.25rem' }}>
                   [
                   <Anchor
-                    onClick={() => onUpdateGraph('channel', message.channel.username)}
+                    onClick={() =>
+                      message.channel?.username && onUpdateGraph('channel', message.channel.username)
+                    }
                     className={classes.channelName}
                   >
-                    {message.channel.username}
+                    {message.channel?.username || 'Unknown Channel'}
                   </Anchor>
                   ]
                 </span>
               </Text>
+
               <Text size="xs" className={classes.timestamp}>
                 {formatRelativeTime(message.date)}
               </Text>
@@ -390,21 +999,9 @@ const MessagesTab: React.FC<MessagesTabProps> = ({
                 message={message}
                 isExpanded={isExpanded}
                 onToggleExpand={() => toggleMessageExpansion(message.message_id)}
+                searchQuery={searchQuery}
               />
-              {message.media_path &&
-                (isVideoFile(message.media_path) ? (
-                  // eslint-disable-next-line jsx-a11y/media-has-caption
-                  <video src={message.media_path} className={classes.messageVideo} controls>
-                    Your browser does not support the video tag.
-                  </video>
-                ) : (
-                  <ImageLightbox
-                    key={message.media_path}
-                    image={message.media_path}
-                    thumbnailWidth={200}
-                    thumbnailHeight={120}
-                  />
-                ))}
+              {renderMedia()}
             </Group>
           </Box>
         </Table.Td>
@@ -427,16 +1024,25 @@ const MessagesTab: React.FC<MessagesTabProps> = ({
           leftSection={<IconSearch size={16} />}
           style={{ flex: 1 }}
         />
-        <Tooltip label="Refresh for new messages">
-          <ActionIcon
-            variant="light"
-            size="lg"
-            onClick={handleRefresh}
-            loading={isRefreshing}
-          >
-            <IconRefresh size={18} />
-          </ActionIcon>
-        </Tooltip>
+        <Group gap="xs">
+          <Switch
+            label="Image transcripts"
+            checked={showImageTranscripts}
+            onChange={(e) => setShowImageTranscripts(e.currentTarget.checked)}
+            size="sm"
+          />
+          <Switch
+            label="Audio transcripts"
+            checked={showAudioTranscripts}
+            onChange={(e) => setShowAudioTranscripts(e.currentTarget.checked)}
+            size="sm"
+          />
+          <Tooltip label="Refresh for new messages">
+            <ActionIcon variant="light" size="lg" onClick={handleRefresh} loading={isRefreshing}>
+              <IconRefresh size={18} />
+            </ActionIcon>
+          </Tooltip>
+        </Group>
       </Group>
 
       <ScrollArea

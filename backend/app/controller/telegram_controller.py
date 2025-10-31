@@ -10,8 +10,15 @@ class ExtendedScrapeRequest(BaseModel):
     channel: str
     tg_session: str
     recursive: bool = True
-    neo4j: bool = True,
+    neo4j: bool = True
     owner_id: str
+    case_id: int = None
+    enable_translation: bool = False
+    enable_image_analysis: bool = False
+    enable_audio_transcription: bool = False
+    enable_emotion_analysis: bool = False
+    enable_label_classifier: bool = False
+    enable_geolocation_extraction: bool = False
 
 def run_similarity(channel: str, tg_session: str, owner_id: str) -> dict:
     try:
@@ -50,10 +57,21 @@ def start_scraper(channels: list[str], tg_session: str, owner_id: str, case_id: 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Scraper job failed: {str(e)}")
 
-def launch_full_scrape_job(channel: str, tg_session: str, recursive: bool = True, neo4j: bool = True, owner_id: str = "", case_id: int = None) -> dict:
-    """
-    Launch a Docker container to run a Telegram scraping + similarity job.
-    """
+def launch_full_scrape_job(
+    channel: str, 
+    tg_session: str, 
+    recursive: bool = True, 
+    neo4j: bool = True, 
+    owner_id: str = "", 
+    case_id: int = None,
+    # NEU: Worker-Flags
+    enable_translation: bool = True,
+    enable_image_analysis: bool = True,
+    enable_audio_transcription: bool = True,
+    enable_emotion_analysis: bool = False,
+    enable_label_classifier: bool = False,
+    enable_geolocation_extraction: bool = False
+) -> dict:
     try:
         response = requests.post(
             f"{LAUNCHER_URL}/scrape",
@@ -65,13 +83,17 @@ def launch_full_scrape_job(channel: str, tg_session: str, recursive: bool = True
                 "recursive": recursive,
                 "neo4j": neo4j,
                 "owner_id": owner_id,
-                "case_id": case_id,  # Optional case ID for tracking
+                "case_id": case_id,
+                # NEU: Flags weitergeben
+                "enable_translation": enable_translation,
+                "enable_image_analysis": enable_image_analysis,
+                "enable_audio_transcription": enable_audio_transcription,
+                "enable_emotion_analysis": enable_emotion_analysis,
+                "enable_label_classifier": enable_label_classifier,
+                "enable_geolocation_extraction": enable_geolocation_extraction,
             },
             timeout=15
         )
-        if response.status_code != 200:
-            raise HTTPException(status_code=500, detail=response.text)
-        return response.json()
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to launch scraper job: {str(e)}")
 

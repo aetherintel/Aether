@@ -1,0 +1,17 @@
+easyocr==1.7.2
+torch==2.5.1
+torchvision==0.20.1
+opencv-python-headless==4.10.0.84
+Pillow==9.5.0
+numpy==1.26.4
+scipy==1.13.1
+scikit-image==0.24.0
+langdetect==1.0.9
+requests==2.32.3
+rq==1.16.2
+
+redis>=5.0.0
+
+
+# Neo4j client (shared library)
+neo4j>=5.14.0

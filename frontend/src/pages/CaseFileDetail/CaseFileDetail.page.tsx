@@ -17,6 +17,7 @@ import type {
 import classes from './CaseFileDetail.module.css';
 
 const apiUrl = import.meta.env.VITE_API_URL;
+type ExpandedChannels = Record<string, string[]>;
 
 export function CaseFileDetail() {
   const { id } = useParams<{ id: string }>();
@@ -51,19 +52,28 @@ export function CaseFileDetail() {
             const expandUrl = new URL(`${base}/messages/channels/expand`);
             expandUrl.searchParams.set('channel_usernames', initialChannels.join(','));
             const expandRes = await authFetch(expandUrl.toString());
-            const expandedChannels = await expandRes.json();
+            const expandedChannels: ExpandedChannels = await expandRes.json();
 
+            console.log('initial channels:', initialChannels);
             const uniqueChannels = [
-              ...new Set(
-                Object.entries(expandedChannels)
-                // @ts-ignore
-                  .flatMap(([key, recommendations]) => [key, ...recommendations])
-                  .map((item) => item.toLowerCase())
-              ),
-            ];
+            ...new Set(
+              Object.entries(expandedChannels)
+                .flatMap(([key, recommendations]) => {
+                  const cleanKey = key.replace(/^"+|"+$/g, '').replace(/"/g, '');
+                  const cleanRecs = (recommendations || []).map((r) =>
+                    r.replace(/^"+|"+$/g, '').replace(/"/g, '')
+                  );
+                  return [cleanKey, ...cleanRecs];
+                })
+                .map((item) => item.toLowerCase())
+            ),
+          ];
+
+
+
 
             console.log(
-              `[DEBUG] Expanded ${initialChannels.length} to ${expandedChannels.length} channels`
+              `[DEBUG] Expanded ${initialChannels.length} to ${Object.keys(expandedChannels || {}).length} channels and ${uniqueChannels.length} unique usernames`
             );
 
             const channelsUrl = new URL(`${base}/messages/channels`);
