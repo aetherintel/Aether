@@ -16,6 +16,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY workers/geolocation_worker/ ./workers/geolocation_worker/
 COPY aether_lib/ ./aether_lib/
 
+RUN mkdir -p /app/models/geolocation/geonames
+
 ENV PYTHONPATH=/app
 ENV PYTHONUNBUFFERED=1
 ENV GEONAMES_DATA_DIR=/app/models/geolocation/geonames
