@@ -19,6 +19,7 @@ jobs:
     strategy:
       matrix:
         include:
+          # Core services
           - service: frontend
             context: ./frontend
             dockerfile: ./frontend/Dockerfile
@@ -33,6 +34,29 @@ jobs:
           - service: telegram-scraper
             context: ./telegram_scraper
             dockerfile: ./telegram_scraper/Dockerfile
+          
+          # AI Worker services
+          - service: translation-worker
+            context: .
+            dockerfile: ./workers/translation_worker/Dockerfile
+          - service: image-worker
+            context: .
+            dockerfile: ./workers/image_worker/Dockerfile
+          - service: audio-worker
+            context: .
+            dockerfile: ./workers/audio_worker/Dockerfile
+          - service: emotion-worker
+            context: .
+            dockerfile: ./workers/emotion_worker/Dockerfile
+          - service: classification-worker
+            context: .
+            dockerfile: ./workers/classification_worker/Dockerfile
+          - service: geolocation-worker
+            context: .
+            dockerfile: ./workers/geolocation_worker/Dockerfile
+          - service: photon
+            context: .
+            dockerfile: ./docker/photon/Dockerfile
     
     steps:
       - name: Checkout repository
@@ -73,6 +97,10 @@ jobs:
           cache-to: type=gha,mode=max
           build-args: ${{ matrix.build-args }}
 
+  deploy-to-vm:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    steps:
       - name: Copy files to production VM
         uses: appleboy/scp-action@v0.1.5
         with:
@@ -112,6 +140,13 @@ jobs:
             export POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}
             export NEO4J_PASSWORD=${{ secrets.NEO4J_PASSWORD }}
             export JOB_SECRET_TOKEN=${{ secrets.JOB_SECRET_TOKEN }}
+            export NEO4J_USER=neo4j
+            export POSTGRES_HOST=postgres
+            export POSTGRES_PORT=5432
+            export POSTGRES_DB=telegramdb
+            export POSTGRES_USER=telegramuser
+            export JOB_LAUNCHER_URL=http://job-launcher:9001
+            export MEDIA_PATH=${PWD}/shared/media
             export ENVIRONMENT=prod
             
             # Determine Docker Compose command
@@ -125,9 +160,9 @@ jobs:
             echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
             
             # Define stateful services (don't recreate these)
-            STATEFUL_SERVICES="postgres neo4j keycloak"
+            STATEFUL_SERVICES="postgres neo4j keycloak redis"
             # Define stateless services (safe to recreate)
-            STATELESS_SERVICES="frontend backend job-launcher telegram-job certbot"
+            STATELESS_SERVICES="frontend backend job-launcher telegram-worker translation-worker image-worker audio-worker emotion-worker classification-worker geolocation-worker photon certbot"
             
             echo "=== GRACEFUL DEPLOYMENT STARTING ==="
             
@@ -257,6 +292,15 @@ jobs:
             done
             
             echo "=== GRACEFUL DEPLOYMENT COMPLETED ==="
+            echo ""
+            echo "🤖 AI Workers deployed:"
+            echo "  - Translation Worker (replicas: 2)"
+            echo "  - Image Analysis Worker"
+            echo "  - Audio Transcription Worker (Whisper)"
+            echo "  - Emotion Analysis Worker (replicas: 2)"
+            echo "  - Classification Worker"
+            echo "  - Geolocation Worker (replicas: 3)"
+            echo "  - Photon Geocoding Service"
 
   # # Optional: Clean up old packages
   # cleanup-packages:
@@ -269,14 +313,6 @@ jobs:
   #       uses: actions/delete-package-versions@v4
   #       with:
   #         package-name: 'aether-frontend'
-  #         package-type: 'container'
-  #         min-versions-to-keep: 5
-  #         delete-only-untagged-versions: 'true'
-      
-  #     - name: Delete old backend versions
-  #       uses: actions/delete-package-versions@v4
-  #       with:
-  #         package-name: 'aether-backend'
   #         package-type: 'container'
   #         min-versions-to-keep: 5
   #         delete-only-untagged-versions: 'true'

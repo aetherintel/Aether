@@ -24,4 +24,4 @@ COPY models/image/easyocr /app/models/image/easyocr
 # Copy worker code
 COPY workers/image_worker/ /app/workers/image_worker/
 
-CMD ["rq", "worker", "--url", "redis://redis:6379/2", "image-jobs"]
+CMD ["rq", "worker", "--url",  "redis://redis:6379/2", "image-jobs"]

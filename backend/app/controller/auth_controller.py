@@ -299,14 +299,19 @@ def telegram_status(
             
             # Determine image/name based on queue
             queue = job.get("queue", "unknown")
-            if "telegram" in queue:
-                image = "telegram-scraper"
-            elif "translation" in queue:
-                image = "translation-worker"
-            elif "image" in queue:
-                image = "image-worker"
-            else:
-                image = "unknown-worker"
+            match queue:
+                case q if "telegram" in q:
+                    image = "telegram-scraper"
+                case q if "translation" in q:
+                    image = "translation-worker"
+                case q if "image" in q:
+                    image = "image-worker"
+                case q if "emotion" in q:
+                    image = "emotion-worker"
+                case q if "classification" in q:
+                    image = "classification-worker"
+                case _:
+                    image = "unknown-worker"
             
             containers.append({
                 "id": job.get("job_id", "unknown"),

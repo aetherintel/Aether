@@ -343,13 +343,15 @@ def queue_emotion_job(req: EmotionJobRequest, request: Request):
     
     # Queue the job
     job = queues['emotion'].enqueue(
-        'workers.emotion_worker.worker.classify_emotion_job',
+        'worker.classify_emotion_job',
         message_id=req.message_id,
         text=req.text,
         neo4j_uri=os.getenv('NEO4J_URI'),
         neo4j_user=os.getenv('NEO4J_USER'),
         neo4j_password=os.getenv('NEO4J_PASSWORD'),
         threshold=req.threshold,
+        owner_id=req.owner_id,
+        case_id=req.case_id,
         top_k=req.top_k,
         job_timeout='5m',
         result_ttl=600,
@@ -381,26 +383,26 @@ def queue_emotion_job(req: EmotionJobRequest, request: Request):
 def queue_classification_job(req: EmotionJobRequest, request: Request):
     """
     Queue a text classification job
-    Can be called by scraper (German text) OR translation worker (after translation)
     """
     _check_auth(request)
-    
     job_id = f"classification_{req.message_id}_{uuid.uuid4().hex[:6]}"
-    
     print(f"[QUEUE] Text classification job for message {req.message_id}")
     
     if req.chained_from:
         print(f"[QUEUE] Chained from: {req.chained_from} (parent: {req.parent_job_id})")
     
-    # Queue the job
+    # Queue the job with flat module path
     job = queues['classification'].enqueue(
-        'workers.classification_worker.worker.classify_post_job',
+        'worker.classify_post_job',  # Simple flat path
         message_id=req.message_id,
         text=req.text,
         neo4j_uri=os.getenv('NEO4J_URI'),
         neo4j_user=os.getenv('NEO4J_USER'),
         neo4j_password=os.getenv('NEO4J_PASSWORD'),
+        owner_id=req.owner_id,
+        case_id=req.case_id,
         job_timeout='5m',
+
         result_ttl=600,
         failure_ttl=86400,
         ttl=None,
@@ -417,7 +419,7 @@ def queue_classification_job(req: EmotionJobRequest, request: Request):
     
     return {
         "job_id": job.id,
-        "queue": "emotion-jobs",
+        "queue": "classification-jobs",
         "status": job.get_status(),
         "message_id": req.message_id,
         "queued_at": str(job.enqueued_at)
@@ -488,7 +490,7 @@ def launch_scraper(req: ScrapeRequest, request: Request):
             'enable_geolocation_extraction': req.enable_geolocation_extraction,
         },
         job_id=job_id,
-        timeout='6h',
+        job_timeout='6h',
         result_ttl=86400,
         failure_ttl=86400,
         ttl=None,
