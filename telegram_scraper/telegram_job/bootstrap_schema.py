@@ -1,6 +1,6 @@
 # telegram_job/bootstrap_schema.py
 from pathlib import Path
-from neo4j_client import driver
+from aether_lib.neo4j_client.neo4j_client import driver
 
 SCHEMA_FILE = Path(__file__).parents[1] / "neo4j" / "schema.cypher"
 

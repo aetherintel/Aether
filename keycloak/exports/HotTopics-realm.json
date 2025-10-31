@@ -1266,13 +1266,13 @@
     "auth" : "true",
     "envelopeFrom" : "",
     "ssl" : "false",
-    "password" : "jkni ztpm aurz wpuk",
-    "port" : "587",
-    "host" : "smtp.gmail.com",
+    "password" : "$H0!%R5w^3Yb0m#P",
+    "port" : "465",
+    "host" : "smtp.strato.de",
     "replyTo" : "",
-    "from" : "aether.hottopics@gmail.com",
+    "from" : "admin@aethery.cloud",
     "fromDisplayName" : "",
-    "user" : "aether.hottopics@gmail.com"
+    "user" : "admin@aethery.cloud"
   },
   "eventsEnabled" : true,
   "eventsExpiration" : 36288000,

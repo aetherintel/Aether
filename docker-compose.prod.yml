@@ -1,4 +1,3 @@
-# docker-compose.prod.yml
 services:
   postgres:
     image: postgres:15
@@ -141,7 +140,9 @@ services:
     networks:
       - aether-network
 
-  # Redis für RQ Queue
+  # ============================================================================
+  # REDIS (Central Message Queue)
+  # ============================================================================
   redis:
     image: redis:7-alpine
     container_name: redis
@@ -152,11 +153,24 @@ services:
       - redis_data:/data
     networks:
       - aether-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
-  # RQ Worker (ersetzt altes telegram-job)
+  # ============================================================================
+  # TELEGRAM SCRAPER WORKER
+  # CRITICAL: --timeout -1 = NO TIMEOUT (runs indefinitely)!
+  # ============================================================================
   telegram-worker:
     image: ghcr.io/${GITHUB_REPOSITORY_OWNER:-aetherintel}/aether-telegram-scraper:latest
-    command: rq worker --url redis://redis:6379 telegram-jobs
+    command: >
+      rq worker telegram-jobs
+      --url redis://redis:6379
+      --timeout -1
+      --worker-ttl 0
+      --job-monitoring-interval 60
     restart: unless-stopped
     environment:
       ENVIRONMENT: prod
@@ -185,7 +199,270 @@ services:
       - neo4j
     networks:
       - aether-network
+    deploy:
+      replicas: 5
 
+  # ============================================================================
+  # TRANSLATION WORKER
+  # --timeout 3600 (1 hour max per translation)
+  # worker-ttl=1800 (30 min) - periodic restart to prevent memory leaks
+  # ============================================================================
+  translation-worker:
+    image: ghcr.io/${GITHUB_REPOSITORY_OWNER:-aetherintel}/aether-translation-worker:latest
+    command: >
+      rq worker translation-jobs
+      --url redis://redis:6379/1
+      --timeout 3600
+      --worker-ttl 1800
+      --job-monitoring-interval 30
+    restart: unless-stopped
+    environment:
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      MODELS_PATH: /app/models
+      USE_QUANTIZATION: "true"
+      NEO4J_URI: bolt://neo4j:7687
+      NEO4J_USER: ${NEO4J_USER}
+      NEO4J_PASSWORD: ${NEO4J_PASSWORD}
+      DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@postgres:5432/${POSTGRES_DB}
+    volumes:
+      - ./models/translation:/app/models/translation
+    depends_on:
+      - redis
+      - postgres
+      - neo4j
+    networks:
+      - aether-network
+    deploy:
+      replicas: 2
+      resources:
+        limits:
+          cpus: '2'
+          memory: 4G
+        reservations:
+          cpus: '1'
+          memory: 2G
+
+  # ============================================================================
+  # IMAGE ANALYSIS WORKER
+  # --timeout 1800 (30 minutes max per image)
+  # worker-ttl=1800 (30 min) - periodic restart to prevent memory leaks
+  # ============================================================================
+  image-worker:
+    image: ghcr.io/${GITHUB_REPOSITORY_OWNER:-aetherintel}/aether-image-worker:latest
+    command: >
+      rq worker image-jobs
+      --url redis://redis:6379/2
+      --timeout 1800
+      --worker-ttl 1800
+      --job-monitoring-interval 30
+    restart: unless-stopped
+    environment:
+      HOME: /app/models/image
+      PADDLEX_HOME: /app/models/image
+      MODEL_BASE_DIR: /app/models/image
+      JOB_LAUNCHER_URL: ${JOB_LAUNCHER_URL}
+      JOB_SECRET_TOKEN: ${JOB_SECRET_TOKEN}
+      NEO4J_URI: ${NEO4J_URI}
+      NEO4J_USER: ${NEO4J_USER}
+      NEO4J_PASSWORD: ${NEO4J_PASSWORD}
+    volumes:
+      - ${MEDIA_PATH}:/shared/media:ro
+      - ./models/image:/app/models/image
+    depends_on:
+      - redis
+      - neo4j
+    networks:
+      - aether-network
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+        reservations:
+          memory: 1G
+
+  # ============================================================================
+  # AUDIO TRANSCRIPTION WORKER (Whisper)
+  # --timeout 7200 (2 hours max per audio file)
+  # worker-ttl=3600 (1h) - Whisper can leak memory with large files
+  # ============================================================================
+  audio-worker:
+    image: ghcr.io/${GITHUB_REPOSITORY_OWNER:-aetherintel}/aether-audio-worker:latest
+    command: >
+      rq worker audio-jobs
+      --url redis://redis:6379/3
+      --timeout 7200
+      --worker-ttl 3600
+      --job-monitoring-interval 60
+    restart: unless-stopped
+    environment:
+      JOB_LAUNCHER_URL: ${JOB_LAUNCHER_URL}
+      JOB_SECRET_TOKEN: ${JOB_SECRET_TOKEN}
+      NEO4J_URI: ${NEO4J_URI}
+      NEO4J_USER: ${NEO4J_USER}
+      NEO4J_PASSWORD: ${NEO4J_PASSWORD}
+      MODELS_PATH: /app/models
+      USE_QUANTIZATION: "true"
+    volumes:
+      - ./models/audio:/app/models/audio
+      - ${MEDIA_PATH}:/shared/media:ro
+    depends_on:
+      - redis
+      - neo4j
+    networks:
+      - aether-network
+    deploy:
+      resources:
+        limits:
+          memory: 6G
+        reservations:
+          memory: 1G
+
+  # ============================================================================
+  # EMOTION ANALYSIS WORKER
+  # --timeout 600 (10 minutes max - should be much faster)
+  # worker-ttl=900 (15 min) - lightweight, frequent restart is fine
+  # ============================================================================
+  emotion-worker:
+    image: ghcr.io/${GITHUB_REPOSITORY_OWNER:-aetherintel}/aether-emotion-worker:latest
+    command: >
+      rq worker emotion-jobs
+      --url redis://redis:6379/4
+      --timeout 600
+      --worker-ttl 900
+      --job-monitoring-interval 30
+    restart: unless-stopped
+    environment:
+      JOB_LAUNCHER_URL: ${JOB_LAUNCHER_URL}
+      JOB_SECRET_TOKEN: ${JOB_SECRET_TOKEN}
+      NEO4J_URI: ${NEO4J_URI}
+      NEO4J_USER: ${NEO4J_USER}
+      NEO4J_PASSWORD: ${NEO4J_PASSWORD}
+      MODELS_PATH: /app/models
+      USE_QUANTIZATION: "true"
+    volumes:
+      - ./models/emotion:/app/models/emotion
+    depends_on:
+      - redis
+      - neo4j
+    networks:
+      - aether-network
+    deploy:
+      replicas: 2
+      resources:
+        limits:
+          memory: 4G
+        reservations:
+          memory: 1G
+
+  # ============================================================================
+  # CLASSIFICATION WORKER
+  # --timeout 600 (10 minutes max - should be much faster)
+  # worker-ttl=900 (15 min) - lightweight, frequent restart is fine
+  # ============================================================================
+  classification-worker:
+    image: ghcr.io/${GITHUB_REPOSITORY_OWNER:-aetherintel}/aether-classification-worker:latest
+    command: >
+      rq worker classification-jobs
+      --url redis://redis:6379/5
+      --timeout 600
+      --worker-ttl 900
+      --job-monitoring-interval 30
+    restart: unless-stopped
+    environment:
+      JOB_LAUNCHER_URL: ${JOB_LAUNCHER_URL}
+      JOB_SECRET_TOKEN: ${JOB_SECRET_TOKEN}
+      NEO4J_URI: ${NEO4J_URI}
+      NEO4J_USER: ${NEO4J_USER}
+      NEO4J_PASSWORD: ${NEO4J_PASSWORD}
+      MODELS_PATH: /app/models
+      USE_QUANTIZATION: "true"
+    volumes:
+      - ./models/classifier:/app/models/classifier
+      - ${MEDIA_PATH}:/shared/media:ro
+    depends_on:
+      - redis
+      - neo4j
+    networks:
+      - aether-network
+    deploy:
+      resources:
+        limits:
+          memory: 3G
+        reservations:
+          memory: 1G
+
+  # ============================================================================
+  # GEOLOCATION WORKER
+  # --timeout 600 (10 minutes max - should be much faster)
+  # worker-ttl=900 (15 min) - lightweight, frequent restart is fine
+  # ============================================================================
+  geolocation-worker:
+    image: ghcr.io/${GITHUB_REPOSITORY_OWNER:-aetherintel}/aether-geolocation-worker:latest
+    command: >
+      rq worker geolocation-jobs
+      --url redis://redis:6379/6
+      --timeout 600
+      --worker-ttl 900
+      --job-monitoring-interval 30
+    restart: unless-stopped
+    environment:
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      NEO4J_URI: ${NEO4J_URI}
+      NEO4J_USER: ${NEO4J_USER}
+      NEO4J_PASSWORD: ${NEO4J_PASSWORD}
+      POSTGRES_HOST: ${POSTGRES_HOST}
+      POSTGRES_PORT: ${POSTGRES_PORT}
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      JOB_LAUNCHER_URL: ${JOB_LAUNCHER_URL}
+      JOB_SECRET_TOKEN: ${JOB_SECRET_TOKEN}
+      PHOTON_URL: http://photon:2322
+    volumes:
+      - ./models/geolocation:/app/models/geolocation
+    depends_on:
+      - redis
+      - neo4j
+      - photon
+    networks:
+      - aether-network
+    deploy:
+      replicas: 3
+      resources:
+        limits:
+          memory: 2G
+        reservations:
+          memory: 512M
+
+  # ============================================================================
+  # PHOTON GEOCODING SERVICE
+  # ============================================================================
+  photon:
+    image: ghcr.io/${GITHUB_REPOSITORY_OWNER:-aetherintel}/aether-photon:latest
+    container_name: aether-photon
+    restart: unless-stopped
+    ports:
+      - "2322:2322"
+    volumes:
+      - ./models/geocoding/photon/photon_data:/photon/photon_data
+    environment:
+      - JAVA_OPTS=-Xmx2g
+    networks:
+      - aether-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:2322/api?q=Berlin"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    depends_on:
+      - postgres
+
+  # ============================================================================
+  # JOB LAUNCHER (Central Queue Manager)
+  # ============================================================================
   job-launcher:
     image: ghcr.io/${GITHUB_REPOSITORY_OWNER:-aetherintel}/aether-job-launcher:latest
     container_name: job_launcher

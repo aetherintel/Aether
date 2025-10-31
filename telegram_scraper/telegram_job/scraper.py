@@ -2,9 +2,12 @@ import asyncio
 from pathlib import Path
 import os
 import time
+import requests
+from langdetect import detect, LangDetectException
 from telethon import events
 from telegram_client import client, login
-from neo4j_client import save_message_if_new, is_scraped, mark_scraped
+from aether_lib.neo4j_client.messages import save_message_with_processing_status
+from aether_lib.neo4j_client.channels import is_scraped, mark_scraped
 from utils import download_media_to_path, extract_invite_links, generate_media_path, get_media_type
 
 # Configuration
@@ -13,12 +16,553 @@ MESSAGE_BATCH_SIZE = int(os.getenv("MESSAGE_BATCH_SIZE", "500"))
 MESSAGE_BATCH_DELAY = float(os.getenv("MESSAGE_BATCH_DELAY", "0.05"))
 MAX_PARALLEL_SCRAPERS = int(os.getenv("MAX_PARALLEL_SCRAPERS", "4"))
 
+# Job Launcher Configuration
+JOB_LAUNCHER_URL = os.getenv("JOB_LAUNCHER_URL", "http://job-launcher:9001")
+JOB_SECRET_TOKEN = os.getenv("JOB_SECRET_TOKEN")
+OWNER_ID = os.getenv("OWNER_ID", "unknown")
+
+ENABLE_TRANSLATION = os.getenv('ENABLE_TRANSLATION', '1') == '1'
+ENABLE_IMAGE_ANALYSIS = os.getenv('ENABLE_IMAGE_ANALYSIS', '1') == '1'
+ENABLE_AUDIO_TRANSCRIPTION = os.getenv('ENABLE_AUDIO_TRANSCRIPTION', '1') == '1'
+ENABLE_EMOTION_ANALYSIS = os.getenv('ENABLE_EMOTION_ANALYSIS', '0') == '1'
+ENABLE_LABEL_CLASSIFIER = os.getenv('ENABLE_LABEL_CLASSIFIER', '0') == '1'
+ENABLE_GEOLOCATION_EXTRACTION = os.getenv('ENABLE_GEOLOCATION_EXTRACTION', '0') == '1'
+
+# Translation Configuration
+SUPPORTED_TRANSLATION_LANGUAGES = ['ru', 'ar', 'trk', 'en']
+
 # Global state for parallel processing
 processing_channels = set()
 found_channels_queue = asyncio.Queue()
 scraper_semaphore = asyncio.Semaphore(MAX_PARALLEL_SCRAPERS)
-# FIX: Track all channels we've seen to prevent duplicates
 all_seen_channels = set()
+
+# ============================================================================
+#  TRANSLATION HELPERS
+# ============================================================================
+
+def detect_language(text: str) -> str:
+    """Detect language of text, returns 'de' if detection fails"""
+    if not text or len(text.strip()) < 10:
+        return 'de'
+    
+    try:
+        lang = detect(text)
+        return lang
+    except LangDetectException:
+        print(f"[LANG] Could not detect language, assuming German")
+        return 'de'
+
+def needs_translation(text: str) -> tuple[bool, str]:
+    """
+    Check if text needs translation
+    Returns: (needs_translation, detected_language, to_english)
+    """
+    detected_lang = detect_language(text)
+    
+    # Already German
+    if detected_lang == 'de':
+        # translate to english for better NLP results
+        return False, 'de'
+    
+    # Supported language - needs translation
+    if detected_lang in SUPPORTED_TRANSLATION_LANGUAGES:
+        print(f"[LANG] Text needs translation: {detected_lang} -> de")
+        return True, detected_lang
+    
+    # Unsupported language - store as-is
+    print(f"[LANG] Unsupported language {detected_lang}, storing original")
+    return False, detected_lang
+
+def queue_translation(message_id: str, text: str, source_language: str, case_id: int = None, owner_id: str = None) -> str:
+    """
+    Queue translation job via job-launcher
+    Returns job ID or None if failed
+    """
+    try:
+        response = requests.post(
+            f"{JOB_LAUNCHER_URL}/queue/translation",
+            json={
+                "message_id": message_id,
+                "original_text": text,
+                "source_language": source_language,
+                "owner_id": owner_id,
+                "case_id": case_id
+            },
+            headers={"Authorization": f"Bearer {JOB_SECRET_TOKEN}"},
+            timeout=10
+        )
+        response.raise_for_status()
+        job_data = response.json()
+        print(f"[TRANSLATION] ✓ Queued job {job_data['job_id']} for message {message_id}")
+        return job_data['job_id']
+    except Exception as e:
+        print(f"[TRANSLATION] ✗ Failed to queue translation: {e}")
+        return None
+
+# ===========================================================================
+# IMAGE ANALYSIS
+# ============================================================================
+
+
+def queue_image_analysis(
+    message_id: str, 
+    image_path: str, 
+    case_id: int = None, 
+    owner_id: str = None,
+    extract_text: bool = True,
+    detect_objects: bool = True,
+    translate_extracted_text: bool = True
+) -> str:
+    """
+    Queue image analysis job via job-launcher
+    Returns job ID or None if failed
+    """
+    try:
+        response = requests.post(
+            f"{JOB_LAUNCHER_URL}/queue/image",
+            json={
+                "message_id": message_id,
+                "image_path": image_path,
+                "owner_id": owner_id,
+                "case_id": case_id,
+                "extract_text": extract_text,
+                "detect_objects": detect_objects,
+                "translate_extracted_text": translate_extracted_text
+            },
+            headers={"Authorization": f"Bearer {JOB_SECRET_TOKEN}"},
+            timeout=10
+        )
+        response.raise_for_status()
+        job_data = response.json()
+        print(f"[IMAGE] ✓ Queued analysis job {job_data['job_id']} for message {message_id}")
+        return job_data['job_id']
+    except Exception as e:
+        print(f"[IMAGE] ✗ Failed to queue image analysis: {e}")
+        return None
+
+
+def queue_geolocation_extraction(
+    message_id: str,
+    text: str,
+    case_id: int = None,
+    owner_id: str = None
+) -> str:
+    """
+    Queue geolocation extraction job via job-launcher
+    Returns job ID or None if failed
+    """
+    try:
+        response = requests.post(
+            f"{JOB_LAUNCHER_URL}/queue/geolocation",
+            json={
+                "message_id": message_id,
+                "text": text,
+                "owner_id": owner_id,
+                "case_id": case_id
+            },
+            headers={"Authorization": f"Bearer {JOB_SECRET_TOKEN}"},
+            timeout=10
+        )
+        response.raise_for_status()
+        job_data = response.json()
+        print(f"[GEOLOCATION] ✓ Queued extraction job {job_data['job_id']} for message {message_id}")
+        return job_data['job_id']
+    except Exception as e:
+        print(f"[GEOLOCATION] ✗ Failed to queue geolocation extraction: {e}")
+        return None
+
+
+# ============================================================================
+#  MESSAGE PROCESSING (Updated with Translation)
+# ============================================================================
+
+# Updated process_message function with audio transcription support
+
+async def process_message(msg, username, found_channels, recursive=False, case_id=None, owner_id=None):
+    """Process a single message: save it, download media, queue translation/transcription, find channels"""
+    try:
+        # Skip service messages
+        if hasattr(msg, 'action') and msg.action is not None:
+            return
+            
+        # Rate limiting
+        await asyncio.sleep(RATE_LIMIT_DELAY)
+        
+        # Get sender
+        sender = await msg.get_sender()
+        
+        # Extract text
+        text = msg.message or ""
+        
+        # Analyze text for translation
+        needs_trans = False
+        detected_lang = None
+        translation_status = 'none'
+        geolocation_status = 'none'
+        if text:
+            if len(text) >= 10 and ENABLE_TRANSLATION:
+                needs_trans, detected_lang = needs_translation(text)
+                translation_status = 'pending' if needs_trans else 'none'
+            # Geolocation extraction status
+            if len(text) >= 10 and ENABLE_GEOLOCATION_EXTRACTION:
+                geolocation_status = 'pending'
+                # Queue geolocation extraction
+                job_id = queue_geolocation_extraction(
+                    message_id=f"{msg.chat_id}-{msg.id}",
+                    text=text,
+                    owner_id=owner_id,
+                    case_id=case_id
+                )
+        # Initialize processing statuses
+        image_analysis_status = 'none'
+        audio_transcription_status = 'none'
+        
+        # Handle media download and processing
+        media_path = None
+        media_type = None
+        
+        if msg.media:
+            media_type = get_media_type(msg.media)
+            
+            # Check if media should be downloaded
+            if media_type in ["photo", "video", "document", "audio"]:
+                media_path = generate_media_path(username, msg.id, media_type, msg)
+                
+                if media_path:
+                    try:
+                        os.makedirs(os.path.dirname(media_path), exist_ok=True)
+                        if not os.path.exists(media_path):
+                            print(f"[DOWNLOAD] {username}: Downloading media for message {msg.id}")
+                            await download_media_to_path(username, msg, client, media_path)
+                        
+                        # Build full message ID for processing
+                        full_message_id = f"{msg.chat_id}-{msg.id}"
+                        
+                        # Process based on media type
+                        
+                        # 1. IMAGE PROCESSING (existing)
+                        if media_type == "photo" and os.path.exists(media_path) and ENABLE_IMAGE_ANALYSIS:
+                            image_analysis_status = 'pending'
+                            
+                            job_id = queue_image_analysis(
+                                message_id=full_message_id,
+                                image_path=media_path,
+                                case_id=case_id,
+                                owner_id=owner_id,
+                                extract_text=True,
+                                detect_objects=False,
+                                translate_extracted_text=True
+                            )
+                            print(f"[QUEUE] Image analysis queued for {full_message_id}, job: {job_id}")
+                        
+                        # 2. AUDIO PROCESSING (new)
+                        elif media_type == "audio" and os.path.exists(media_path) and ENABLE_AUDIO_TRANSCRIPTION:
+                            audio_transcription_status = 'pending'
+                            
+                            job_id = queue_audio_transcription(
+                                message_id=full_message_id,
+                                media_path=media_path,
+                                media_type="audio",
+                                case_id=case_id,
+                                owner_id=owner_id,
+                                translate_transcription=True
+                            )
+                            print(f"[QUEUE] Audio transcription queued for {full_message_id}, job: {job_id}")
+                        
+                        # 3. VIDEO PROCESSING (check for audio track)
+                        elif media_type == "video" and os.path.exists(media_path) and ENABLE_AUDIO_TRANSCRIPTION:
+                            # Queue for audio extraction and transcription
+                            # Videos often contain speech that needs transcription
+                            audio_transcription_status = 'pending'
+                            
+                            job_id = queue_audio_transcription(
+                                message_id=full_message_id,
+                                media_path=media_path,
+                                media_type="video",
+                                case_id=case_id,
+                                owner_id=owner_id,
+                                translate_transcription=True
+                            )
+                            print(f"[QUEUE] Video audio extraction queued for {full_message_id}, job: {job_id}")
+                        
+                        # 4. DOCUMENT PROCESSING (check if it's audio/video file)
+                        elif media_type == "document" and os.path.exists(media_path):
+                            # Check if document is actually an audio/video file
+                            if await is_audio_video_document(msg, media_path) and ENABLE_AUDIO_TRANSCRIPTION:
+                                audio_transcription_status = 'pending'
+                                
+                                # Detect if it's audio or video based on mime type or extension
+                                doc_media_type = await get_document_media_type(msg, media_path)
+                                
+                                job_id = queue_audio_transcription(
+                                    message_id=full_message_id,
+                                    media_path=media_path,
+                                    media_type=doc_media_type,
+                                    case_id=case_id,
+                                    owner_id=owner_id,
+                                    translate_transcription=True
+                                )
+                                print(f"[QUEUE] Document {doc_media_type} transcription queued for {full_message_id}")
+                            
+                    except Exception as e:
+                        print(f"[ERROR] {username}: Failed to download/process media for message {msg.id}: {e}")
+            
+            # 5. VOICE MESSAGES (Telegram voice notes)
+            # Voice messages appear as audio with is_voice flag
+            elif hasattr(msg.media, 'document') and msg.media.document:
+                doc = msg.media.document
+                # Check for voice attribute
+                if hasattr(doc, 'attributes'):
+                    for attr in doc.attributes:
+                        if hasattr(attr, 'voice') and attr.voice:
+                            # This is a voice message
+                            media_path = generate_media_path(username, msg.id, "voice", msg)
+                            if media_path:
+                                try:
+                                    os.makedirs(os.path.dirname(media_path), exist_ok=True)
+                                    if not os.path.exists(media_path):
+                                        print(f"[DOWNLOAD] {username}: Downloading voice message {msg.id}")
+                                        await download_media_to_path(username, msg, client, media_path)
+                                    
+                                    if os.path.exists(media_path) and ENABLE_AUDIO_TRANSCRIPTION:
+                                        full_message_id = f"{msg.chat_id}-{msg.id}"
+                                        audio_transcription_status = 'pending'
+                                        
+                                        job_id = queue_audio_transcription(
+                                            message_id=full_message_id,
+                                            media_path=media_path,
+                                            media_type="audio",  # Treat voice as audio
+                                            case_id=case_id,
+                                            owner_id=owner_id,
+                                            translate_transcription=True
+                                        )
+                                        print(f"[QUEUE] Voice transcription queued for {full_message_id}")
+                                        media_type = "voice"  # Store as voice type
+                                except Exception as e:
+                                    print(f"[ERROR] Failed to process voice message: {e}")
+        
+        # Build full message ID
+        full_message_id = f"{msg.chat_id}-{msg.id}"
+        
+        # Save message to Neo4j with processing status
+        await save_message_with_processing_status(
+            channel_id=msg.chat_id,
+            username=username,
+            message=msg,
+            sender=sender,
+            media_path=media_path,
+            media_type=media_type,
+            original_language=detected_lang,
+            translation_status=translation_status,
+            image_analysis_status=image_analysis_status,
+            audio_transcription_status=audio_transcription_status,
+            geolocation_status=geolocation_status
+        )
+
+        print(f"[SAVE] {username}: Saved message {msg.id} (lang: {detected_lang}, translation: {translation_status}, audio: {audio_transcription_status}, geolocation: {geolocation_status})")
+
+        # Queue text translation if needed (existing logic)
+        if needs_trans and ENABLE_TRANSLATION:
+            job_id = queue_translation(
+                message_id=full_message_id,
+                text=text,
+                source_language=detected_lang,
+                case_id=case_id,
+                owner_id=owner_id
+            )
+        else:
+            if text and len(text.strip()) > 10 and ENABLE_EMOTION_ANALYSIS:  # Only if meaningful text
+                print(f"🎭 Text is German, triggering emotion analysis directly")
+                await trigger_emotion_from_scraper(
+                    message_id=f"{msg.chat_id}-{msg.id}",
+                    text=text,
+                    owner_id=owner_id,
+                    case_id=case_id
+                )
+            if text and len(text.strip()) > 10 and ENABLE_LABEL_CLASSIFIER:
+                print(f"🏷️ Text is German, triggering label classification directly")
+                await trigger_label_classification(
+                    message_id=f"{msg.chat_id}-{msg.id}",
+                    text=text,
+                    owner_id=owner_id,
+                    case_id=case_id
+                )
+        # Extract invite links for recursive processing (existing logic)
+        if recursive and text:
+            links = extract_invite_links([text])
+            for link in links:
+                normalized_link = link.lower().replace('https://t.me/', '').replace('http://t.me/', '').replace('t.me/', '').replace('@', '').strip()
+                
+                if normalized_link == username.lower():
+                    continue
+                    
+                if normalized_link not in all_seen_channels:
+                    all_seen_channels.add(normalized_link)
+                    found_channels.add(normalized_link)
+                    print(f"[FOUND] {username}: New channel from message {msg.id}: {normalized_link}")
+                    await found_channels_queue.put((normalized_link, username))
+                else:
+                    print(f"[DUPLICATE] {username}: Channel {normalized_link} already seen, skipping")
+        
+    except Exception as e:
+        print(f"[ERROR] {username}: Failed to process message {msg.id}: {e}")
+
+
+# Helper functions for audio/video detection
+
+async def is_audio_video_document(msg, file_path: str) -> bool:
+    """Check if a document is actually an audio or video file"""
+    # Check by MIME type
+    if hasattr(msg.media, 'document') and msg.media.document:
+        doc = msg.media.document
+        mime_type = getattr(doc, 'mime_type', '').lower()
+        
+        # Audio MIME types
+        if mime_type.startswith('audio/'):
+            return True
+        # Video MIME types  
+        if mime_type.startswith('video/'):
+            return True
+    
+    # Check by file extension as fallback
+    if file_path:
+        from pathlib import Path
+        ext = Path(file_path).suffix.lower()
+        
+        audio_extensions = {'.mp3', '.wav', '.ogg', '.m4a', '.flac', '.opus', '.wma', '.aac', '.oga'}
+        video_extensions = {'.mp4', '.avi', '.mkv', '.mov', '.webm', '.flv', '.wmv', '.m4v', '.mpg', '.mpeg'}
+        
+        if ext in audio_extensions or ext in video_extensions:
+            return True
+    
+    return False
+
+
+async def get_document_media_type(msg, file_path: str) -> str:
+    """Determine if document is audio or video"""
+    # Check MIME type first
+    if hasattr(msg.media, 'document') and msg.media.document:
+        doc = msg.media.document
+        mime_type = getattr(doc, 'mime_type', '').lower()
+        
+        if mime_type.startswith('audio/'):
+            return "audio"
+        elif mime_type.startswith('video/'):
+            return "video"
+    
+    # Check file extension
+    if file_path:
+        from pathlib import Path
+        ext = Path(file_path).suffix.lower()
+        
+        audio_extensions = {'.mp3', '.wav', '.ogg', '.m4a', '.flac', '.opus', '.wma', '.aac', '.oga'}
+        video_extensions = {'.mp4', '.avi', '.mkv', '.mov', '.webm', '.flv', '.wmv', '.m4v', '.mpg', '.mpeg'}
+        
+        if ext in audio_extensions:
+            return "audio"
+        elif ext in video_extensions:
+            return "video"
+    
+    # Default to audio if unsure
+    return "audio"
+
+async def trigger_emotion_from_scraper(message_id: str, text: str, owner_id: str, case_id: int = None):
+    """
+    Trigger emotion analysis from scraper (async version)
+    """
+    
+    JOB_LAUNCHER_URL = os.getenv("JOB_LAUNCHER_URL", "http://job-launcher:9001")
+    JOB_SECRET_TOKEN = os.getenv("JOB_SECRET_TOKEN")
+    
+    try:
+        response = requests.post(
+            f"{JOB_LAUNCHER_URL}/queue/emotion",
+            json={
+            "message_id": message_id,
+            "text": text,
+            "owner_id": owner_id,
+            "chained_from": "scraper",
+            "threshold": 0.3,
+            "top_k": 3,
+            "case_id": case_id
+            },
+            headers={"Authorization": f"Bearer {JOB_SECRET_TOKEN}"},
+            timeout=10
+        )
+        response.raise_for_status()
+        job_data = response.json()
+        print(f"✅ Emotion analysis queued: {job_data.get('job_id')}")
+        return job_data.get('job_id')
+    except Exception as e:
+        print(f"❌ Failed to trigger emotion analysis: {e}")
+        return None
+
+async def trigger_label_classification(message_id: str, text: str, owner_id: str, case_id: int = None):
+    """
+    Trigger label classification from scraper (async version)
+    """
+    
+    JOB_LAUNCHER_URL = os.getenv("JOB_LAUNCHER_URL", "http://job-launcher:9001")
+    JOB_SECRET_TOKEN = os.getenv("JOB_SECRET_TOKEN")
+    
+    try:
+        response = requests.post(
+            f"{JOB_LAUNCHER_URL}/queue/classification",
+            json={
+                "message_id": message_id,
+                "text": text,
+                "case_id": case_id,
+                "owner_id": owner_id,
+                "chained_from": "scraper"
+            },
+            headers={"Authorization": f"Bearer {JOB_SECRET_TOKEN}"},
+            timeout=10
+        )
+        response.raise_for_status()
+        job_data = response.json()
+        print(f"✅ Label classification queued: {job_data.get('job_id')}")
+        return job_data.get('job_id')
+    except Exception as e:
+        print(f"❌ Failed to trigger label classification: {e}")
+        return None
+
+def queue_audio_transcription(
+    message_id: str,
+    media_path: str,
+    media_type: str = None,
+    case_id: int = None,
+    owner_id: str = None,
+    translate_transcription: bool = True
+) -> str:
+    """Queue audio transcription job via job launcher"""
+    try:
+        response = requests.post(
+            f"{JOB_LAUNCHER_URL}/queue/audio-transcription",
+            json={
+                "message_id": message_id,
+                "media_path": media_path,
+                "media_type": media_type,
+                "language_hint": None,  # Let Whisper auto-detect
+                "translate_transcription": translate_transcription,
+                "owner_id": owner_id,
+                "case_id": case_id
+            },
+            headers={"Authorization": f"Bearer {JOB_SECRET_TOKEN}"},
+            timeout=10
+        )
+        response.raise_for_status()
+        
+        job_data = response.json()
+        print(f"[AUDIO] ✓ Transcription job queued: {job_data['job_id']}")
+        return job_data['job_id']
+        
+    except Exception as e:
+        print(f"[ERROR] Failed to queue audio transcription: {e}")
+        return None
+# ============================================================================
+#  EXISTING SCRAPER LOGIC (Keep as is, just updated process_message call)
+# ============================================================================
 
 async def get_entity_safe(identifier):
     """Safely get a Telegram entity"""
@@ -36,74 +580,14 @@ async def get_entity_safe(identifier):
         print(f"[ERROR] Could not resolve entity '{identifier}': {e}")
         return None, None
 
-async def process_message(msg, username, found_channels, recursive=False):
-    """Process a single message: save it, download media, find channels"""
-    try:
-        # Skip service messages
-        if hasattr(msg, 'action') and msg.action is not None:
-            return
-            
-        # Rate limiting
-        await asyncio.sleep(RATE_LIMIT_DELAY)
-        
-        # Get sender
-        sender = await msg.get_sender()
-        
-        # Handle media download
-        media_path = None
-        if msg.media:
-            media_type = get_media_type(msg.media)
-            if media_type in ["photo", "video", "document"]:
-                media_path = generate_media_path(username, msg.id, media_type, msg)
-                
-                if media_path:
-                    # Download immediately
-                    try:
-                        os.makedirs(os.path.dirname(media_path), exist_ok=True)
-                        if not os.path.exists(media_path):
-                            print(f"[DOWNLOAD] {username}: Downloading media for message {msg.id}")
-                            await download_media_to_path(username, msg, client, media_path)
-                        # Silent if exists
-                    except Exception as e:
-                        print(f"[ERROR] {username}: Failed to download media for message {msg.id}: {e}")
-        
-        # Save message to Neo4j
-        await save_message_if_new(msg.chat_id, username, msg, sender, media_path)
-        
-        # Extract invite links for recursive processing
-        if recursive and msg.message:
-            links = extract_invite_links([msg.message])
-            for link in links:
-                # Normalize link
-                normalized_link = link.lower().replace('https://t.me/', '').replace('http://t.me/', '').replace('t.me/', '').replace('@', '').strip()
-                
-                # Skip self-references
-                if normalized_link == username.lower():
-                    continue
-                    
-                # FIX: Check global seen channels to prevent duplicates
-                if normalized_link not in all_seen_channels:
-                    all_seen_channels.add(normalized_link)
-                    found_channels.add(normalized_link)
-                    print(f"[FOUND] {username}: New channel from message {msg.id}: {normalized_link}")
-                    # FIX: Use current channel (username) as source, not original channel
-                    await found_channels_queue.put((normalized_link, username))
-                else:
-                    print(f"[DUPLICATE] {username}: Channel {normalized_link} already seen, skipping")
-        
-    except Exception as e:
-        print(f"[ERROR] {username}: Failed to process message {msg.id}: {e}")
-
-async def scrape_channel_complete(channel_name, recursive=False):
+async def scrape_channel_complete(channel_name, recursive=False, case_id=None, owner_id=None):
     """Scrape a channel completely: all messages, media, and find new channels"""
-    # Use semaphore to limit concurrent scrapers
     async with scraper_semaphore:
         try:
             entity, clean_name = await get_entity_safe(channel_name)
             if not entity:
                 return set()
                 
-            # Check if already scraped
             if await is_scraped(clean_name):
                 print(f"[SKIP] {clean_name} already scraped")
                 return set()
@@ -115,17 +599,14 @@ async def scrape_channel_complete(channel_name, recursive=False):
             
             # Process ALL messages in the channel
             async for msg in client.iter_messages(entity, reverse=True):
-                # Skip empty messages
                 if not msg.message and not msg.media:
                     continue
                     
                 message_count += 1
                 
-                # Process message: save, download media, find channels
-                # FIX: Channels are added to queue immediately in process_message!
-                await process_message(msg, clean_name, found_channels, recursive)
+                # Process message with translation pipeline
+                await process_message(msg, clean_name, found_channels, recursive, case_id, owner_id=owner_id)
                 
-                # Rate limiting
                 if message_count % MESSAGE_BATCH_SIZE == 0:
                     await asyncio.sleep(MESSAGE_BATCH_DELAY)
                 
@@ -133,13 +614,11 @@ async def scrape_channel_complete(channel_name, recursive=False):
                     print(f"[SCRAPE] {clean_name}: Processed {message_count} messages")
                     await asyncio.sleep(0.1)
             
-            # Mark as scraped
             await mark_scraped(clean_name)
             print(f"[SCRAPE] ✅ {clean_name}: Completed scrape with {message_count} messages")
             
             if recursive and found_channels:
                 print(f"[SCRAPE] {clean_name}: Found {len(found_channels)} new channels total")
-                # Channels were already added to queue during processing!
             
             return found_channels
             
@@ -152,7 +631,6 @@ async def try_join_channel(channel_name):
     try:
         print(f"[JOIN] Trying to join: {channel_name}")
         
-        # If it's an invite link, extract the slug
         if '+' in channel_name:
             slug = channel_name.split('+')[-1]
             from telethon.tl.functions.messages import ImportChatInviteRequest
@@ -162,7 +640,6 @@ async def try_join_channel(channel_name):
             print(f"[JOIN] ✅ Joined via invite: {username}")
             return username
         else:
-            # Try to get entity directly
             entity, clean_name = await get_entity_safe(channel_name)
             if entity:
                 print(f"[JOIN] ✅ Access to channel: {clean_name}")
@@ -173,14 +650,12 @@ async def try_join_channel(channel_name):
         
     return None
 
-async def channel_processor(recursive=False):
+async def channel_processor(recursive=False, case_id=None, owner_id=None):
     """Process channels from the queue in parallel"""
     while True:
         try:
-            # Get next channel from queue
             queue_item = await found_channels_queue.get()
             
-            # Handle both old format (string) and new format (tuple)
             if isinstance(queue_item, tuple):
                 channel_name, source_channel = queue_item
             else:
@@ -189,7 +664,6 @@ async def channel_processor(recursive=False):
             
             print(f"[DEBUG] Processing: {channel_name}, source: {source_channel}")
             
-            # FIX: Skip if already processing (double-check)
             if channel_name in processing_channels:
                 print(f"[SKIP] {channel_name} already being processed")
                 found_channels_queue.task_done()
@@ -198,20 +672,17 @@ async def channel_processor(recursive=False):
             processing_channels.add(channel_name)
             
             try:
-                # Try to join/access channel
                 actual_name = await try_join_channel(channel_name)
                 if actual_name:
-                    # FIX: Write recommendation relationship if we have source channel
                     if source_channel:
                         try:
-                            from neo4j_client import write_recommendations
+                            from aether_lib.neo4j_client.channels import write_recommendations
                             print(f"[RECOMMEND] Creating relationship: {source_channel} -> {actual_name}")
                             
-                            # Create recommendation record
                             rec_data = [{
-                                "id": actual_name,  # Use actual name as ID
+                                "id": actual_name,
                                 "username": actual_name,
-                                "title": None  # Will be set during scraping
+                                "title": None
                             }]
                             
                             await write_recommendations(source_channel, rec_data)
@@ -222,8 +693,8 @@ async def channel_processor(recursive=False):
                     else:
                         print(f"[DEBUG] No source channel for {actual_name}, skipping recommendation")
                     
-                    # Scrape the channel
-                    await scrape_channel_complete(actual_name, recursive)
+                    # Scrape the channel with case_id
+                    await scrape_channel_complete(actual_name, recursive, case_id, owner_id=owner_id)
                 
             finally:
                 processing_channels.discard(channel_name)
@@ -235,35 +706,32 @@ async def channel_processor(recursive=False):
             print(f"[ERROR] Channel processor error: {e}")
             await asyncio.sleep(5)
 
-async def run_parallel_scraper(channels, recursive=False):
+async def run_parallel_scraper(channels, recursive=False, case_id=None, owner_id=None):
     """Parallel scraper with workers"""
     await login()
     
-    print(f"[START] Parallel scraper: channels={channels}, recursive={recursive}")
+    print(f"[START] Parallel scraper: channels={channels}, recursive={recursive}, case_id={case_id}")
     print(f"[START] Max parallel scrapers: {MAX_PARALLEL_SCRAPERS}")
+    print(f"[START] Translation enabled for: {SUPPORTED_TRANSLATION_LANGUAGES}")
     
-    # FIX: Add initial channels to seen set and queue
     for ch in channels:
         normalized_ch = ch.lower().replace('https://t.me/', '').replace('http://t.me/', '').replace('t.me/', '').replace('@', '').strip()
         all_seen_channels.add(normalized_ch)
-        await found_channels_queue.put((normalized_ch, None))  # No source for initial channels
+        await found_channels_queue.put((normalized_ch, None))
     
     async with client:
         # Start channel processor workers
         workers = []
         for i in range(MAX_PARALLEL_SCRAPERS):
-            worker = asyncio.create_task(channel_processor(recursive))
+            worker = asyncio.create_task(channel_processor(recursive, case_id, owner_id=owner_id))
             workers.append(worker)
         
         # Monitor progress
-        processed_count = 0
         while True:
-            # Check if queue is empty and no channels are being processed
             if found_channels_queue.empty() and not processing_channels:
                 print(f"[COMPLETE] ✅ All channels processed!")
                 break
             
-            # Status update
             current_processing = len(processing_channels)
             queue_size = found_channels_queue.qsize()
             total_seen = len(all_seen_channels)
@@ -281,8 +749,8 @@ async def run_parallel_scraper(channels, recursive=False):
         
         print(f"[COMPLETE] ✅ Parallel scraping finished")
 
-async def run_live_monitor(channels):
-    """Simple live monitor for channels"""
+async def run_live_monitor(channels, case_id=None, owner_id=None):
+    """Simple live monitor for channels with translation"""
     await login()
     
     print(f"[LIVE] Starting live monitor for {len(channels)} channels")
@@ -297,13 +765,11 @@ async def run_live_monitor(channels):
         print("[LIVE] No valid channels to monitor")
         return
     
-    # Set up live listener
     entities = [entity for entity, _ in resolved_entities]
     
     @client.on(events.NewMessage(chats=entities))
     async def handle_new_message(event):
         try:
-            # Find the channel name
             channel_name = None
             for entity, name in resolved_entities:
                 if entity.id == event.chat_id:
@@ -315,34 +781,29 @@ async def run_live_monitor(channels):
                 
             print(f"[LIVE] 📩 New message in {channel_name}")
             
-            # Process the message
-            await process_message(event, channel_name, set(), False)
+            # Process the message with translation pipeline
+            await process_message(event.message, channel_name, set(), False, case_id, owner_id=owner_id)
             
         except Exception as e:
             print(f"[LIVE] Error processing message: {e}")
     
-    print("[LIVE] ✅ Live monitor active")
+    print("[LIVE] ✅ Live monitor active (with translation)")
     
-    # Keep running
     async with client:
         while True:
-            await asyncio.sleep(60)  # Check every minute
+            await asyncio.sleep(60)
             print("[LIVE] Monitor running...")
 
 # Main entry points
-async def run_scraper(channels, _session_name, recursive=False, skip_history=False):
-    """Main scraper entry point"""
+async def run_scraper(channels, _session_name, recursive=False, skip_history=False, case_id=None, owner_id=None):
+    """Main scraper entry point with translation support"""
     if skip_history:
-        # Only live monitoring
-        await run_live_monitor(channels)
+        await run_live_monitor(channels, case_id, owner_id=owner_id)
     else:
-        # Complete scraping in parallel
-        await run_parallel_scraper(channels, recursive)
-        
-        # After scraping, start live monitoring
+        await run_parallel_scraper(channels, recursive, case_id, owner_id=owner_id)
         print("[TRANSITION] Scraping complete, starting live monitor...")
-        await run_live_monitor(channels)
+        await run_live_monitor(channels, case_id, owner_id=owner_id)
 
-async def run_live_listener_only(channels):
-    """Only live listener"""
-    await run_live_monitor(channels)
+async def run_live_listener_only(channels, case_id=None, owner_id=None):
+    """Only live listener with translation"""
+    await run_live_monitor(channels, case_id, owner_id=owner_id)

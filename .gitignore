@@ -48,3 +48,11 @@ volumes/
 postgres_data/
 
 shared/
+
+models/translation/*
+models/emotion/*
+models/classifier/*
+models/audio/*
+models/geolocation/* 
+models/geocoding/* 
+models/image/*

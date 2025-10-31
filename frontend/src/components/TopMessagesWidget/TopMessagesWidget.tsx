@@ -26,6 +26,8 @@ interface Author {
 interface Message {
   message_id: string;
   channel_id: string;
+  original_text: string;
+  translated_text?: string;
   text: string;
   date: string;
   channel_title?: string;
@@ -391,8 +393,8 @@ export function TopMessagesWidget() {
                               className={classes.showMoreButton}
                             >
                               {expandedMessages.includes(message.message_id)
-                                ? 'Show less'
-                                : 'Show more'}
+                                ? 'Weniger anzeigen'
+                                : 'Mehr anzeigen'}
                             </Button>
                           )}
                         </div>
