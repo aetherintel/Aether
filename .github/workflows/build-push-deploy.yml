@@ -170,8 +170,9 @@ jobs:
             echo "=== GRACEFUL DEPLOYMENT STARTING ==="
             
             # Pull latest images first
-            echo "Pulling latest images..."
-            $COMPOSE_CMD -f docker-compose.prod.yml pull $STATELESS_SERVICES
+            echo "Deploying updated stateless services (force recreate)..."
+            $COMPOSE_CMD -f docker-compose.prod.yml up -d --force-recreate --pull always $STATELESS_SERVICES
+
             
             # Function to handle container conflicts gracefully
             handle_container_conflicts() {
