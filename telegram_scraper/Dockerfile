@@ -10,4 +10,4 @@ COPY telegram_job/*.py ./
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONPATH=/app
 
-CMD ["rq", "worker", "--url", "redis://redis:6379", "telegram-jobs"]
+CMD ["rq", "worker", "--url", "--timeout", "6000", "redis://redis:6379/0", "telegram-jobs"]

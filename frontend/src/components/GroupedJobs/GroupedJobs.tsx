@@ -22,6 +22,7 @@ import {
   IconPhoto,
   IconVolume,
   IconMoodSmile,
+  IconMapPin,
 } from '@tabler/icons-react';
 
 interface ContainerInfo {
@@ -85,6 +86,7 @@ const GroupedJobsDisplay: React.FC<GroupedJobsDisplayProps> = ({
     if (queue.includes('audio')) return <IconVolume size="1.2rem" />;
     if (queue.includes('emotion')) return <IconMoodSmile size="1.2rem" />;
     if (queue.includes('classification')) return <IconActivity size="1.2rem" />;
+    if (queue.includes('geolocation')) return <IconMapPin size="1.2rem" />;
 
     return '⚙️';
   };
@@ -96,6 +98,7 @@ const GroupedJobsDisplay: React.FC<GroupedJobsDisplayProps> = ({
     if (queue.includes('audio')) return 'orange';
     if (queue.includes('emotion')) return 'pink';
     if (queue.includes('classification')) return 'cyan';
+    if (queue.includes('geolocation')) return 'lime';
     return 'gray';
   };
 

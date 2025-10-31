@@ -377,14 +377,16 @@ async def process_message(msg, username, found_channels, recursive=False, case_i
                 await trigger_emotion_from_scraper(
                     message_id=f"{msg.chat_id}-{msg.id}",
                     text=text,
-                    owner_id=owner_id
+                    owner_id=owner_id,
+                    case_id=case_id
                 )
             if text and len(text.strip()) > 10 and ENABLE_LABEL_CLASSIFIER:
                 print(f"🏷️ Text is German, triggering label classification directly")
                 await trigger_label_classification(
                     message_id=f"{msg.chat_id}-{msg.id}",
                     text=text,
-                    owner_id=owner_id
+                    owner_id=owner_id,
+                    case_id=case_id
                 )
         # Extract invite links for recursive processing (existing logic)
         if recursive and text:
@@ -465,7 +467,7 @@ async def get_document_media_type(msg, file_path: str) -> str:
     # Default to audio if unsure
     return "audio"
 
-async def trigger_emotion_from_scraper(message_id: str, text: str, owner_id: str):
+async def trigger_emotion_from_scraper(message_id: str, text: str, owner_id: str, case_id: int = None):
     """
     Trigger emotion analysis from scraper (async version)
     """
@@ -482,7 +484,8 @@ async def trigger_emotion_from_scraper(message_id: str, text: str, owner_id: str
             "owner_id": owner_id,
             "chained_from": "scraper",
             "threshold": 0.3,
-            "top_k": 3
+            "top_k": 3,
+            "case_id": case_id
             },
             headers={"Authorization": f"Bearer {JOB_SECRET_TOKEN}"},
             timeout=10
@@ -495,7 +498,7 @@ async def trigger_emotion_from_scraper(message_id: str, text: str, owner_id: str
         print(f"❌ Failed to trigger emotion analysis: {e}")
         return None
 
-async def trigger_label_classification(message_id: str, text: str, owner_id: str):
+async def trigger_label_classification(message_id: str, text: str, owner_id: str, case_id: int = None):
     """
     Trigger label classification from scraper (async version)
     """
@@ -509,6 +512,7 @@ async def trigger_label_classification(message_id: str, text: str, owner_id: str
             json={
                 "message_id": message_id,
                 "text": text,
+                "case_id": case_id,
                 "owner_id": owner_id,
                 "chained_from": "scraper"
             },

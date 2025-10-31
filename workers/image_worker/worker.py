@@ -8,8 +8,8 @@ import os
 import logging
 import requests
 from pathlib import Path
+from aether_lib.neo4j_client.messages import update_message_image_analysis
 
-# Configure logging
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s [%(levelname)s] %(name)s: %(message)s'
@@ -100,28 +100,36 @@ class FastOCRService:
             logger.info("✅ OCR engine ready")
     
     def preprocess_image(self, img):
-        """Adaptive preprocessing based on image characteristics"""
-        from PIL import ImageEnhance, ImageOps
+        """Optimized preprocessing with minimal memory copies"""
+        from PIL import ImageEnhance
         import numpy as np
         
-        # Convert to RGB
+        # Convert to RGB in-place if needed
         if img.mode != 'RGB':
             img = img.convert('RGB')
         
-        # Calculate image statistics
-        img_array = np.array(img)
-        mean_brightness = np.mean(img_array)
+        # Quick brightness check without creating full numpy array
+        # Sample only a small portion of the image
+        sample = img.crop((
+            img.width // 4, 
+            img.height // 4,
+            img.width * 3 // 4,
+            img.height * 3 // 4
+        ))
+        img_array = np.array(sample)
         std_brightness = np.std(img_array)
         
-        # Only enhance if image is low contrast
-        if std_brightness < 50:  # Low contrast
-            enhancer = ImageEnhance.Contrast(img)
-            img = enhancer.enhance(2.0)  # Stronger enhancement
+        # Free sample memory immediately
+        del sample, img_array
         
-        # Only sharpen if image is blurry
+        # Only enhance if really needed
+        if std_brightness < 50:
+            enhancer = ImageEnhance.Contrast(img)
+            img = enhancer.enhance(1.5)  # Reduced from 2.0
+        
         if std_brightness < 40:
             enhancer = ImageEnhance.Sharpness(img)
-            img = enhancer.enhance(1.5)
+            img = enhancer.enhance(1.3)  # Reduced from 1.5
         
         return img
     def adaptive_threshold(self, img):
@@ -145,98 +153,170 @@ class FastOCRService:
         # Convert back to PIL
         return Image.fromarray(binary)
     def extract_text(self, image_path: str) -> str:
-        """Extract ALL text from image using EasyOCR"""
+        """Extract text from image with optimized settings for complex infographics"""
+        import gc
+        from PIL import Image
+        import tempfile
+        
         if OCR_ENGINE is None:
             logger.warning("⚠️ OCR engine not loaded, skipping text extraction")
             return ""
-
+        
+        img = None
+        temp_path = None
+        
         try:
             logger.info(f"🔍 Extracting text: {image_path}")
-
-            # Load image and check size
-            from PIL import Image
+            
+            # Load image
             img = Image.open(image_path)
             width, height = img.size
             logger.info(f"   Image size: {width}x{height}")
-
-            # INCREASED max dimension for documents - preserve more detail
-            max_dimension = 3840  # 4K resolution - much better for documents
+            
+            # BALANCE: 2560px is good for infographics (between 1920 and 3840)
+            max_dimension = 2560  # Better for complex text layouts
+            
             if width > max_dimension or height > max_dimension:
                 scale = max_dimension / max(width, height)
                 new_width = int(width * scale)
                 new_height = int(height * scale)
-                # Use LANCZOS (same as old ANTIALIAS)
                 img = img.resize((new_width, new_height), Image.LANCZOS)
-                logger.info(f"   Resized to: {new_width}x{new_height} (preserving detail)")
-
-            # Apply preprocessing to improve OCR
-            logger.info("   Preprocessing image (contrast/sharpness enhancement)...")
+                logger.info(f"   Resized to: {new_width}x{new_height}")
+            
+            # Preprocess image
+            logger.info("   Preprocessing image...")
             img = self.preprocess_image(img)
-
-            # Save preprocessed image temporarily
-            import tempfile
+            
+            # Save to temp file with higher quality for infographics
             with tempfile.NamedTemporaryFile(suffix='.jpg', delete=False) as tmp:
-                img.save(tmp.name, 'JPEG', quality=98)  # Higher quality
+                img.save(tmp.name, 'JPEG', quality=90)  # Higher quality for complex images
                 temp_path = tmp.name
-
-            # Run OCR with MAXIMUM accuracy settings
-            logger.info("   Running EasyOCR with maximum accuracy settings...")
+            
+            # Close image to free memory before OCR
+            img.close()
+            img = None
+            gc.collect()
+            
+            # Run OCR with AGGRESSIVE settings for maximum text capture
+            logger.info("   Running EasyOCR (aggressive mode for infographics)...")
             result = OCR_ENGINE.readtext(
                 temp_path,
-                detail=1,
-                paragraph=True,  # Change to True - better for document layout
-                contrast_ths=0.01,  # Even lower (was 0.05)
-                adjust_contrast=0.7,  # Higher adjustment
-                text_threshold=0.3,  # Lower (was 0.5)
-                low_text=0.2,  # Lower (was 0.3)
-                link_threshold=0.2,  # Lower (was 0.3)
-                canvas_size=4096,  # Increase
-                mag_ratio=2.0,  # Increase (was 1.5)
-                width_ths=0.5,  # Add: helps with narrow text
-                height_ths=0.5  # Add: helps with small text
+                detail=1,               # Return detailed results with confidence
+                paragraph=False,        # Line-by-line for complex layouts
+                
+                # AGGRESSIVE THRESHOLDS - capture more text from complex images
+                contrast_ths=0.05,      # LOWERED from 0.1 - more sensitive
+                adjust_contrast=0.6,    # Moderate adjustment
+                text_threshold=0.3,     # LOWERED from 0.4 - catch smaller text
+                low_text=0.2,           # LOWERED from 0.3 - catch faint text
+                link_threshold=0.2,     # LOWERED from 0.3 - better word linking
+                
+                # LARGER CANVAS - better for complex layouts
+                canvas_size=3200,       # INCREASED from 2560
+                mag_ratio=1.8,          # INCREASED from 1.5 - more detail
+                
+                # RELAXED GROUPING - better for scattered text in infographics
+                width_ths=0.3,          # LOWERED from 0.5 - accept varied widths
+                height_ths=0.3,         # LOWERED from 0.5 - accept varied heights
+                
+                # ADDITIONAL SETTINGS for better detection
+                slope_ths=0.3,          # Allow slightly slanted text
+                ycenter_ths=0.5,        # Better vertical alignment tolerance
+                add_margin=0.15         # Add margin around detected text
             )
-
-            # Clean up temp file
-            import os
-            os.unlink(temp_path)
-
-            # Extract all text with VERY low confidence threshold
-            if result:
+            
+            # Extract text with VERY LOW confidence thresholds for infographics
+            if result and len(result) > 0:
                 text_lines = []
                 low_confidence_lines = []
-
-                for detection in result:
-                    # detection = (bbox, text, confidence)
-                    text = detection[1].strip()
-                    confidence = detection[2]
-
-                    if confidence > 0.3:  # High confidence
-                        text_lines.append(text)
-                    elif confidence > 0.05:  # Low but possibly valid
-                        low_confidence_lines.append(text)
-                        logger.debug(f"   Low confidence ({confidence:.2f}): {text[:50]}")
-
-                # Include low confidence text too - better to have extra than miss important text
+                filtered_out = []
+                
+                logger.info(f"   Found {len(result)} text detections")
+                
+                for i, detection in enumerate(result):
+                    try:
+                        if isinstance(detection, str):
+                            text = detection.strip()
+                            confidence = 1.0
+                        elif isinstance(detection, (list, tuple)):
+                            if len(detection) >= 3:
+                                text = str(detection[1]).strip()
+                                confidence = float(detection[2])
+                            elif len(detection) == 2:
+                                text = str(detection[1]).strip()
+                                confidence = 0.7
+                            else:
+                                continue
+                        else:
+                            continue
+                        
+                        if not text or len(text.strip()) == 0:
+                            continue
+                        
+                        # MUCH LOWER thresholds for complex infographics
+                        if confidence > 0.15:  # LOWERED from 0.3
+                            text_lines.append(text)
+                        elif confidence > 0.05:  # LOWERED from 0.1
+                            low_confidence_lines.append(text)
+                        else:
+                            # Track what we're filtering
+                            filtered_out.append((confidence, text[:30]))
+                            
+                    except (IndexError, ValueError, TypeError) as e:
+                        logger.warning(f"⚠️ Error processing detection {i}: {e}")
+                        continue
+                
+                # Log statistics
+                if filtered_out:
+                    logger.info(f"   ⚠️ Filtered out {len(filtered_out)} very low confidence (<0.05) detections")
+                
+                # Combine all lines
                 all_lines = text_lines + low_confidence_lines
-
-                # Join all lines with newlines
-                extracted_text = "\n".join(all_lines)
-
-                logger.info(f"✅ Extracted {len(text_lines)} high-conf + {len(low_confidence_lines)} low-conf text lines")
-                logger.info(f"   Total: {len(extracted_text)} characters")
-                if extracted_text:
-                    logger.info(f"   Preview: {extracted_text[:150]}...")
-
-                return extracted_text.strip()
+                
+                if all_lines:
+                    # Sort by vertical position if bounding boxes are available
+                    # This helps maintain reading order for complex layouts
+                    extracted_text = "\n".join(all_lines)
+                    
+                    logger.info(f"✅ Extracted {len(text_lines)} high-conf + {len(low_confidence_lines)} low-conf lines")
+                    logger.info(f"   Total: {len(extracted_text)} characters")
+                    logger.info(f"   Kept: {len(all_lines)}/{len(result)} detections ({100*len(all_lines)/len(result):.1f}%)")
+                    
+                    if extracted_text:
+                        preview_len = min(200, len(extracted_text))
+                        logger.info(f"   Preview: {extracted_text[:preview_len]}...")
+                    
+                    return extracted_text.strip()
+                else:
+                    logger.warning("⚠️ All detections were below confidence threshold")
+                    logger.info(f"   Consider lowering thresholds - found {len(result)} detections but kept 0")
+                    return ""
             else:
-                logger.info("ℹ️ No text found in image")
+                logger.info("ℹ️ No text detected in image")
                 return ""
-
+                
         except Exception as e:
             logger.error(f"❌ OCR error: {e}")
             logger.exception("Full traceback:")
             return ""
-
+            
+        finally:
+            # SAFE: Cleanup temp files and memory
+            if temp_path and os.path.exists(temp_path):
+                try:
+                    os.unlink(temp_path)
+                except Exception as e:
+                    logger.warning(f"⚠️ Could not delete temp file: {e}")
+            
+            # SAFE: Close image if still open
+            if img is not None:
+                try:
+                    img.close()
+                except Exception:
+                    pass
+            
+            # Force garbage collection
+            gc.collect()
 
 ocr_service = FastOCRService()
 
@@ -304,7 +384,6 @@ def queue_translation(message_id: str, text: str, source_language: str, case_id:
 # ============================================================================
 # WORKER JOB FUNCTION
 # ============================================================================
-
 def analyze_and_update(
     message_id: str,
     image_path: str,
@@ -315,12 +394,30 @@ def analyze_and_update(
     case_id: int = None,
     job_id: str = None
 ):
-    """Main OCR-only worker function"""
+    """
+    Main OCR worker function with memory management and proper Neo4j updates
+    
+    Args:
+        message_id: Full message ID (channel_id-message_id)
+        image_path: Path to image file
+        extract_text: Whether to perform OCR
+        detect_objects: Whether to detect objects (not implemented)
+        translate_extracted_text: Whether to queue translation
+        owner_id: Owner ID for multi-tenancy
+        case_id: Case ID for filtering
+        job_id: Parent job ID for chaining
+    
+    Returns:
+        bool: True if successful, False otherwise
+    """
+    import gc
+    
     logger.info("=" * 80)
-    logger.info(f"📝 OCR-ONLY analysis job started")
+    logger.info(f"📝 OCR job started")
     logger.info(f"   Message: {message_id}")
     logger.info(f"   Image: {image_path}")
-    logger.info(f"   Engine: EasyOCR")
+    logger.info(f"   Extract text: {extract_text}")
+    logger.info(f"   Auto-translate: {translate_extracted_text}")
     logger.info("=" * 80)
     
     try:
@@ -329,22 +426,26 @@ def analyze_and_update(
             logger.error(f"❌ Image not found: {image_path}")
             return False
         
-        # Step 1: Extract text (OCR) - FAST
         extracted_text = None
         detected_lang = None
         
+        # Step 1: Extract text with OCR
         if extract_text:
             logger.info("📝 Step 1: Extracting text with EasyOCR...")
             extracted_text = ocr_service.extract_text(image_path)
+            
             if extracted_text:
                 logger.info(f"✅ Step 1: Extracted {len(extracted_text)} characters")
-                # Detect language
+                logger.info(f"   Preview: {extracted_text[:100]}...")
+                
+                # Detect language of extracted text
                 detected_lang = detect_language(extracted_text)
                 logger.info(f"   Detected language: {detected_lang}")
             else:
                 logger.info("ℹ️ Step 1: No text found in image")
+                detected_lang = 'unknown'
         
-        # Step 2: Update Neo4j IMMEDIATELY with extracted text
+        # Step 2: Update Neo4j with OCR results
         logger.info("💾 Step 2: Updating Neo4j with OCR results...")
         
         from aether_lib.neo4j_client.connection import run_in_neo4j_loop
@@ -358,15 +459,20 @@ def analyze_and_update(
         )
         
         if result:
-            logger.info("✅ Step 2: Neo4j updated with OCR text")
+            logger.info("✅ Step 2: Neo4j updated successfully")
+            logger.info(f"   - image_text: {len(extracted_text or '')} chars")
+            logger.info(f"   - image_detected_language: {detected_lang}")
+            logger.info(f"   - image_analysis_status: completed")
         else:
-            logger.warning("⚠️ Step 2: Update returned False")
+            logger.warning("⚠️ Step 2: Neo4j update returned False")
         
-        # Step 3: Queue translation ASYNCHRONOUSLY
+        # Step 3: Queue translation if needed
         if extracted_text and translate_extracted_text:
             needs_trans, _ = needs_translation(extracted_text)
+            
             if needs_trans:
-                logger.info(f"🌍 Step 3: Queueing translation ({detected_lang} -> de)...")
+                logger.info(f"🌍 Step 3: Queueing translation ({detected_lang} → de)...")
+                
                 translation_job_id = queue_translation(
                     message_id=message_id,
                     text=extracted_text,
@@ -376,21 +482,28 @@ def analyze_and_update(
                     parent_job_id=job_id,
                     image_text=True
                 )
+                
                 if translation_job_id:
-                    logger.info(f"✅ Step 3: Translation queued")
+                    logger.info(f"✅ Step 3: Translation queued (job: {translation_job_id})")
+                else:
+                    logger.warning("⚠️ Step 3: Translation queue failed")
             else:
-                logger.info(f"ℹ️ Step 3: No translation needed ({detected_lang})")
+                logger.info(f"ℹ️ Step 3: No translation needed (language: {detected_lang})")
         
         logger.info("=" * 80)
-        logger.info(f"✅ Job completed: {message_id}")
+        logger.info(f"✅ OCR job completed successfully: {message_id}")
         logger.info("=" * 80)
         
-        return result
+        return True
         
     except Exception as e:
         logger.error("=" * 80)
-        logger.error(f"❌ Job FAILED: {message_id}")
+        logger.error(f"❌ OCR job FAILED: {message_id}")
         logger.error(f"   Error: {e}")
         logger.exception("Full traceback:")
         logger.error("=" * 80)
-        raise
+        return False
+        
+    finally:
+        # CRITICAL: Force garbage collection after each job
+        gc.collect()

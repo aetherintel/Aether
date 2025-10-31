@@ -11,12 +11,13 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements and install dependencies
+# Copy requirements and install
 COPY workers/emotion_worker/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy worker code
-COPY workers/emotion_worker /app/workers/emotion_worker
+# Copy worker module files directly to /app (flat structure)
+COPY workers/emotion_worker/*.py /app/
+
 COPY aether_lib /app/aether_lib
 
 # Create models directory
@@ -26,10 +27,6 @@ RUN mkdir -p /app/models/emotion
 ENV PYTHONUNBUFFERED=1 \
     MODELS_PATH=/app/models/emotion \
     PYTHONPATH=/app:/app/workers:/app/aether_lib
-
-# Ensure package init files exist
-RUN touch /app/workers/__init__.py && \
-    touch /app/workers/emotion_worker/__init__.py
 
 # Run RQ worker listening to emotion-jobs queue
 CMD ["rq", "worker", "emotion-jobs", \

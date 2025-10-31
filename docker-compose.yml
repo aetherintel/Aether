@@ -169,7 +169,7 @@ services:
       - ./shared/media:/shared/media
       - ./aether_lib:/app/aether_lib:ro
     deploy:
-      replicas: 5
+      replicas: 2
     depends_on:
       redis:
         condition: service_healthy
@@ -225,7 +225,7 @@ services:
     networks:
       - aether-network
     deploy:
-      replicas: 2  # Run 2 worker instances for parallel processing
+      replicas: 1  # Run 2 worker instances for parallel processing
       resources:
         limits:
           cpus: '2'
@@ -261,12 +261,14 @@ services:
       keycloak:
         condition: service_started
     restart: unless-stopped
-    deploy:
-      resources:
-        limits:
-          memory: 4G
-        reservations:
-          memory: 1G
+    mem_limit: 4g
+    mem_reservation: 2g
+    healthcheck:
+      test: ["CMD", "rq", "info", "--url", "redis://redis:6379/2"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
 
   # ===========================================================================
   # AUDIO TRANSCRIPTION WORKER
@@ -324,7 +326,7 @@ services:
     restart: unless-stopped
     mem_limit: 4g
     deploy:
-      replicas: 2 
+      replicas: 1
       resources:
         limits:
           memory: 4G
@@ -354,6 +356,8 @@ services:
       - aether-network
     depends_on:
       keycloak:
+        condition: service_started
+      neo4j:
         condition: service_started
     restart: unless-stopped
     mem_limit: 3G
@@ -393,7 +397,7 @@ services:
         condition: service_started
     restart: unless-stopped
     deploy:
-      replicas: 3  # Parallel processing
+      replicas: 1  # Parallel processing
       resources:
         limits:
           memory: 2G

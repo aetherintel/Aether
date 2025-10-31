@@ -178,6 +178,7 @@ def translate_and_update(
     original_text: str,
     source_language: str,
     owner_id: str = None,
+    case_id: int = None,
     image_text: bool = False,
     audio_text: bool = False,
     target_language: str = "de"
@@ -234,7 +235,8 @@ def translate_and_update(
                 emotion_job_id = trigger_emotion_analysis(
                 message_id=message_id,
                 text=translated_text,
-                owner_id=owner_id
+                owner_id=owner_id,
+                case_id=case_id
             )
                 if emotion_job_id:
                     logger.info(f"✅ Step 3: Emotion analysis queued: {emotion_job_id}")
@@ -249,7 +251,8 @@ def translate_and_update(
                 classification_job_id = trigger_classification(
                 message_id=message_id,
                 text=translated_text,
-                owner_id=owner_id
+                owner_id=owner_id,
+                case_id=case_id
             )
                 if classification_job_id:
                     logger.info(f"✅ Step 4: Classification queued: {classification_job_id}")
@@ -286,7 +289,7 @@ def enqueue_translation(message_id: str, original_text: str, source_language: st
     logger.info(f"📤 Enqueued job {job.id} for {message_id}")
     return job
 
-def trigger_emotion_analysis(message_id: str, text: str, owner_id: str = None) -> str:
+def trigger_emotion_analysis(message_id: str, text: str, owner_id: str = None, case_id: int = None) -> str:
     """
     Trigger emotion analysis job via job-launcher
     
@@ -310,6 +313,7 @@ def trigger_emotion_analysis(message_id: str, text: str, owner_id: str = None) -
                 "message_id": message_id,
                 "text": text,
                 "owner_id": owner_id,
+                "case_id": case_id,
                 "chained_from": "translation",
                 "threshold": 0.3,
                 "top_k": 3
@@ -326,7 +330,7 @@ def trigger_emotion_analysis(message_id: str, text: str, owner_id: str = None) -
         logger.error(f"❌ Failed to trigger emotion analysis: {e}")
         return None
 
-def trigger_classification(message_id: str, text: str, owner_id: str = None) -> str:
+def trigger_classification(message_id: str, text: str, owner_id: str = None, case_id: int = None) -> str:
     """
     Trigger classification job via job-launcher
     
@@ -350,6 +354,7 @@ def trigger_classification(message_id: str, text: str, owner_id: str = None) -> 
                 "message_id": message_id,
                 "text": text,
                 "owner_id": owner_id,
+                "case_id": case_id,
                 "chained_from": "translation"
             },
             headers={"Authorization": f"Bearer {JOB_SECRET_TOKEN}"},
