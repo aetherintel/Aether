@@ -18,8 +18,7 @@ COPY workers/image_worker/requirements.txt .
 # Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY models/image/easyocr /app/models/image/easyocr
-
+RUN mkdir -p /app/models/image/easyocr
 
 # Copy worker code
 COPY workers/image_worker/ /app/workers/image_worker/

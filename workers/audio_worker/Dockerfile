@@ -21,7 +21,8 @@ ENV MALLOC_ARENA_MAX=2
 # Copy shared libs and worker code
 COPY aether_lib /app/aether_lib
 COPY workers/audio_worker/ /app/workers/audio_worker
-COPY models/audio/whisper /app/models/audio/whisper
+
+RUN mkdir -p /app/models/audio/whisper
 
 ENV PYTHONPATH=/app:$PYTHONPATH
 

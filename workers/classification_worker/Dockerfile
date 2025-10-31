@@ -19,6 +19,7 @@ COPY workers/classification_worker/*.py /app/
 # Copy shared library
 COPY aether_lib/ /app/aether_lib/
 
+RUN mkdir -p /app/models/classifier
 # Set environment variables
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONPATH=/app
