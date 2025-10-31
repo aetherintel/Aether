@@ -9,7 +9,8 @@ services:
       POSTGRES_DB: keycloak
     volumes:
       - pgdata:/var/lib/postgresql/data
-      - ./docker/db-init:/docker-entrypoint-initdb.d
+      # ⚠️ REMOVED db-init mount to prevent re-initialization on every restart
+      # Init scripts should only run on first container creation
     networks:
       - aether-network
 
@@ -161,7 +162,6 @@ services:
 
   # ============================================================================
   # TELEGRAM SCRAPER WORKER
-  # CRITICAL: --timeout -1 = NO TIMEOUT (runs indefinitely)!
   # ============================================================================
   telegram-worker:
     image: ghcr.io/${GITHUB_REPOSITORY_OWNER:-aetherintel}/aether-telegram-scraper:latest
@@ -204,8 +204,6 @@ services:
 
   # ============================================================================
   # TRANSLATION WORKER
-  # --timeout 3600 (1 hour max per translation)
-  # worker-ttl=1800 (30 min) - periodic restart to prevent memory leaks
   # ============================================================================
   translation-worker:
     image: ghcr.io/${GITHUB_REPOSITORY_OWNER:-aetherintel}/aether-translation-worker:latest
@@ -226,7 +224,7 @@ services:
       NEO4J_PASSWORD: ${NEO4J_PASSWORD}
       DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@postgres:5432/${POSTGRES_DB}
     volumes:
-      - ./models/translation:/app/models/translation
+      - ai_models:/app/models
     depends_on:
       - redis
       - postgres
@@ -245,8 +243,6 @@ services:
 
   # ============================================================================
   # IMAGE ANALYSIS WORKER
-  # --timeout 1800 (30 minutes max per image)
-  # worker-ttl=1800 (30 min) - periodic restart to prevent memory leaks
   # ============================================================================
   image-worker:
     image: ghcr.io/${GITHUB_REPOSITORY_OWNER:-aetherintel}/aether-image-worker:latest
@@ -258,9 +254,9 @@ services:
       --job-monitoring-interval 30
     restart: unless-stopped
     environment:
-      HOME: /app/models/image
-      PADDLEX_HOME: /app/models/image
-      MODEL_BASE_DIR: /app/models/image
+      HOME: /app/models
+      PADDLEX_HOME: /app/models
+      MODEL_BASE_DIR: /app/models
       JOB_LAUNCHER_URL: ${JOB_LAUNCHER_URL}
       JOB_SECRET_TOKEN: ${JOB_SECRET_TOKEN}
       NEO4J_URI: ${NEO4J_URI}
@@ -268,7 +264,7 @@ services:
       NEO4J_PASSWORD: ${NEO4J_PASSWORD}
     volumes:
       - ${MEDIA_PATH}:/shared/media:ro
-      - ./models/image:/app/models/image
+      - ai_models:/app/models
     depends_on:
       - redis
       - neo4j
@@ -283,8 +279,6 @@ services:
 
   # ============================================================================
   # AUDIO TRANSCRIPTION WORKER (Whisper)
-  # --timeout 7200 (2 hours max per audio file)
-  # worker-ttl=3600 (1h) - Whisper can leak memory with large files
   # ============================================================================
   audio-worker:
     image: ghcr.io/${GITHUB_REPOSITORY_OWNER:-aetherintel}/aether-audio-worker:latest
@@ -304,7 +298,7 @@ services:
       MODELS_PATH: /app/models
       USE_QUANTIZATION: "true"
     volumes:
-      - ./models/audio:/app/models/audio
+      - ai_models:/app/models
       - ${MEDIA_PATH}:/shared/media:ro
     depends_on:
       - redis
@@ -320,8 +314,6 @@ services:
 
   # ============================================================================
   # EMOTION ANALYSIS WORKER
-  # --timeout 600 (10 minutes max - should be much faster)
-  # worker-ttl=900 (15 min) - lightweight, frequent restart is fine
   # ============================================================================
   emotion-worker:
     image: ghcr.io/${GITHUB_REPOSITORY_OWNER:-aetherintel}/aether-emotion-worker:latest
@@ -341,7 +333,7 @@ services:
       MODELS_PATH: /app/models
       USE_QUANTIZATION: "true"
     volumes:
-      - ./models/emotion:/app/models/emotion
+      - ai_models:/app/models
     depends_on:
       - redis
       - neo4j
@@ -357,8 +349,6 @@ services:
 
   # ============================================================================
   # CLASSIFICATION WORKER
-  # --timeout 600 (10 minutes max - should be much faster)
-  # worker-ttl=900 (15 min) - lightweight, frequent restart is fine
   # ============================================================================
   classification-worker:
     image: ghcr.io/${GITHUB_REPOSITORY_OWNER:-aetherintel}/aether-classification-worker:latest
@@ -378,7 +368,7 @@ services:
       MODELS_PATH: /app/models
       USE_QUANTIZATION: "true"
     volumes:
-      - ./models/classifier:/app/models/classifier
+      - ai_models:/app/models
       - ${MEDIA_PATH}:/shared/media:ro
     depends_on:
       - redis
@@ -394,8 +384,6 @@ services:
 
   # ============================================================================
   # GEOLOCATION WORKER
-  # --timeout 600 (10 minutes max - should be much faster)
-  # worker-ttl=900 (15 min) - lightweight, frequent restart is fine
   # ============================================================================
   geolocation-worker:
     image: ghcr.io/${GITHUB_REPOSITORY_OWNER:-aetherintel}/aether-geolocation-worker:latest
@@ -421,7 +409,7 @@ services:
       JOB_SECRET_TOKEN: ${JOB_SECRET_TOKEN}
       PHOTON_URL: http://photon:2322
     volumes:
-      - ./models/geolocation:/app/models/geolocation
+      - ai_models:/app/models
     depends_on:
       - redis
       - neo4j
@@ -441,12 +429,12 @@ services:
   # ============================================================================
   photon:
     image: ghcr.io/${GITHUB_REPOSITORY_OWNER:-aetherintel}/aether-photon:latest
-    container_name: aether-photon
+    container_name: photon
     restart: unless-stopped
     ports:
       - "2322:2322"
     volumes:
-      - ./models/geocoding/photon/photon_data:/photon/photon_data
+      - photon_data:/photon/photon_data
     environment:
       - JAVA_OPTS=-Xmx2g
     networks:
@@ -462,10 +450,11 @@ services:
 
   # ============================================================================
   # JOB LAUNCHER (Central Queue Manager)
+  # ⚠️ FIXED: container_name now matches service name
   # ============================================================================
   job-launcher:
     image: ghcr.io/${GITHUB_REPOSITORY_OWNER:-aetherintel}/aether-job-launcher:latest
-    container_name: job_launcher
+    container_name: job-launcher
     restart: unless-stopped
     ports:
       - "9001:9001"
@@ -503,3 +492,5 @@ volumes:
   keycloak_data:
   tg_sessions:
   redis_data:
+  ai_models:
+  photon_data:
