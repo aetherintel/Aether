@@ -101,6 +101,9 @@ jobs:
     needs: build-and-push
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
       - name: Copy files to production VM
         uses: appleboy/scp-action@v0.1.5
         with:
