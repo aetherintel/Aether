@@ -1,4 +1,5 @@
 from typing import List, Optional, TypedDict
+from aether_lib.schemas.jobs import ChannelInput, ChannelListInput, ExtendedScrapeRequest, RegisterRequest, StatusRequest, TokenRefreshRequest
 from fastapi import APIRouter, Depends, HTTPException, Form
 from fastapi.security import OAuth2PasswordRequestForm
 from fastapi.security import OAuth2PasswordBearer
@@ -19,58 +20,6 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 docker_client = docker.from_env()
 
-class ExtendedScrapeRequest(BaseModel):
-    channel: str
-    tg_session: str
-    recursive: bool = True
-    neo4j: bool = True
-    case_id: Optional[int] = None
-    enable_translation: bool = True
-    enable_image_analysis: bool = True
-    enable_audio_transcription: bool = True
-    enable_emotion_analysis: bool = False
-    enable_label_classifier: bool = False
-    enable_geolocation_extraction: bool = False
-
-class LoginRequest(BaseModel):
-    username: str
-    password: str
-    client_id: str
-    client_secret: str
-
-class TokenRefreshRequest(BaseModel):
-    refresh_token: str
-
-class RegisterRequest(BaseModel):
-    username: str
-    email: str
-    firstname: str
-    lastname: str
-    password: str
-
-class ChannelInput(BaseModel):
-    channel: str
-    tg_session: str
-
-class ChannelListInput(BaseModel):
-    channels: List[str]
-    tg_session: str
-    neo4j: bool = True
-    case_id: Optional[int] = None  # Optional case ID for tracking
-    enable_translation: bool = True
-    enable_image_analysis: bool = True
-    enable_audio_transcription: bool = True
-    enable_emotion_analysis: bool = False
-    enable_label_classifier: bool = False
-    enable_geolocation_extraction: bool = False
-
-class StatusRequest(BaseModel):
-    case_id: Optional[int] = None
-
-
-class UserCtx(TypedDict):
-    id: str           # Keycloak "sub"
-    roles: list[str]
 
 def user_ctx(token_data: dict = Depends(get_current_user)) -> UserCtx:
     return {
