@@ -16,8 +16,6 @@ logger = logging.getLogger(__name__)
 NEO4J_URI = os.getenv("NEO4J_URI", "bolt://neo4j:7687")
 NEO4J_USER = os.getenv("NEO4J_USER", "neo4j")
 NEO4J_PASSWORD = os.getenv("NEO4J_PASSWORD")
-JOB_LAUNCHER_URL = os.getenv("JOB_LAUNCHER_URL")
-JOB_SECRET_TOKEN = os.getenv("JOB_SECRET_TOKEN")
 PHOTON_URL = os.getenv("PHOTON_URL", "http://photon:2322")
 GEONAMES_DATA_DIR = os.getenv("GEONAMES_DATA_DIR", "/app/models/geolocation/geonames")
 
@@ -352,15 +350,3 @@ async def update_message_geolocation_status(mid: str, status: str, owner: str):
             "SET m.geolocation_status = $status, m.geolocation_processed_at = datetime()",
             mid=mid, owner=owner, status=status
         )
-
-
-def update_job_status(jid: str, status: str, owner: str, case: int):
-    try:
-        requests.patch(
-            f"{JOB_LAUNCHER_URL}/jobs/{jid}/status",
-            headers={"Authorization": f"Bearer {JOB_SECRET_TOKEN}"},
-            json={"status": status, "owner_id": owner, "case_id": case},
-            timeout=5
-        )
-    except:
-        pass
