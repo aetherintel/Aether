@@ -256,7 +256,6 @@ async def _extract_and_update_location_async(
 ):
     """Main extraction logic"""
     try:
-        update_job_status(job_id, "running", owner_id, case_id)
         
         logger.info(f"Processing: {text[:100]}...")
         
@@ -266,7 +265,6 @@ async def _extract_and_update_location_async(
         if not entities:
             logger.info(f"No entities in {message_id}")
             await update_message_geolocation_status(message_id, 'no_location', owner_id)
-            update_job_status(job_id, "completed", owner_id, case_id)
             return {"status": "no_location", "message_id": message_id}
         
         logger.info(f"Found entities: {[e[0] for e in entities]}")
@@ -299,7 +297,6 @@ async def _extract_and_update_location_async(
         if locations:
             await store_locations_neo4j(message_id, locations, owner_id)
             await update_message_geolocation_status(message_id, 'completed', owner_id)
-            update_job_status(job_id, "completed", owner_id, case_id)
             return {
                 "status": "success",
                 "message_id": message_id,
@@ -307,13 +304,11 @@ async def _extract_and_update_location_async(
             }
         else:
             await update_message_geolocation_status(message_id, 'no_coordinates', owner_id)
-            update_job_status(job_id, "completed", owner_id, case_id)
             return {"status": "no_coordinates", "message_id": message_id}
             
     except Exception as e:
         logger.error(f"Failed for {message_id}: {e}", exc_info=True)
         await update_message_geolocation_status(message_id, 'failed', owner_id)
-        update_job_status(job_id, "failed", owner_id, case_id)
         raise
 
 

@@ -170,8 +170,8 @@ const TelegramScraper: React.FC<TelegramScraperProps> = ({ case_id }) => {
 
   const fetchStatus = async (): Promise<void> => {
     try {
-      const response = await authFetch(`${apiUrl}/auth/telegram/status`, {
-        method: 'POST',
+      const response = await authFetch(`${apiUrl}/queue/jobs`, {
+        method: 'GET',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ case_id: case_id || null }),
       });
@@ -203,10 +203,10 @@ const TelegramScraper: React.FC<TelegramScraperProps> = ({ case_id }) => {
       let method = 'POST';
 
       if (action === 'remove') {
-        endpoint = `${apiUrl}/auth/telegram/job/${jobId}`;
+        endpoint = `${apiUrl}/queue/job/${jobId}`;
         method = 'DELETE';
       } else if (action === 'requeue') {
-        endpoint = `${apiUrl}/auth/telegram/job/${jobId}/requeue`;
+        endpoint = `${apiUrl}/queue/job/${jobId}/requeue`;
         method = 'POST';
       }
 
@@ -290,7 +290,7 @@ const TelegramScraper: React.FC<TelegramScraperProps> = ({ case_id }) => {
 
       switch (mode) {
         case 'full':
-          endpoint = `${apiUrl}/auth/telegram/full`;
+          endpoint = `${apiUrl}/scrape`;
           payload = {
             channel: channel.trim(),
             tg_session: selectedSession,
@@ -306,7 +306,7 @@ const TelegramScraper: React.FC<TelegramScraperProps> = ({ case_id }) => {
           };
           break;
         case 'live':
-          endpoint = `${apiUrl}/auth/telegram/live`;
+          endpoint = `${apiUrl}/scrape`;
           payload = {
             channels: [channel.trim()],
             tg_session: selectedSession,
