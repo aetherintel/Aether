@@ -2,6 +2,7 @@
 import asyncio
 import os
 import logging
+from aether_lib.queue_client import queue_client
 from redis import Redis
 from rq import Queue
 import torch
@@ -248,7 +249,7 @@ def translate_and_update(
             # Step 4: Trigger classification (runs independently)
             logger.info("🏷️ Step 4: Triggering classification...")
             try:
-                classification_job_id = trigger_classification(
+                classification_job_id = queue_client.enqueue_classification(
                 message_id=message_id,
                 text=translated_text,
                 owner_id=owner_id,
@@ -273,98 +274,3 @@ def translate_and_update(
         logger.exception("Full traceback:")
         logger.error("=" * 80)
         raise
-
-def enqueue_translation(message_id: str, original_text: str, source_language: str, owner_id: str = None):
-    """Enqueue translation job"""
-    job = translation_queue.enqueue(
-        'workers.translation_worker.translate_and_update',
-        message_id=message_id,
-        original_text=original_text,
-        source_language=source_language,
-        owner_id=owner_id,
-        job_timeout="10m",
-        result_ttl=3600,
-        failure_ttl=86400
-    )
-    logger.info(f"📤 Enqueued job {job.id} for {message_id}")
-    return job
-
-def trigger_emotion_analysis(message_id: str, text: str, owner_id: str = None, case_id: int = None) -> str:
-    """
-    Trigger emotion analysis job via job-launcher
-    
-    Args:
-        message_id: Message ID
-        text: German text (already translated)
-        owner_id: Owner ID for tracking
-        
-    Returns:
-        Job ID or None
-    """
-    import requests
-    
-    JOB_LAUNCHER_URL = os.getenv("JOB_LAUNCHER_URL", "http://job-launcher:9001")
-    JOB_SECRET_TOKEN = os.getenv("JOB_SECRET_TOKEN")
-    
-    try:
-        response = requests.post(
-            f"{JOB_LAUNCHER_URL}/queue/emotion",
-            json={
-                "message_id": message_id,
-                "text": text,
-                "owner_id": owner_id,
-                "case_id": case_id,
-                "chained_from": "translation",
-                "threshold": 0.3,
-                "top_k": 3
-            },
-            headers={"Authorization": f"Bearer {JOB_SECRET_TOKEN}"},
-            timeout=10
-        )
-        response.raise_for_status()
-        
-        job_data = response.json()
-        return job_data.get('job_id')
-        
-    except Exception as e:
-        logger.error(f"❌ Failed to trigger emotion analysis: {e}")
-        return None
-
-def trigger_classification(message_id: str, text: str, owner_id: str = None, case_id: int = None) -> str:
-    """
-    Trigger classification job via job-launcher
-    
-    Args:
-        message_id: Message ID
-        text: German text (already translated)
-        owner_id: Owner ID for tracking
-        
-    Returns:
-        Job ID or None
-    """
-    import requests
-    
-    JOB_LAUNCHER_URL = os.getenv("JOB_LAUNCHER_URL", "http://job-launcher:9001")
-    JOB_SECRET_TOKEN = os.getenv("JOB_SECRET_TOKEN")
-    
-    try:
-        response = requests.post(
-            f"{JOB_LAUNCHER_URL}/queue/classification",
-            json={
-                "message_id": message_id,
-                "text": text,
-                "owner_id": owner_id,
-                "case_id": case_id,
-                "chained_from": "translation"
-            },
-            headers={"Authorization": f"Bearer {JOB_SECRET_TOKEN}"},
-            timeout=10
-        )
-        response.raise_for_status()
-        
-        job_data = response.json()
-        return job_data.get('job_id')
-        
-    except Exception as e:
-        logger.error(f"❌ Failed to trigger classification: {e}")
-        return None

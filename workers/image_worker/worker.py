@@ -9,7 +9,7 @@ import logging
 import requests
 from pathlib import Path
 from aether_lib.neo4j_client.messages import update_message_image_analysis
-
+from aether_lib.queue_client.queue_client import queue_client
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s [%(levelname)s] %(name)s: %(message)s'
@@ -26,9 +26,6 @@ MODEL_BASE_DIR = Path(os.getenv("MODEL_BASE_DIR", "/app/models/image"))
 # Global OCR instance
 OCR_ENGINE = None
 
-# Job Launcher Configuration
-JOB_LAUNCHER_URL = os.getenv("JOB_LAUNCHER_URL", "http://job-launcher:9001")
-JOB_SECRET_TOKEN = os.getenv("JOB_SECRET_TOKEN")
 
 # Translation Configuration
 SUPPORTED_TRANSLATION_LANGUAGES = ['ru', 'ar', 'tr', 'en']
@@ -353,34 +350,6 @@ def needs_translation(text: str) -> tuple[bool, str]:
     logger.info(f"[LANG] Unsupported language {detected_lang}, storing original")
     return False, detected_lang
 
-
-def queue_translation(message_id: str, text: str, source_language: str, case_id: int = None, owner_id: str = None, parent_job_id: str = None, image_text=True) -> str:
-    """Queue translation job for extracted text"""
-    try:
-        response = requests.post(
-            f"{JOB_LAUNCHER_URL}/queue/translation",
-            json={
-                "message_id": message_id,
-                "original_text": text,
-                "source_language": source_language,
-                "owner_id": owner_id,
-                "case_id": case_id,
-                "parent_job_id": parent_job_id,
-                "chained_from": "image-ocr",
-                "image_text": image_text
-            },
-            headers={"Authorization": f"Bearer {JOB_SECRET_TOKEN}"},
-            timeout=10
-        )
-        response.raise_for_status()
-        job_data = response.json()
-        logger.info(f"[TRANSLATION] ✓ Queued job {job_data['job_id']}")
-        return job_data['job_id']
-    except Exception as e:
-        logger.error(f"[TRANSLATION] ✗ Failed: {e}")
-        return None
-
-
 # ============================================================================
 # WORKER JOB FUNCTION
 # ============================================================================
@@ -473,7 +442,7 @@ def analyze_and_update(
             if needs_trans:
                 logger.info(f"🌍 Step 3: Queueing translation ({detected_lang} → de)...")
                 
-                translation_job_id = queue_translation(
+                translation_job_id = queue_client.enqueue_translation(
                     message_id=message_id,
                     text=extracted_text,
                     source_language=detected_lang,

@@ -425,8 +425,6 @@ def queue_classification_job(req: EmotionJobRequest, request: Request):
         "queued_at": str(job.enqueued_at)
     }
 
-# Add to job_launcher/main.py
-
 @app.post("/queue/geolocation")
 def launch_geolocation_job(req: GeolocationRequest, request: Request):
     """Queue geolocation extraction job"""
