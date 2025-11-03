@@ -29,7 +29,7 @@ class QueueClient:
             'geoloacation': Queue('geolocation-jobs',
                 connection=Redis(host=redis_host, port=redis_port, db=6)),
         }
-        
+
     def enqueue_translation(self, message_id, text, source_lang, owner_id, case_id):
         """Kann von Backend UND Workern genutzt werden"""
         job = self.queues['translation'].enqueue(
@@ -46,7 +46,7 @@ class QueueClient:
     def enqueue_emotion(self, message_id, text, owner_id, case_id):
         """Emotion Analysis"""
         job = self.queues['emotion'].enqueue(
-            'workers.emotion_worker.worker.analyze_emotion',
+            'workers.emotion_worker.worker.classify_emotion_job',
             message_id=message_id,
             text=text,
             owner_id=owner_id,
@@ -58,7 +58,7 @@ class QueueClient:
     def enqueue_classification(self, message_id, text, owner_id, case_id):
         """Label Classification"""
         job = self.queues['classification'].enqueue(
-            'workers.classification_worker.worker.classify_labels',
+            'workers.classification_worker.worker.classify_post_job',
             message_id=message_id,
             text=text,
             owner_id=owner_id,
@@ -69,7 +69,7 @@ class QueueClient:
     def enqueue_image_analysis(self, message_id, image_path, extract_text, detect_objects, translate_extracted_text, owner_id, case_id):
         """Image Analysis"""
         job = self.queues['image'].enqueue(
-            'workers.image_worker.worker.analyze_image',
+            'workers.image_worker.worker.analyze_and_update',
             message_id=message_id,
             image_path=image_path,
             extract_text=extract_text,
@@ -84,7 +84,7 @@ class QueueClient:
     def enqueue_audio_transcription(self, message_id, audio_path, translate_transcription, owner_id, case_id):
         """Audio Transcription"""
         job = self.queues['audio'].enqueue(
-            'workers.audio_worker.worker.transcribe_audio',
+            'workers.audio_worker.worker.transcribe_and_update',
             message_id=message_id,
             audio_path=audio_path,
             translate_transcription=translate_transcription,
@@ -96,7 +96,7 @@ class QueueClient:
     def enqueue_geolocation(self, message_id, text, owner_id, case_id):
         """Geolocation Extraction"""
         job = self.queues['geoloacation'].enqueue(
-            'workers.geolocation_worker.worker.extract_geolocation',
+            'workers.geolocation_worker.worker.extract_and_update_location',
             message_id=message_id,
             text=text,
             owner_id=owner_id,
