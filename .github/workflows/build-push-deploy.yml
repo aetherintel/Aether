@@ -2,9 +2,9 @@ name: CI/CD Pipeline with Model Initialization
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ "test-deploy" ]
   pull_request:
-    branches: [ "main" ]
+    branches: [ "test-deploy" ]
 
 env:
   REGISTRY: ghcr.io
