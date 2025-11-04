@@ -1,5 +1,5 @@
 # docker/photon/Dockerfile
-FROM openjdk:17-ea-17-slim
+FROM openjdk:26-ea-17-slim-bookworm
 
 WORKDIR /photon
 
