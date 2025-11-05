@@ -185,7 +185,9 @@ const TelegramScraper: React.FC<TelegramScraperProps> = ({ case_id }) => {
       }
 
       const data = await response.json();
-      const mappedContainers = data.containers.map((job: any) => ({
+      // Handle both old (data.containers) and new (data.jobs) response formats
+      const jobsArray = data.jobs || data.containers || [];
+      const mappedContainers = jobsArray.map((job: any) => ({
         ...job,
         status: mapJobStatus(job.status),
       }));
