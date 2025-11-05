@@ -14,12 +14,14 @@ COPY workers/classification_worker/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy worker module files directly to /app (flat structure)
-COPY workers/classification_worker/*.py /app/
+COPY workers/classification_worker/*.py ./workers/classification_worker/
 
 # Copy shared library
 COPY aether_lib/ /app/aether_lib/
 
 RUN mkdir -p /app/models/classifier
+RUN touch /app/workers/__init__.py && \
+    touch /app/workers/classification_worker/__init__.py
 # Set environment variables
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONPATH=/app

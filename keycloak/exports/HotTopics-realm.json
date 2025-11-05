@@ -150,7 +150,7 @@
         },
         "clientRole" : true,
         "containerId" : "28c0bcf1-7bdb-4037-9551-f7014be41725",
-        "attributes" : { }
+        "attributes" : {  }
       }, {
         "id" : "64214960-7b88-4de6-adc9-940ab0477b3c",
         "name" : "view-realm",
@@ -378,6 +378,22 @@
   "webAuthnPolicyPasswordlessAcceptableAaguids" : [ ],
   "webAuthnPolicyPasswordlessExtraOrigins" : [ ],
   "users" : [ {
+      "username": "admin",
+      "email": "admin@aethery.cloud",
+      "emailVerified": true,
+      "enabled": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "admin"
+        }
+      ],
+      "realmRoles": ["admin"],
+      "clientRoles": {
+        "realm-management": ["realm-admin"]
+      }
+    },
+    {
     "id" : "6c954d17-e690-429b-8e57-fd3165af96a4",
     "username" : "service-account-backend-admin-client",
     "emailVerified" : false,
@@ -1267,7 +1283,7 @@
     "envelopeFrom" : "",
     "ssl" : "false",
     "password" : "$H0!%R5w^3Yb0m#P",
-    "port" : "465",
+    "port" : "587",
     "host" : "smtp.strato.de",
     "replyTo" : "",
     "from" : "admin@aethery.cloud",

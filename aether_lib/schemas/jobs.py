@@ -106,7 +106,21 @@ class BaseJobPayload(BaseModel):
     owner_id: str = Field(..., description="Owner/user ID who triggered the job")
     case_id: Optional[int] = Field(None, description="Case ID this job belongs to")
 
-
+class ScrapeRequest(BaseModel):
+    """Frontend-Schema: owner_id wird automatisch aus Auth-Context injiziert"""
+    channel: str = Field(..., description="Single Telegram channel username")
+    tg_session: str = Field(..., description="Telegram session name")
+    recursive: bool = Field(default=True, description="Recursive channel discovery")
+    neo4j: bool = Field(default=True, description="Write to Neo4j")
+    case_id: Optional[int] = Field(None, description="Case ID")
+    
+    # AI Feature Flags
+    enable_translation: bool = Field(default=True)
+    enable_image_analysis: bool = Field(default=False)
+    enable_audio_transcription: bool = Field(default=False)
+    enable_emotion_analysis: bool = Field(default=False)
+    enable_label_classifier: bool = Field(default=False)
+    enable_geolocation_extraction: bool = Field(default=False)
 # ============================================================================
 # TELEGRAM SCRAPER
 # ============================================================================

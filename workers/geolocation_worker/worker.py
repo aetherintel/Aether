@@ -243,6 +243,7 @@ async def geocode_with_fallback(location_name: str, geonames_data: Optional[Dict
 
 def extract_and_update_location(message_id: str, text: str, owner_id: str, case_id: int):
     """RQ worker entry point"""
+    print("DEBUG: Starting geolocation extraction...")
     job = get_current_job()
     job_id = job.id if job else 'unknown'
     

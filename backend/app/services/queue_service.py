@@ -215,7 +215,7 @@ class QueueService:
         job = self.queues['audio'].enqueue(
             'workers.audio_worker.worker.transcribe_and_update',
             message_id=payload.message_id,
-            audio_path=payload.audio_path,
+            media_path=payload.audio_path,
             translate_transcription=payload.translate_transcription,
             owner_id=payload.owner_id,
             case_id=payload.case_id,
