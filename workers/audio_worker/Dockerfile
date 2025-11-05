@@ -23,6 +23,8 @@ COPY aether_lib /app/aether_lib
 COPY workers/audio_worker/ /app/workers/audio_worker
 
 RUN mkdir -p /app/models/audio/whisper
+RUN touch /app/workers/__init__.py && \
+    touch /app/workers/audio_worker/__init__.py
 
 ENV PYTHONPATH=/app:$PYTHONPATH
 

@@ -170,10 +170,14 @@ const TelegramScraper: React.FC<TelegramScraperProps> = ({ case_id }) => {
 
   const fetchStatus = async (): Promise<void> => {
     try {
-      const response = await authFetch(`${apiUrl}/queue/jobs`, {
+      const url = new URL(`${apiUrl}/queue/jobs`);
+      if (case_id) {
+        url.searchParams.append('case_id', case_id.toString());
+      }
+
+      const response = await authFetch(url.toString(), {
         method: 'GET',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ case_id: case_id || null }),
       });
 
       if (!response.ok) {
@@ -308,7 +312,7 @@ const TelegramScraper: React.FC<TelegramScraperProps> = ({ case_id }) => {
         case 'live':
           endpoint = `${apiUrl}/scrape`;
           payload = {
-            channels: [channel.trim()],
+            channel: [channel.trim()],
             tg_session: selectedSession,
             case_id: case_id || undefined,
             enable_translation: enableTranslation,

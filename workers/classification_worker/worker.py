@@ -12,7 +12,7 @@ from neo4j import AsyncGraphDatabase
 import asyncio
 
 # Import our Neo4j utilities
-from neo4j_utils import (
+from .neo4j_utils import (
     store_classifications_in_neo4j,
     get_messages_pending_classification,
     mark_classification_failed
@@ -212,9 +212,6 @@ classification_service = PostClassificationService()
 def classify_post_job(
     message_id: str,
     text: str,
-    neo4j_uri: str,
-    neo4j_user: str,
-    neo4j_password: str,
     threshold: float = 0.3,
     top_k: int = 3,
     use_multi_label: bool = True,
@@ -232,6 +229,9 @@ def classify_post_job(
     logger.info("=" * 80)
     
     try:
+        neo4j_uri = os.getenv("NEO4J_URI")
+        neo4j_user = os.getenv("NEO4J_USER")
+        neo4j_password = os.getenv("NEO4J_PASSWORD")
         # Classify post (sync operation)
         classifications = classification_service.classify(
             text, 

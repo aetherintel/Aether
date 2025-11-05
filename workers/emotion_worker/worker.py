@@ -13,7 +13,7 @@ from transformers import pipeline
 from neo4j import AsyncGraphDatabase
 
 # Import our Neo4j utilities
-from neo4j_utils import (
+from .neo4j_utils import (
     store_emotions_in_neo4j,
     get_messages_pending_emotion_analysis,
     mark_emotion_analysis_failed
@@ -288,9 +288,6 @@ emotion_service = EmotionService()
 def classify_emotion_job(
     message_id: str,
     text: str,
-    neo4j_uri: str,
-    neo4j_user: str,
-    neo4j_password: str,
     threshold: float = 0.3,
     top_k: int = 3,
     owner_id: str = None,
@@ -320,6 +317,9 @@ def classify_emotion_job(
     logger.info("=" * 80)
     
     try:
+        neo4j_uri = os.getenv("NEO4J_URI")
+        neo4j_user = os.getenv("NEO4J_USER")
+        neo4j_password = os.getenv("NEO4J_PASSWORD")
         # Classify emotions (sync operation)
         emotions = emotion_service.classify(text, threshold=threshold, top_k=top_k)
         

@@ -21,6 +21,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 RUN mkdir -p /app/models/image/easyocr
 
 # Copy worker code
-COPY workers/image_worker/ /app/workers/image_worker/
+COPY workers/image_worker/ ./workers/image_worker/
+RUN touch /app/workers/__init__.py && \
+    touch /app/workers/image_worker/__init__.py
 
 CMD ["rq", "worker", "--url",  "redis://redis:6379/2", "image-jobs"]

@@ -11,7 +11,7 @@ requests==2.32.3
 rq==1.16.2
 
 redis>=5.0.0
-
+pydantic
 
 # Neo4j client (shared library)
 neo4j>=5.14.0

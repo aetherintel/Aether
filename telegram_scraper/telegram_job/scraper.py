@@ -9,6 +9,14 @@ from telegram_client import client, login
 from aether_lib.neo4j_client.messages import save_message_with_processing_status
 from aether_lib.neo4j_client.channels import is_scraped, mark_scraped
 from aether_lib.queue_client.queue_client import queue_client
+from aether_lib.schemas.jobs import (
+    TranslationJobPayload,
+    ImageJobPayload,
+    AudioJobPayload,
+    EmotionJobPayload,
+    ClassificationJobPayload,
+    GeolocationJobPayload,
+)
 from utils import download_media_to_path, extract_invite_links, generate_media_path, get_media_type
 
 # Configuration
@@ -99,6 +107,9 @@ async def process_message(msg, username, found_channels, recursive=False, case_i
         detected_lang = None
         translation_status = 'none'
         geolocation_status = 'none'
+        image_analysis_status = 'none'
+        audio_transcription_status = 'none'
+
         if text:
             if len(text) >= 10 and ENABLE_TRANSLATION:
                 needs_trans, detected_lang = needs_translation(text)
@@ -107,15 +118,13 @@ async def process_message(msg, username, found_channels, recursive=False, case_i
             if len(text) >= 10 and ENABLE_GEOLOCATION_EXTRACTION:
                 geolocation_status = 'pending'
                 # Queue geolocation extraction
-                job_id = queue_client.enqueue_geolocation(
+                geolocation_payload = GeolocationJobPayload(
                     message_id=f"{msg.chat_id}-{msg.id}",
                     text=text,
                     owner_id=owner_id,
                     case_id=case_id
                 )
-        # Initialize processing statuses
-        image_analysis_status = 'none'
-        audio_transcription_status = 'none'
+                job_id = queue_client.enqueue_geolocation(geolocation_payload)
         
         # Handle media download and processing
         media_path = None
@@ -143,30 +152,31 @@ async def process_message(msg, username, found_channels, recursive=False, case_i
                         # 1. IMAGE PROCESSING (existing)
                         if media_type == "photo" and os.path.exists(media_path) and ENABLE_IMAGE_ANALYSIS:
                             image_analysis_status = 'pending'
-                            
-                            job_id = queue_client.enqueue_image_analysis(
+
+                            image_payload = ImageJobPayload(
                                 message_id=full_message_id,
                                 image_path=media_path,
-                                case_id=case_id,
                                 owner_id=owner_id,
+                                case_id=case_id,
                                 extract_text=True,
                                 detect_objects=False,
                                 translate_extracted_text=True
                             )
+                            job_id = queue_client.enqueue_image_analysis(image_payload)
                             print(f"[QUEUE] Image analysis queued for {full_message_id}, job: {job_id}")
                         
                         # 2. AUDIO PROCESSING (new)
                         elif media_type == "audio" and os.path.exists(media_path) and ENABLE_AUDIO_TRANSCRIPTION:
                             audio_transcription_status = 'pending'
-                            
-                            job_id = queue_client.enqueue_audio_transcription(
+
+                            audio_payload = AudioJobPayload(
                                 message_id=full_message_id,
-                                media_path=media_path,
-                                media_type="audio",
-                                case_id=case_id,
+                                audio_path=media_path,
                                 owner_id=owner_id,
+                                case_id=case_id,
                                 translate_transcription=True
                             )
+                            job_id = queue_client.enqueue_audio_transcription(audio_payload)
                             print(f"[QUEUE] Audio transcription queued for {full_message_id}, job: {job_id}")
                         
                         # 3. VIDEO PROCESSING (check for audio track)
@@ -174,15 +184,15 @@ async def process_message(msg, username, found_channels, recursive=False, case_i
                             # Queue for audio extraction and transcription
                             # Videos often contain speech that needs transcription
                             audio_transcription_status = 'pending'
-                            
-                            job_id = queue_client.enqueue_audio_transcription(
+
+                            audio_payload = AudioJobPayload(
                                 message_id=full_message_id,
-                                media_path=media_path,
-                                media_type="video",
-                                case_id=case_id,
+                                audio_path=media_path,
                                 owner_id=owner_id,
+                                case_id=case_id,
                                 translate_transcription=True
                             )
+                            job_id = queue_client.enqueue_audio_transcription(audio_payload)
                             print(f"[QUEUE] Video audio extraction queued for {full_message_id}, job: {job_id}")
                         
                         # 4. DOCUMENT PROCESSING (check if it's audio/video file)
@@ -190,18 +200,18 @@ async def process_message(msg, username, found_channels, recursive=False, case_i
                             # Check if document is actually an audio/video file
                             if await is_audio_video_document(msg, media_path) and ENABLE_AUDIO_TRANSCRIPTION:
                                 audio_transcription_status = 'pending'
-                                
+
                                 # Detect if it's audio or video based on mime type or extension
                                 doc_media_type = await get_document_media_type(msg, media_path)
-                                
-                                job_id = queue_client.enqueue_audio_transcription(
+
+                                audio_payload = AudioJobPayload(
                                     message_id=full_message_id,
-                                    media_path=media_path,
-                                    media_type=doc_media_type,
-                                    case_id=case_id,
+                                    audio_path=media_path,
                                     owner_id=owner_id,
+                                    case_id=case_id,
                                     translate_transcription=True
                                 )
+                                job_id = queue_client.enqueue_audio_transcription(audio_payload)
                                 print(f"[QUEUE] Document {doc_media_type} transcription queued for {full_message_id}")
                             
                     except Exception as e:
@@ -228,14 +238,14 @@ async def process_message(msg, username, found_channels, recursive=False, case_i
                                         full_message_id = f"{msg.chat_id}-{msg.id}"
                                         audio_transcription_status = 'pending'
 
-                                        job_id = queue_client.enqueue_audio_transcription(
+                                        audio_payload = AudioJobPayload(
                                             message_id=full_message_id,
-                                            media_path=media_path,
-                                            media_type="audio",  # Treat voice as audio
-                                            case_id=case_id,
+                                            audio_path=media_path,
                                             owner_id=owner_id,
+                                            case_id=case_id,
                                             translate_transcription=True
                                         )
+                                        job_id = queue_client.enqueue_audio_transcription(audio_payload)
                                         print(f"[QUEUE] Voice transcription queued for {full_message_id}")
                                         media_type = "voice"  # Store as voice type
                                 except Exception as e:
@@ -263,30 +273,33 @@ async def process_message(msg, username, found_channels, recursive=False, case_i
 
         # Queue text translation if needed (existing logic)
         if needs_trans and ENABLE_TRANSLATION:
-            job_id = queue_client.enqueue_translation(
+            translation_payload = TranslationJobPayload(
                 message_id=full_message_id,
-                text=text,
+                original_text=text,
                 source_language=detected_lang,
-                case_id=case_id,
-                owner_id=owner_id
+                owner_id=owner_id,
+                case_id=case_id
             )
+            job_id = queue_client.enqueue_translation(translation_payload)
         else:
             if text and len(text.strip()) > 10 and ENABLE_EMOTION_ANALYSIS:  # Only if meaningful text
                 print(f"🎭 Text is German, triggering emotion analysis directly")
-                await queue_client.enqueue_emotion(
+                emotion_payload = EmotionJobPayload(
                     message_id=f"{msg.chat_id}-{msg.id}",
                     text=text,
                     owner_id=owner_id,
                     case_id=case_id
                 )
+                queue_client.enqueue_emotion(emotion_payload)
             if text and len(text.strip()) > 10 and ENABLE_LABEL_CLASSIFIER:
                 print(f"🏷️ Text is German, triggering label classification directly")
-                await queue_client.enqueue_label_classification(
+                classification_payload = ClassificationJobPayload(
                     message_id=f"{msg.chat_id}-{msg.id}",
                     text=text,
                     owner_id=owner_id,
                     case_id=case_id
                 )
+                queue_client.enqueue_classification(classification_payload)
         # Extract invite links for recursive processing (existing logic)
         if recursive and text:
             links = extract_invite_links([text])
