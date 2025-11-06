@@ -14,7 +14,6 @@ from telegram_client import login
 def run_job(**kwargs):
     """
     Entry point für RQ Worker.
-    Wird vom Job-Launcher via Queue aufgerufen.
     """
     print(f"[RQ] Starting job with kwargs: {kwargs}")
 
