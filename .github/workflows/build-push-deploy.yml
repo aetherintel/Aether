@@ -11,65 +11,6 @@ env:
   IMAGE_PREFIX: ${{ github.repository_owner }}/aether
 
 jobs:
-  build-models:
-    runs-on: ubuntu-latest
-    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[models]')
-    permissions:
-      contents: read
-      packages: write
-    strategy:
-      matrix:
-        include:
-          - service: translation-models
-            context: ./models
-            dockerfile: ./models/translation/Dockerfile
-          - service: audio-models
-            context: ./models
-            dockerfile: ./models/audio/Dockerfile
-          - service: emotion-models
-            context: ./models
-            dockerfile: ./models/emotion/Dockerfile
-          - service: classifier-models
-            context: ./models
-            dockerfile: ./models/classifier/Dockerfile
-          - service: image-models
-            context: ./models
-            dockerfile: ./models/image/Dockerfile
-          - service: geolocation-models
-            context: ./models
-            dockerfile: ./models/geolocation/Dockerfile
-    
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Extract metadata
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-${{ matrix.service }}
-          tags: |
-            type=raw,value=latest
-
-      - name: Build and push Model image
-        uses: docker/build-push-action@v5
-        with:
-          context: ${{ matrix.context }}
-          file: ${{ matrix.dockerfile }}
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
   build-and-push:
     runs-on: ubuntu-latest
     permissions:
@@ -170,6 +111,71 @@ jobs:
           target: "~/app/"
           strip_components: 0
 
+      # ═══════════════════════════════════════════════════════════════
+      # 🤖 MODEL INITIALIZATION (BEFORE DEPLOYMENT)
+      # ═══════════════════════════════════════════════════════════════
+      - name: Initialize AI Models (if needed)
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.PROD_HOST }}
+          username: ${{ secrets.PROD_USER }}
+          key: ${{ secrets.PROD_SSH_KEY }}
+          script: |
+            cd ~/app
+            
+            echo "═══════════════════════════════════════════════════════════════"
+            echo "🤖 Checking AI Model Status"
+            echo "═══════════════════════════════════════════════════════════════"
+            
+            # Check if models exist in volumes
+            MODEL_EXISTS=false
+            
+            # Check audio models volume
+            if docker volume ls | grep -q "app_audio_models"; then
+              FILE_COUNT=$(docker run --rm -v app_audio_models:/check alpine:latest find /check -type f 2>/dev/null | wc -l)
+              if [ "$FILE_COUNT" -gt 5 ]; then
+                echo "✅ Models already initialized ($FILE_COUNT files in audio_models volume)"
+                MODEL_EXISTS=true
+              fi
+            fi
+            
+            # Skip if models exist
+            if [ "$MODEL_EXISTS" = true ]; then
+              echo "⏭️  Skipping model download"
+              exit 0
+            fi
+            
+            # Download models
+            echo ""
+            echo "📥 First deployment detected - downloading AI models..."
+            echo "⚠️  This is a ONE-TIME operation (~3-4 GB, 10-30 minutes)"
+            echo ""
+            
+            # Check disk space
+            AVAILABLE_SPACE=$(df -BG . | awk 'NR==2 {print $4}' | sed 's/G//')
+            echo "💾 Available disk space: ${AVAILABLE_SPACE}GB"
+            
+            if [ "$AVAILABLE_SPACE" -lt 5 ]; then
+              echo "❌ ERROR: Insufficient disk space!"
+              echo "   Required: ~5 GB"
+              echo "   Available: ${AVAILABLE_SPACE}GB"
+              exit 1
+            fi
+            
+            # Make script executable
+            chmod +x scripts/init_models.sh
+            
+            # Run initialization (BLOCKING - not background!)
+            echo "🚀 Starting model download..."
+            mkdir -p logs
+            ./scripts/init_models.sh docker-compose.prod.yml 2>&1 | tee logs/model-init.log
+            
+            echo ""
+            echo "✅ Model initialization complete"
+
+      # ═══════════════════════════════════════════════════════════════
+      # 🚀 DEPLOYMENT
+      # ═══════════════════════════════════════════════════════════════
       - name: Deploy to Production VM
         uses: appleboy/ssh-action@v1.0.0
         with:
@@ -222,32 +228,30 @@ jobs:
             # 🛡️ GRACEFUL ZERO-DOWNTIME DEPLOYMENT
             # ═══════════════════════════════════════════════════════════════
             
-            # Define stateful services (NEVER recreate - contain persistent data)
-            STATEFUL_SERVICES="postgres neo4j keycloak redis translation-models audio-models emotion-models classifier-models image-models geolocation-models"
+            # Define stateful services (NEVER recreate)
+            STATEFUL_SERVICES="postgres neo4j keycloak redis"
             
-            # Define stateless services (safe to recreate - no data loss)
+            # Define stateless services (safe to recreate)
             STATELESS_SERVICES="frontend backend telegram-worker translation-worker image-worker audio-worker emotion-worker classification-worker geolocation-worker photon certbot"
             
             echo "═══════════════════════════════════════════════════════════════"
             echo "🚀 GRACEFUL DEPLOYMENT STARTING"
             echo "═══════════════════════════════════════════════════════════════"
-            echo ""
             
             # ────────────────────────────────────────────────────────────────
             # STEP 1: Ensure stateful services are running
             # ────────────────────────────────────────────────────────────────
+            echo ""
             echo "📦 Step 1/4: Ensuring stateful services are running..."
             for service in $STATEFUL_SERVICES; do
               if $COMPOSE_CMD -f docker-compose.prod.yml ps "$service" 2>/dev/null | grep -q "Up"; then
-                echo "  ✅ $service is already running (keeping as-is)"
+                echo "  ✅ $service is already running"
               else
                 echo "  🔄 Starting $service..."
                 $COMPOSE_CMD -f docker-compose.prod.yml up -d "$service"
               fi
             done
             
-            # Wait for critical services to be healthy
-            echo ""
             echo "⏳ Waiting for database services to be ready..."
             sleep 10
             
@@ -255,41 +259,33 @@ jobs:
             # STEP 2: Pull latest images
             # ────────────────────────────────────────────────────────────────
             echo ""
-            echo "📥 Step 2/4: Pulling latest images for stateless services..."
+            echo "📥 Step 2/4: Pulling latest images..."
             for service in $STATELESS_SERVICES; do
               echo "  🔽 Pulling $service..."
               $COMPOSE_CMD -f docker-compose.prod.yml pull "$service" 2>&1 | grep -v "Pulling" | head -n 1 || true
             done
             
             # ────────────────────────────────────────────────────────────────
-            # STEP 3: Deploy stateless services with zero-downtime
+            # STEP 3: Deploy stateless services
             # ────────────────────────────────────────────────────────────────
             echo ""
-            echo "🔄 Step 3/4: Deploying stateless services (zero-downtime)..."
+            echo "🔄 Step 3/4: Deploying stateless services..."
             
-            # Deploy services one by one for better control
             for service in $STATELESS_SERVICES; do
               echo "  🔄 Updating $service..."
-              
-              # Stop old container gracefully (if exists)
               $COMPOSE_CMD -f docker-compose.prod.yml stop "$service" --timeout 30 2>/dev/null || true
-              
-              # Remove old container
               $COMPOSE_CMD -f docker-compose.prod.yml rm -f "$service" 2>/dev/null || true
-              
-              # Start new container
               $COMPOSE_CMD -f docker-compose.prod.yml up -d "$service"
-              
-              # Brief pause between services to prevent overwhelming the system
               sleep 2
             done
             
             # ────────────────────────────────────────────────────────────────
-            # STEP 4: Scale workers to desired replicas
+            # STEP 4: Scale workers
             # ────────────────────────────────────────────────────────────────
             echo ""
-            echo "📊 Step 4/4: Scaling workers to production configuration..."
-            $COMPOSE_CMD -f docker-compose.prod.yml up -d --scale telegram-worker=5 \
+            echo "📊 Step 4/4: Scaling workers..."
+            $COMPOSE_CMD -f docker-compose.prod.yml up -d \
+              --scale telegram-worker=5 \
               --scale translation-worker=2 \
               --scale emotion-worker=2 \
               --scale geolocation-worker=3 \
@@ -319,67 +315,6 @@ jobs:
                 $COMPOSE_CMD -f docker-compose.prod.yml logs --tail=10 "$service"
               fi
             done
-            
-            # ════════════════════════════════════════════════════════════════
-            # 🤖 AI MODEL INITIALIZATION
-            # ════════════════════════════════════════════════════════════════
-            echo ""
-            echo "═══════════════════════════════════════════════════════════════"
-            echo "🤖 AI Model Initialization"
-            echo "═══════════════════════════════════════════════════════════════"
-            
-            # Check if models need to be initialized
-            if [ ! -d "models" ] || [ -z "$(ls -A models 2>/dev/null)" ]; then
-              echo "📦 AI models directory is empty - initialization needed"
-              echo "⚠️  WARNING: Model downloads require ~3-4 GB of disk space"
-              echo ""
-              
-              # Check available disk space
-              AVAILABLE_SPACE=$(df -BG . | awk 'NR==2 {print $4}' | sed 's/G//')
-              echo "💾 Available disk space: ${AVAILABLE_SPACE}GB"
-              
-              if [ "$AVAILABLE_SPACE" -lt 5 ]; then
-                echo ""
-                echo "❌ ERROR: Insufficient disk space for AI models!"
-                echo "   Required: ~5 GB (models + buffer)"
-                echo "   Available: ${AVAILABLE_SPACE}GB"
-                echo ""
-                echo "⚡ RECOMMENDED ACTIONS:"
-                echo "   1. Clean up old Docker images: docker system prune -a"
-                echo "   2. Clean up old logs: rm -rf logs/*.log"
-                echo "   3. Expand VM disk space to at least 20GB"
-                echo ""
-                echo "🔄 AI workers will start but will fail until models are available"
-              else
-                echo "✅ Sufficient disk space available"
-                echo ""
-                echo "🚀 Starting model initialization in background..."
-                
-                # Create logs directory
-                mkdir -p logs/model-downloads
-                
-                # Make script executable
-                chmod +x scripts/init_models.sh 2>/dev/null || echo "⚠️  Warning: init_models.sh not found"
-                
-                # Start model initialization in background
-                if [ -f "scripts/init_models.sh" ]; then
-                  nohup ./scripts/init_models.sh docker-compose.prod.yml > logs/model-init.log 2>&1 &
-                  MODEL_INIT_PID=$!
-                  
-                  echo "  ✅ Model initialization started (PID: $MODEL_INIT_PID)"
-                  echo "  📝 Monitor progress: tail -f logs/model-init.log"
-                  echo ""
-                  echo "  ⏱️  Expected initialization time: 10-30 minutes"
-                  echo "  💡 Workers will automatically use models once ready"
-                else
-                  echo "  ⚠️  Model initialization script not found"
-                  echo "  📝 You may need to manually initialize models"
-                fi
-              fi
-            else
-              echo "✅ AI models already initialized"
-              echo "   Models found in: $(du -sh models 2>/dev/null | cut -f1)"
-            fi
             
             echo ""
             echo "═══════════════════════════════════════════════════════════════"

@@ -23,7 +23,7 @@ services:
       - start-dev 
       - --import-realm
     ports:
-      - "8080:8080"
+      - "127.0.0.1:8080:8080"
     restart: always
     environment:
       KC_DB: postgres
@@ -89,7 +89,7 @@ services:
       - keycloak
       - neo4j
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     networks:
       - aether-network
 
@@ -126,8 +126,8 @@ services:
     container_name: neo4j
     restart: unless-stopped
     ports:
-      - "7474:7474"
-      - "7687:7687"
+      - "127.0.0.1:7474:7474"
+      - "127.0.0.1:7687:7687"
     environment:
       NEO4J_AUTH: neo4j/${NEO4J_PASSWORD}
       NEO4J_PLUGINS: '["apoc","graph-data-science"]'
@@ -149,7 +149,7 @@ services:
     container_name: redis
     restart: unless-stopped
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
     volumes:
       - redis_data:/data
     networks:
@@ -431,7 +431,7 @@ services:
     container_name: photon
     restart: unless-stopped
     ports:
-      - "2322:2322"
+      - "127.0.0.1:2322:2322"
     volumes:
       - photon_data:/photon/photon_data
     environment:
