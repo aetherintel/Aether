@@ -16,12 +16,14 @@ COPY workers/emotion_worker/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy worker module files directly to /app (flat structure)
-COPY workers/emotion_worker/*.py /app/
+COPY workers/emotion_worker/*.py ./workers/emotion_worker/
 
 COPY aether_lib /app/aether_lib
 
 # Create models directory
 RUN mkdir -p /app/models/emotion
+RUN touch /app/workers/__init__.py && \
+    touch /app/workers/emotion_worker/__init__.py
 
 # Environment variables
 ENV PYTHONUNBUFFERED=1 \

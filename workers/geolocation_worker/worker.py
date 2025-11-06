@@ -16,8 +16,6 @@ logger = logging.getLogger(__name__)
 NEO4J_URI = os.getenv("NEO4J_URI", "bolt://neo4j:7687")
 NEO4J_USER = os.getenv("NEO4J_USER", "neo4j")
 NEO4J_PASSWORD = os.getenv("NEO4J_PASSWORD")
-JOB_LAUNCHER_URL = os.getenv("JOB_LAUNCHER_URL")
-JOB_SECRET_TOKEN = os.getenv("JOB_SECRET_TOKEN")
 PHOTON_URL = os.getenv("PHOTON_URL", "http://photon:2322")
 GEONAMES_DATA_DIR = os.getenv("GEONAMES_DATA_DIR", "/app/models/geolocation/geonames")
 
@@ -245,6 +243,7 @@ async def geocode_with_fallback(location_name: str, geonames_data: Optional[Dict
 
 def extract_and_update_location(message_id: str, text: str, owner_id: str, case_id: int):
     """RQ worker entry point"""
+    print("DEBUG: Starting geolocation extraction...")
     job = get_current_job()
     job_id = job.id if job else 'unknown'
     
@@ -258,7 +257,6 @@ async def _extract_and_update_location_async(
 ):
     """Main extraction logic"""
     try:
-        update_job_status(job_id, "running", owner_id, case_id)
         
         logger.info(f"Processing: {text[:100]}...")
         
@@ -268,7 +266,6 @@ async def _extract_and_update_location_async(
         if not entities:
             logger.info(f"No entities in {message_id}")
             await update_message_geolocation_status(message_id, 'no_location', owner_id)
-            update_job_status(job_id, "completed", owner_id, case_id)
             return {"status": "no_location", "message_id": message_id}
         
         logger.info(f"Found entities: {[e[0] for e in entities]}")
@@ -301,7 +298,6 @@ async def _extract_and_update_location_async(
         if locations:
             await store_locations_neo4j(message_id, locations, owner_id)
             await update_message_geolocation_status(message_id, 'completed', owner_id)
-            update_job_status(job_id, "completed", owner_id, case_id)
             return {
                 "status": "success",
                 "message_id": message_id,
@@ -309,13 +305,11 @@ async def _extract_and_update_location_async(
             }
         else:
             await update_message_geolocation_status(message_id, 'no_coordinates', owner_id)
-            update_job_status(job_id, "completed", owner_id, case_id)
             return {"status": "no_coordinates", "message_id": message_id}
             
     except Exception as e:
         logger.error(f"Failed for {message_id}: {e}", exc_info=True)
         await update_message_geolocation_status(message_id, 'failed', owner_id)
-        update_job_status(job_id, "failed", owner_id, case_id)
         raise
 
 
@@ -352,15 +346,3 @@ async def update_message_geolocation_status(mid: str, status: str, owner: str):
             "SET m.geolocation_status = $status, m.geolocation_processed_at = datetime()",
             mid=mid, owner=owner, status=status
         )
-
-
-def update_job_status(jid: str, status: str, owner: str, case: int):
-    try:
-        requests.patch(
-            f"{JOB_LAUNCHER_URL}/jobs/{jid}/status",
-            headers={"Authorization": f"Bearer {JOB_SECRET_TOKEN}"},
-            json={"status": status, "owner_id": owner, "case_id": case},
-            timeout=5
-        )
-    except:
-        pass

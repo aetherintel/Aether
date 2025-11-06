@@ -5,6 +5,8 @@ from controller import auth_controller
 from controller import casefile_controller
 from controller import graph_controller
 from controller import telegram_auth_controller
+from controller import queue_controller
+from controller import scraper_controller
 from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI(title="FastAPI with Keycloak",root_path="/api")
@@ -14,6 +16,8 @@ app.include_router(casefile_controller.router)
 app.include_router(message_controller.router)
 app.include_router(graph_controller.router)
 app.include_router(telegram_auth_controller.router)
+app.include_router(scraper_controller.router)
+app.include_router(queue_controller.router)
 
 origins = [
     "http://localhost",

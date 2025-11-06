@@ -2,7 +2,7 @@
 redis==5.0.1
 rq==1.15.1
 requests==2.31.0
-
+pydantic
 # Audio transcription (ARM + CPU-safe versions)
 # CPU-only PyTorch (installed from official PyTorch index via Dockerfile)
 torch==2.2.2
