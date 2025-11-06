@@ -233,7 +233,7 @@ def translate_and_update(
             # Step 3: Trigger emotion analysis
             logger.info("🎭 Step 3: Triggering emotion analysis...")
             try:
-                emotion_job_id = trigger_emotion_analysis(
+                emotion_job_id = queue_client.QueueClient.enqueue_emotion(
                 message_id=message_id,
                 text=translated_text,
                 owner_id=owner_id,
@@ -245,11 +245,8 @@ def translate_and_update(
                     logger.warning("⚠️ Step 3: Emotion analysis not queued")
             except Exception as e:
                 logger.error(f"❌ Step 3: Failed to trigger emotion analysis: {e}")
-            
-            # Step 4: Trigger classification (runs independently)
-            logger.info("🏷️ Step 4: Triggering classification...")
             try:
-                classification_job_id = queue_client.enqueue_classification(
+                classification_job_id = queue_client.QueueClient.enqueue_classification(
                 message_id=message_id,
                 text=translated_text,
                 owner_id=owner_id,
@@ -261,16 +258,9 @@ def translate_and_update(
                     logger.warning("⚠️ Step 4: Classification not queued")
             except Exception as e:
                 logger.error(f"❌ Step 4: Failed to trigger classification: {e}")
-        logger.info("=" * 80)
-        logger.info(f"✅ Job completed: {message_id}")
-        logger.info("=" * 80)
         
         return result
         
     except Exception as e:
-        logger.error("=" * 80)
-        logger.error(f"❌ Job FAILED: {message_id}")
         logger.error(f"   Error: {e}")
-        logger.exception("Full traceback:")
-        logger.error("=" * 80)
         raise

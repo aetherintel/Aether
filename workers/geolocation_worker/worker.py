@@ -291,7 +291,6 @@ async def _extract_and_update_location_async(
                     'city': coords.get('city'),
                     'confidence': 'high' if geonames_data else 'medium'
                 })
-                logger.info(f"✅ {entity_text} -> ({coords['lat']}, {coords['lng']})")
             else:
                 logger.warning(f"❌ Could not geocode: {entity_text}")
         

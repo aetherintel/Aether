@@ -307,14 +307,6 @@ def classify_emotion_job(
         owner_id: Owner ID for multi-tenancy
         case_id: Case ID (optional, for context)
     """
-    logger.info("=" * 80)
-    logger.info(f"🎭 Emotion classification job started")
-    logger.info(f"   Message: {message_id}")
-    logger.info(f"   Text length: {len(text)} chars")
-    logger.info(f"   Owner: {owner_id or 'None'}")
-    logger.info(f"   Threshold: {threshold}")
-    logger.info(f"   Top-K: {top_k}")
-    logger.info("=" * 80)
     
     try:
         neo4j_uri = os.getenv("NEO4J_URI")
@@ -322,15 +314,6 @@ def classify_emotion_job(
         neo4j_password = os.getenv("NEO4J_PASSWORD")
         # Classify emotions (sync operation)
         emotions = emotion_service.classify(text, threshold=threshold, top_k=top_k)
-        
-        logger.info(f"📊 Classification results:")
-        for emo in emotions:
-            src = ", ".join(emo['source_emotions'])
-            logger.info(
-                f"   [{emo['label_id']}] {emo['label']} "
-                f"({emo['confidence']:.2f}) "
-                f"← {src} via {emo['method']}"
-            )
         
         # Store in Neo4j (async operation wrapped in sync)
         asyncio.run(_store_async(
@@ -341,13 +324,10 @@ def classify_emotion_job(
             emotions,
             owner_id
         ))
-        
-        logger.info("✅ Emotion classification completed")
         return emotions
         
     except Exception as e:
         logger.error(f"❌ Emotion classification failed: {e}")
-        logger.exception("Full traceback:")
         
         # Mark as failed
         try:

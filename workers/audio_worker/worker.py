@@ -503,18 +503,9 @@ def transcribe_and_update(
             else:
                 logger.info(f"ℹ️ Step 3: No translation needed ({detected_lang})")
         
-        logger.info("=" * 80)
-        logger.info(f"✅ Job completed: {message_id}")
-        logger.info(f"   Transcribed: {len(transcription) if transcription else 0} chars")
-        logger.info(f"   Language: {detected_lang}")
-        logger.info("=" * 80)
-        
         return result
         
     except Exception as e:
-        logger.error("=" * 80)
         logger.error(f"❌ Job FAILED: {message_id}")
         logger.error(f"   Error: {e}")
-        logger.exception("Full traceback:")
-        logger.error("=" * 80)
         raise

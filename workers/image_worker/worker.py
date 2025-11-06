@@ -381,14 +381,6 @@ def analyze_and_update(
     """
     import gc
     
-    logger.info("=" * 80)
-    logger.info(f"📝 OCR job started")
-    logger.info(f"   Message: {message_id}")
-    logger.info(f"   Image: {image_path}")
-    logger.info(f"   Extract text: {extract_text}")
-    logger.info(f"   Auto-translate: {translate_extracted_text}")
-    logger.info("=" * 80)
-    
     try:
         # Verify image exists
         if not os.path.exists(image_path):
@@ -404,8 +396,6 @@ def analyze_and_update(
             extracted_text = ocr_service.extract_text(image_path)
             
             if extracted_text:
-                logger.info(f"✅ Step 1: Extracted {len(extracted_text)} characters")
-                logger.info(f"   Preview: {extracted_text[:100]}...")
                 
                 # Detect language of extracted text
                 detected_lang = detect_language(extracted_text)
@@ -413,9 +403,6 @@ def analyze_and_update(
             else:
                 logger.info("ℹ️ Step 1: No text found in image")
                 detected_lang = 'unknown'
-        
-        # Step 2: Update Neo4j with OCR results
-        logger.info("💾 Step 2: Updating Neo4j with OCR results...")
         
         from aether_lib.neo4j_client.connection import run_in_neo4j_loop
         from aether_lib.neo4j_client.messages import update_message_image_analysis
@@ -429,9 +416,6 @@ def analyze_and_update(
         
         if result:
             logger.info("✅ Step 2: Neo4j updated successfully")
-            logger.info(f"   - image_text: {len(extracted_text or '')} chars")
-            logger.info(f"   - image_detected_language: {detected_lang}")
-            logger.info(f"   - image_analysis_status: completed")
         else:
             logger.warning("⚠️ Step 2: Neo4j update returned False")
         
@@ -459,18 +443,10 @@ def analyze_and_update(
             else:
                 logger.info(f"ℹ️ Step 3: No translation needed (language: {detected_lang})")
         
-        logger.info("=" * 80)
-        logger.info(f"✅ OCR job completed successfully: {message_id}")
-        logger.info("=" * 80)
-        
         return True
         
     except Exception as e:
-        logger.error("=" * 80)
-        logger.error(f"❌ OCR job FAILED: {message_id}")
         logger.error(f"   Error: {e}")
-        logger.exception("Full traceback:")
-        logger.error("=" * 80)
         return False
         
     finally:

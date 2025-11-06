@@ -221,12 +221,6 @@ def classify_post_job(
     """
     Main post classification worker function (synchronous wrapper for RQ)
     """
-    logger.info("=" * 80)
-    logger.info(f"🏷️  Post classification job started")
-    logger.info(f"   Message: {message_id}")
-    logger.info(f"   Text length: {len(text)} chars")
-    logger.info(f"   Owner: {owner_id or 'None'}")
-    logger.info("=" * 80)
     
     try:
         neo4j_uri = os.getenv("NEO4J_URI")
@@ -249,13 +243,10 @@ def classify_post_job(
             classifications,
             owner_id
         ))
-        
-        logger.info("✅ Post classification completed")
         return classifications
         
     except Exception as e:
         logger.error(f"❌ Post classification failed: {e}")
-        logger.exception("Full traceback:")
         
         # Mark as failed
         try:
