@@ -48,10 +48,24 @@ postgres_data/
 
 shared/
 
+# Ignore model files but keep Dockerfiles
 models/translation/*
+!models/translation/Dockerfile
+
 models/emotion/*
+!models/emotion/Dockerfile
+
 models/classifier/*
+!models/classifier/Dockerfile
+
 models/audio/*
-models/geolocation/* 
-models/geocoding/* 
+!models/audio/Dockerfile
+
+models/geolocation/*
+!models/geolocation/Dockerfile
+
+models/geocoding/*
+!models/geocoding/Dockerfile
+
 models/image/*
+!models/image/Dockerfile

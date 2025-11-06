@@ -224,7 +224,7 @@ services:
       NEO4J_PASSWORD: ${NEO4J_PASSWORD}
       DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@postgres:5432/${POSTGRES_DB}
     volumes:
-      - ai_models:/app/models
+      - translation_models:/app/models
     depends_on:
       - redis
       - postgres
@@ -263,7 +263,7 @@ services:
       NEO4J_PASSWORD: ${NEO4J_PASSWORD}
     volumes:
       - ${MEDIA_PATH}:/shared/media:ro
-      - ai_models:/app/models
+      - image_models:/app/models
     depends_on:
       - redis
       - neo4j
@@ -297,7 +297,7 @@ services:
       MODELS_PATH: /app/models
       USE_QUANTIZATION: "true"
     volumes:
-      - ai_models:/app/models
+      - audio_models:/app/models
       - ${MEDIA_PATH}:/shared/media:ro
     depends_on:
       - redis
@@ -332,7 +332,7 @@ services:
       MODELS_PATH: /app/models
       USE_QUANTIZATION: "true"
     volumes:
-      - ai_models:/app/models
+      - emotion_models:/app/models
     depends_on:
       - redis
       - neo4j
@@ -367,7 +367,7 @@ services:
       MODELS_PATH: /app/models
       USE_QUANTIZATION: "true"
     volumes:
-      - ai_models:/app/models
+      - classifier_models:/app/models
       - ${MEDIA_PATH}:/shared/media:ro
     depends_on:
       - redis
@@ -408,7 +408,7 @@ services:
       JOB_SECRET_TOKEN: ${JOB_SECRET_TOKEN}
       PHOTON_URL: http://photon:2322
     volumes:
-      - ai_models:/app/models
+      - geolocation_models:/app/models
     depends_on:
       - redis
       - neo4j
@@ -447,6 +447,53 @@ services:
     depends_on:
       - postgres
 
+  translation-models:
+    image: ghcr.io/${GITHUB_REPOSITORY_OWNER:-aetherintel}/aether-translation-models:latest
+    restart: "no"
+    volumes:
+      - translation_models:/models
+    networks:
+      - aether-network
+
+  audio-models:
+    image: ghcr.io/${GITHUB_REPOSITORY_OWNER:-aetherintel}/aether-audio-models:latest
+    restart: "no"
+    volumes:
+      - audio_models:/models
+    networks:
+      - aether-network
+
+  emotion-models:
+    image: ghcr.io/${GITHUB_REPOSITORY_OWNER:-aetherintel}/aether-emotion-models:latest
+    restart: "no"
+    volumes:
+      - emotion_models:/models
+    networks:
+      - aether-network
+
+  classifier-models:
+    image: ghcr.io/${GITHUB_REPOSITORY_OWNER:-aetherintel}/aether-classifier-models:latest
+    restart: "no"
+    volumes:
+      - classifier_models:/models
+    networks:
+      - aether-network
+
+  image-models:
+    image: ghcr.io/${GITHUB_REPOSITORY_OWNER:-aetherintel}/aether-image-models:latest
+    restart: "no"
+    volumes:
+      - image_models:/models
+    networks:
+      - aether-network
+
+  geolocation-models:
+    image: ghcr.io/${GITHUB_REPOSITORY_OWNER:-aetherintel}/aether-geolocation-models:latest
+    restart: "no"
+    volumes:
+      - geolocation_models:/models
+    networks:
+      - aether-network
 networks:
   aether-network:
     driver: bridge
@@ -460,3 +507,9 @@ volumes:
   redis_data:
   ai_models:
   photon_data:
+  translation_models:
+  audio_models:
+  emotion_models:
+  classifier_models:
+  image_models:
+  geolocation_models:

@@ -54,6 +54,24 @@ jobs:
           - service: photon
             context: .
             dockerfile: ./docker/photon/Dockerfile
+          - service: translation-models
+            context: ./models
+            dockerfile: ./models/translation/Dockerfile
+          - service: audio-models
+            context: ./models
+            dockerfile: ./models/audio/Dockerfile
+          - service: emotion-models
+            context: ./models
+            dockerfile: ./models/emotion/Dockerfile
+          - service: classifier-models
+            context: ./models
+            dockerfile: ./models/classifier/Dockerfile
+          - service: image-models
+            context: ./models
+            dockerfile: ./models/image/Dockerfile
+          - service: geolocation-models
+            context: ./models
+            dockerfile: ./models/geolocation/Dockerfile
     
     steps:
       - name: Checkout repository
@@ -164,7 +182,7 @@ jobs:
             # ═══════════════════════════════════════════════════════════════
             
             # Define stateful services (NEVER recreate - contain persistent data)
-            STATEFUL_SERVICES="postgres neo4j keycloak redis"
+            STATEFUL_SERVICES="postgres neo4j keycloak redis translation-models audio-models emotion-models classifier-models image-models geolocation-models"
             
             # Define stateless services (safe to recreate - no data loss)
             STATELESS_SERVICES="frontend backend telegram-worker translation-worker image-worker audio-worker emotion-worker classification-worker geolocation-worker photon certbot"
