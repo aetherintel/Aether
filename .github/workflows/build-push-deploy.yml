@@ -130,48 +130,38 @@ jobs:
             # Check if models exist in volumes
             MODEL_EXISTS=false
             
-            # Check audio models volume
             if docker volume ls | grep -q "app_audio_models"; then
               FILE_COUNT=$(docker run --rm -v app_audio_models:/check alpine:latest find /check -type f 2>/dev/null | wc -l)
               if [ "$FILE_COUNT" -gt 5 ]; then
-                echo "✅ Models already initialized ($FILE_COUNT files in audio_models volume)"
+                echo "✅ Models already initialized ($FILE_COUNT files)"
                 MODEL_EXISTS=true
               fi
             fi
             
-            # Skip if models exist
             if [ "$MODEL_EXISTS" = true ]; then
               echo "⏭️  Skipping model download"
               exit 0
             fi
             
-            # Download models
             echo ""
-            echo "📥 First deployment detected - downloading AI models..."
-            echo "⚠️  This is a ONE-TIME operation (~3-4 GB, 10-30 minutes)"
-            echo ""
+            echo "📥 First deployment - downloading AI models..."
+            echo "⚠️  ONE-TIME operation (~3-4 GB, 10-30 minutes)"
             
-            # Check disk space
             AVAILABLE_SPACE=$(df -BG . | awk 'NR==2 {print $4}' | sed 's/G//')
-            echo "💾 Available disk space: ${AVAILABLE_SPACE}GB"
+            echo "💾 Available: ${AVAILABLE_SPACE}GB"
             
             if [ "$AVAILABLE_SPACE" -lt 5 ]; then
-              echo "❌ ERROR: Insufficient disk space!"
-              echo "   Required: ~5 GB"
-              echo "   Available: ${AVAILABLE_SPACE}GB"
+              echo "❌ Insufficient space!"
               exit 1
             fi
             
-            # Make script executable
             chmod +x scripts/init_models.sh
-            
-            # Run initialization (BLOCKING - not background!)
-            echo "🚀 Starting model download..."
             mkdir -p logs
+            
+            echo "🚀 Downloading models..."
             ./scripts/init_models.sh docker-compose.prod.yml 2>&1 | tee logs/model-init.log
             
-            echo ""
-            echo "✅ Model initialization complete"
+            echo "✅ Models ready"
 
       # ═══════════════════════════════════════════════════════════════
       # 🚀 DEPLOYMENT
@@ -189,8 +179,6 @@ jobs:
             export GITHUB_REPOSITORY_OWNER=${{ github.repository_owner }}
             export GITHUB_USER=${{ github.actor }}
             export GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }}
-            
-            # Production environment variables
             export PROD_DOMAIN=${{ secrets.PROD_DOMAIN }}
             export PROD_MAIL=${{ secrets.PROD_MAIL }}
             export DB_USER=${{ secrets.DB_USER }}
@@ -214,74 +202,51 @@ jobs:
             export MEDIA_PATH=${PWD}/shared/media
             export ENVIRONMENT=prod
             
-            # Determine Docker Compose command
             if command -v docker-compose &> /dev/null; then
               COMPOSE_CMD="docker-compose"
             else
               COMPOSE_CMD="docker compose"
             fi
             
-            # Login to GitHub Container Registry
             echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
             
-            # ═══════════════════════════════════════════════════════════════
-            # 🛡️ GRACEFUL ZERO-DOWNTIME DEPLOYMENT
-            # ═══════════════════════════════════════════════════════════════
+            echo "═══════════════════════════════════════════════════════════════"
+            echo "🚀 GRACEFUL DEPLOYMENT"
+            echo "═══════════════════════════════════════════════════════════════"
             
-            # Define stateful services (NEVER recreate)
             STATEFUL_SERVICES="postgres neo4j keycloak redis"
-            
-            # Define stateless services (safe to recreate)
             STATELESS_SERVICES="frontend backend telegram-worker translation-worker image-worker audio-worker emotion-worker classification-worker geolocation-worker photon certbot"
             
-            echo "═══════════════════════════════════════════════════════════════"
-            echo "🚀 GRACEFUL DEPLOYMENT STARTING"
-            echo "═══════════════════════════════════════════════════════════════"
-            
-            # ────────────────────────────────────────────────────────────────
-            # STEP 1: Ensure stateful services are running
-            # ────────────────────────────────────────────────────────────────
             echo ""
-            echo "📦 Step 1/4: Ensuring stateful services are running..."
+            echo "📦 Step 1/4: Ensuring stateful services..."
             for service in $STATEFUL_SERVICES; do
               if $COMPOSE_CMD -f docker-compose.prod.yml ps "$service" 2>/dev/null | grep -q "Up"; then
-                echo "  ✅ $service is already running"
+                echo "  ✅ $service running"
               else
                 echo "  🔄 Starting $service..."
                 $COMPOSE_CMD -f docker-compose.prod.yml up -d "$service"
               fi
             done
             
-            echo "⏳ Waiting for database services to be ready..."
+            echo "⏳ Waiting for databases..."
             sleep 10
             
-            # ────────────────────────────────────────────────────────────────
-            # STEP 2: Pull latest images
-            # ────────────────────────────────────────────────────────────────
             echo ""
-            echo "📥 Step 2/4: Pulling latest images..."
+            echo "📥 Step 2/4: Pulling images..."
             for service in $STATELESS_SERVICES; do
-              echo "  🔽 Pulling $service..."
               $COMPOSE_CMD -f docker-compose.prod.yml pull "$service" 2>&1 | grep -v "Pulling" | head -n 1 || true
             done
             
-            # ────────────────────────────────────────────────────────────────
-            # STEP 3: Deploy stateless services
-            # ────────────────────────────────────────────────────────────────
             echo ""
-            echo "🔄 Step 3/4: Deploying stateless services..."
-            
+            echo "🔄 Step 3/4: Deploying services..."
             for service in $STATELESS_SERVICES; do
-              echo "  🔄 Updating $service..."
+              echo "  🔄 $service..."
               $COMPOSE_CMD -f docker-compose.prod.yml stop "$service" --timeout 30 2>/dev/null || true
               $COMPOSE_CMD -f docker-compose.prod.yml rm -f "$service" 2>/dev/null || true
               $COMPOSE_CMD -f docker-compose.prod.yml up -d "$service"
               sleep 2
             done
             
-            # ────────────────────────────────────────────────────────────────
-            # STEP 4: Scale workers
-            # ────────────────────────────────────────────────────────────────
             echo ""
             echo "📊 Step 4/4: Scaling workers..."
             $COMPOSE_CMD -f docker-compose.prod.yml up -d \
@@ -292,27 +257,99 @@ jobs:
               --no-recreate telegram-worker translation-worker emotion-worker geolocation-worker
             
             echo ""
-            echo "═══════════════════════════════════════════════════════════════"
             echo "✅ DEPLOYMENT COMPLETED"
+
+      # ═══════════════════════════════════════════════════════════════
+      # 🔐 SSL CERTIFICATE SETUP (AUTOMATIC)
+      # ═══════════════════════════════════════════════════════════════
+      - name: Setup SSL Certificates (if needed)
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.PROD_HOST }}
+          username: ${{ secrets.PROD_USER }}
+          key: ${{ secrets.PROD_SSH_KEY }}
+          script: |
+            cd ~/app
+            
+            echo "═══════════════════════════════════════════════════════════════"
+            echo "🔐 SSL Certificate Check"
             echo "═══════════════════════════════════════════════════════════════"
             
-            # ────────────────────────────────────────────────────────────────
-            # POST-DEPLOYMENT: Health Check
-            # ────────────────────────────────────────────────────────────────
-            echo ""
-            echo "🏥 Running health checks..."
-            sleep 5
+            PROD_DOMAIN=${{ secrets.PROD_DOMAIN }}
+            PROD_MAIL=${{ secrets.PROD_MAIL }}
             
+            if command -v docker-compose &> /dev/null; then
+              COMPOSE_CMD="docker-compose"
+            else
+              COMPOSE_CMD="docker compose"
+            fi
+            
+            # Check existing certificate
+            if [ -f "certbot/conf/live/$PROD_DOMAIN/fullchain.pem" ]; then
+              echo "✅ Certificate exists"
+              echo "🔄 Attempting renewal..."
+              $COMPOSE_CMD -f docker-compose.prod.yml run --rm certbot renew --quiet || true
+              exit 0
+            fi
+            
+            echo ""
+            echo "📥 Generating SSL certificate..."
+            mkdir -p certbot/www certbot/conf
+            
+            echo "🌐 Ensuring frontend is ready..."
+            $COMPOSE_CMD -f docker-compose.prod.yml up -d frontend
+            sleep 10
+            
+            echo "🔐 Requesting certificate..."
+            $COMPOSE_CMD -f docker-compose.prod.yml run --rm certbot \
+              certonly \
+              --webroot \
+              -w /var/www/certbot \
+              -d $PROD_DOMAIN \
+              --email $PROD_MAIL \
+              --agree-tos \
+              --non-interactive
+            
+            if [ -f "certbot/conf/live/$PROD_DOMAIN/fullchain.pem" ]; then
+              echo "✅ Certificate generated!"
+              echo "🔄 Restarting frontend with HTTPS..."
+              $COMPOSE_CMD -f docker-compose.prod.yml restart frontend
+            else
+              echo "⚠️  Certificate failed - continuing with HTTP"
+            fi
+
+      # ═══════════════════════════════════════════════════════════════
+      # 🏥 HEALTH CHECK & SUMMARY
+      # ═══════════════════════════════════════════════════════════════
+      - name: Health Check & Summary
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.PROD_HOST }}
+          username: ${{ secrets.PROD_USER }}
+          key: ${{ secrets.PROD_SSH_KEY }}
+          script: |
+            cd ~/app
+            
+            if command -v docker-compose &> /dev/null; then
+              COMPOSE_CMD="docker-compose"
+            else
+              COMPOSE_CMD="docker compose"
+            fi
+            
+            echo "═══════════════════════════════════════════════════════════════"
+            echo "🏥 Health Check"
+            echo "═══════════════════════════════════════════════════════════════"
+            
+            sleep 5
             $COMPOSE_CMD -f docker-compose.prod.yml ps
             
             echo ""
-            echo "🔍 Checking critical services..."
+            echo "🔍 Critical Services:"
             for service in frontend backend telegram-worker; do
               if $COMPOSE_CMD -f docker-compose.prod.yml ps "$service" 2>/dev/null | grep -q "Up"; then
-                echo "  ✅ $service is healthy"
+                echo "  ✅ $service"
               else
-                echo "  ❌ WARNING: $service may have issues"
-                $COMPOSE_CMD -f docker-compose.prod.yml logs --tail=10 "$service"
+                echo "  ❌ $service"
               fi
             done
             
@@ -320,32 +357,11 @@ jobs:
             echo "═══════════════════════════════════════════════════════════════"
             echo "📊 DEPLOYMENT SUMMARY"
             echo "═══════════════════════════════════════════════════════════════"
+            echo "🌐 Services: ✅"
+            echo "🔐 SSL: $([ -f certbot/conf/live/${{ secrets.PROD_DOMAIN }}/fullchain.pem ] && echo '✅ Enabled' || echo '⚠️  HTTP Only')"
+            echo "🤖 Workers: 5 Telegram, 2 Translation, 2 Emotion, 3 Geolocation"
             echo ""
-            echo "🌐 Services Deployed:"
-            echo "  ├─ Core Services: ✅"
-            echo "  │  ├─ Frontend (Nginx + React)"
-            echo "  │  ├─ Backend (FastAPI)"
-            echo "  │  └─ Job Launcher"
-            echo "  │"
-            echo "  ├─ Databases: ✅ (Persistent)"
-            echo "  │  ├─ PostgreSQL"
-            echo "  │  ├─ Neo4j"
-            echo "  │  ├─ Redis"
-            echo "  │  └─ Keycloak"
-            echo "  │"
-            echo "  └─ AI Workers: ✅"
-            echo "     ├─ Telegram Scrapers (5 replicas)"
-            echo "     ├─ Translation Workers (2 replicas)"
-            echo "     ├─ Image Analysis Worker"
-            echo "     ├─ Audio Transcription Worker"
-            echo "     ├─ Emotion Analysis Workers (2 replicas)"
-            echo "     ├─ Classification Worker"
-            echo "     ├─ Geolocation Workers (3 replicas)"
-            echo "     └─ Photon Geocoding Service"
-            echo ""
-            echo "🔗 Service URLs:"
-            echo "  • Frontend: https://$PROD_DOMAIN"
-            echo "  • API Docs: https://$PROD_DOMAIN/api/docs"
-            echo "  • Keycloak: https://$PROD_DOMAIN/keycloak"
-            echo ""
+            echo "🔗 URLs:"
+            echo "  • Frontend: https://${{ secrets.PROD_DOMAIN }}"
+            echo "  • API: https://${{ secrets.PROD_DOMAIN }}/api/docs"
             echo "═══════════════════════════════════════════════════════════════"
