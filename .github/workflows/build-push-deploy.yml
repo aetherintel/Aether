@@ -157,19 +157,23 @@ jobs:
             echo "📦 Infrastructure..."
             $COMPOSE_CMD -f docker-compose.prod.yml up -d postgres neo4j keycloak redis
             sleep 15
-            
+            # GitHub Actions - SSL Teil ersetzen:
             # SSL Certificate
             echo "🔐 SSL Certificate..."
-            
+
             if [ ! -f "certbot/conf/live/$PROD_DOMAIN/fullchain.pem" ]; then
               echo "  Generating certificate..."
               mkdir -p certbot/{www,conf}
               
+              # Temp Nginx
               docker run -d --name nginx-acme -p 80:80 \
                 -v $(pwd)/certbot/www:/usr/share/nginx/html nginx:alpine
               sleep 5
               
+              # Certbot MIT DNS
               docker run --rm \
+                --dns 8.8.8.8 \
+                --dns 1.1.1.1 \
                 -v $(pwd)/certbot/conf:/etc/letsencrypt \
                 -v $(pwd)/certbot/www:/var/www/certbot \
                 certbot/certbot certonly \
@@ -183,6 +187,7 @@ jobs:
               
               if [ ! -f "certbot/conf/live/$PROD_DOMAIN/fullchain.pem" ]; then
                 echo "❌ SSL FAILED"
+                echo "Debug: Check if port 80 is accessible from outside"
                 exit 1
               fi
               
