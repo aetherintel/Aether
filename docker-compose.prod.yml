@@ -209,7 +209,7 @@ services:
     networks:
       - aether-network
     deploy:
-      replicas: 5
+      replicas: 2
 
   # ============================================================================
   # TRANSLATION WORKER
@@ -425,7 +425,7 @@ services:
     networks:
       - aether-network
     deploy:
-      replicas: 3
+      replicas: 2
       resources:
         limits:
           memory: 2G
