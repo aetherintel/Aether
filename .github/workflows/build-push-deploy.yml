@@ -28,9 +28,6 @@ jobs:
           - service: backend
             context: ./backend/app
             dockerfile: ./backend/app/Dockerfile
-          - service: job-launcher
-            context: ./job_launcher
-            dockerfile: ./job_launcher/Dockerfile
           - service: telegram-scraper
             context: ./telegram_scraper
             dockerfile: ./telegram_scraper/Dockerfile
@@ -149,7 +146,6 @@ jobs:
             export POSTGRES_PORT=5432
             export POSTGRES_DB=telegramdb
             export POSTGRES_USER=telegramuser
-            export JOB_LAUNCHER_URL=http://job-launcher:9001
             export MEDIA_PATH=${PWD}/shared/media
             export ENVIRONMENT=prod
             
@@ -171,7 +167,7 @@ jobs:
             STATEFUL_SERVICES="postgres neo4j keycloak redis"
             
             # Define stateless services (safe to recreate - no data loss)
-            STATELESS_SERVICES="frontend backend job-launcher telegram-worker translation-worker image-worker audio-worker emotion-worker classification-worker geolocation-worker photon certbot"
+            STATELESS_SERVICES="frontend backend telegram-worker translation-worker image-worker audio-worker emotion-worker classification-worker geolocation-worker photon certbot"
             
             echo "═══════════════════════════════════════════════════════════════"
             echo "🚀 GRACEFUL DEPLOYMENT STARTING"
@@ -256,7 +252,7 @@ jobs:
             
             echo ""
             echo "🔍 Checking critical services..."
-            for service in frontend backend job-launcher; do
+            for service in frontend backend telegram-worker; do
               if $COMPOSE_CMD -f docker-compose.prod.yml ps "$service" 2>/dev/null | grep -q "Up"; then
                 echo "  ✅ $service is healthy"
               else
