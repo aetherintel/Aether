@@ -260,8 +260,8 @@ jobs:
             echo "✅ DEPLOYMENT COMPLETED"
 
 
-# ═══════════════════════════════════════════════════════════════
-      # 🔐 SSL CERTIFICATE SETUP (AUTOMATIC)
+      # ═══════════════════════════════════════════════════════════════
+      # 🔐 SSL CERTIFICATE SETUP
       # ═══════════════════════════════════════════════════════════════
       - name: Setup SSL Certificates (if needed)
         uses: appleboy/ssh-action@v1.0.0
@@ -276,7 +276,7 @@ jobs:
             echo "🔐 SSL Certificate Check"
             echo "═══════════════════════════════════════════════════════════════"
             
-            # ═══ EXPORT ALL VARIABLES ═══
+            # Export all variables
             export PROD_DOMAIN=${{ secrets.PROD_DOMAIN }}
             export PROD_MAIL=${{ secrets.PROD_MAIL }}
             export DB_USER=${{ secrets.DB_USER }}
@@ -302,6 +302,7 @@ jobs:
             export GITHUB_USER=${{ github.actor }}
             export GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }}
             export GITHUB_REPOSITORY_OWNER=${{ github.repository_owner }}
+            export JOB_LAUNCHER_URL=http://job-launcher:9001
             
             if command -v docker-compose &> /dev/null; then
               COMPOSE_CMD="docker-compose"
@@ -311,21 +312,45 @@ jobs:
             
             # Check existing certificate
             if [ -f "certbot/conf/live/$PROD_DOMAIN/fullchain.pem" ]; then
-              echo "✅ Certificate exists"
-              echo "🔄 Attempting renewal..."
+              echo "✅ Certificate exists for $PROD_DOMAIN"
+              
+              # Check expiry
+              EXPIRY=$(openssl x509 -enddate -noout -in "certbot/conf/live/$PROD_DOMAIN/fullchain.pem" 2>/dev/null | cut -d= -f2)
+              echo "📅 Expires: $EXPIRY"
+              
+              # Auto-renew if needed
+              echo "🔄 Checking renewal..."
               $COMPOSE_CMD -f docker-compose.prod.yml run --rm certbot renew --quiet || true
+              
+              echo "✅ Certificate up to date"
               exit 0
             fi
             
+            # First-time certificate generation
             echo ""
-            echo "📥 Generating SSL certificate..."
+            echo "📥 First deployment - generating SSL certificate..."
+            echo "   Domain: $PROD_DOMAIN"
+            echo "   Email: $PROD_MAIL"
+            
+            # Create directories
             mkdir -p certbot/www certbot/conf
             
-            echo "🌐 Ensuring frontend is ready..."
-            $COMPOSE_CMD -f docker-compose.prod.yml up -d frontend
-            sleep 10
+            # Kill any hanging certbot processes
+            pkill -f certbot || true
+            docker rm -f certbot 2>/dev/null || true
             
-            echo "🔐 Requesting certificate..."
+            # Ensure frontend is running
+            echo "🌐 Starting frontend..."
+            $COMPOSE_CMD -f docker-compose.prod.yml up -d frontend
+            sleep 15
+            
+            # Test if port 80 is accessible
+            if ! curl -f http://localhost/.well-known/acme-challenge/test 2>/dev/null; then
+              echo "⚠️  Warning: Frontend may not be ready"
+            fi
+            
+            # Request certificate
+            echo "🔐 Requesting certificate from Let's Encrypt..."
             $COMPOSE_CMD -f docker-compose.prod.yml run --rm certbot \
               certonly \
               --webroot \
@@ -334,15 +359,27 @@ jobs:
               --email $PROD_MAIL \
               --agree-tos \
               --non-interactive \
-              --verbose
+              --verbose \
+              --force-renewal
             
+            # Check result
             if [ -f "certbot/conf/live/$PROD_DOMAIN/fullchain.pem" ]; then
-              echo "✅ Certificate generated!"
-              echo "🔄 Restarting frontend with HTTPS..."
+              echo ""
+              echo "✅ SSL certificate generated successfully!"
+              
+              # Restart frontend to load HTTPS config
+              echo "🔄 Switching to HTTPS..."
               $COMPOSE_CMD -f docker-compose.prod.yml restart frontend
+              
+              echo "✅ HTTPS enabled!"
             else
-              echo "⚠️  Certificate failed - continuing with HTTP"
-              echo "Check logs: docker compose -f docker-compose.prod.yml logs certbot"
+              echo ""
+              echo "❌ Certificate generation failed"
+              echo ""
+              echo "Debug info:"
+              $COMPOSE_CMD -f docker-compose.prod.yml logs --tail=50 certbot
+              echo ""
+              echo "⚠️  Continuing with HTTP-only mode"
             fi
 
 # ═══════════════════════════════════════════════════════════════
