@@ -108,18 +108,27 @@ services:
     restart: always
     depends_on:
       - backend
+      - certbot-daemon
     networks:
       - aether-network
 
-  certbot:
-    image: certbot/certbot
-    container_name: certbot
+  certbot-daemon:
+    image: certbot/certbot:latest
+    container_name: certbot-daemon
     volumes:
-      - ./certbot/www:/var/www/certbot
       - ./certbot/conf:/etc/letsencrypt
-    entrypoint: "/bin/sh -c 'sleep 10 && certbot certonly --webroot -w /var/www/certbot -d ${PROD_DOMAIN} --email ${PROD_MAIL} --agree-tos --non-interactive'"
-    networks:
-      - aether-network
+      - ./certbot/www:/var/www/certbot
+    entrypoint: /bin/sh -c 'trap exit TERM; while :; do certbot renew --quiet; sleep 12h & wait $${!}; done'
+    stop_signal: SIGTERM
+    stop_grace_period: 30s
+    restart: unless-stopped
+
+  certbot:
+    image: certbot/certbot:latest
+    volumes:
+      - ./certbot/conf:/etc/letsencrypt
+      - ./certbot/www:/var/www/certbot
+    profiles: ["manual"]
 
   neo4j:
     image: neo4j:5.18
