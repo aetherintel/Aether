@@ -17,6 +17,8 @@ COPY workers/geolocation_worker/ ./workers/geolocation_worker/
 COPY aether_lib/ ./aether_lib/
 
 RUN mkdir -p /app/models/geolocation/geonames
+RUN touch /app/workers/__init__.py && \
+    touch /app/workers/geolocation_worker/__init__.py
 
 ENV PYTHONPATH=/app
 ENV PYTHONUNBUFFERED=1

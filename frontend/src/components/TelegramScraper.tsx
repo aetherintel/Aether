@@ -170,10 +170,14 @@ const TelegramScraper: React.FC<TelegramScraperProps> = ({ case_id }) => {
 
   const fetchStatus = async (): Promise<void> => {
     try {
-      const response = await authFetch(`${apiUrl}/auth/telegram/status`, {
-        method: 'POST',
+      const url = new URL(`${apiUrl}/queue/jobs`);
+      if (case_id) {
+        url.searchParams.append('case_id', case_id.toString());
+      }
+
+      const response = await authFetch(url.toString(), {
+        method: 'GET',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ case_id: case_id || null }),
       });
 
       if (!response.ok) {
@@ -181,7 +185,9 @@ const TelegramScraper: React.FC<TelegramScraperProps> = ({ case_id }) => {
       }
 
       const data = await response.json();
-      const mappedContainers = data.containers.map((job: any) => ({
+      // Handle both old (data.containers) and new (data.jobs) response formats
+      const jobsArray = data.jobs || data.containers || [];
+      const mappedContainers = jobsArray.map((job: any) => ({
         ...job,
         status: mapJobStatus(job.status),
       }));
@@ -203,10 +209,10 @@ const TelegramScraper: React.FC<TelegramScraperProps> = ({ case_id }) => {
       let method = 'POST';
 
       if (action === 'remove') {
-        endpoint = `${apiUrl}/auth/telegram/job/${jobId}`;
+        endpoint = `${apiUrl}/queue/job/${jobId}`;
         method = 'DELETE';
       } else if (action === 'requeue') {
-        endpoint = `${apiUrl}/auth/telegram/job/${jobId}/requeue`;
+        endpoint = `${apiUrl}/queue/job/${jobId}/requeue`;
         method = 'POST';
       }
 
@@ -290,7 +296,7 @@ const TelegramScraper: React.FC<TelegramScraperProps> = ({ case_id }) => {
 
       switch (mode) {
         case 'full':
-          endpoint = `${apiUrl}/auth/telegram/full`;
+          endpoint = `${apiUrl}/scrape`;
           payload = {
             channel: channel.trim(),
             tg_session: selectedSession,
@@ -306,9 +312,9 @@ const TelegramScraper: React.FC<TelegramScraperProps> = ({ case_id }) => {
           };
           break;
         case 'live':
-          endpoint = `${apiUrl}/auth/telegram/live`;
+          endpoint = `${apiUrl}/scrape`;
           payload = {
-            channels: [channel.trim()],
+            channel: [channel.trim()],
             tg_session: selectedSession,
             case_id: case_id || undefined,
             enable_translation: enableTranslation,

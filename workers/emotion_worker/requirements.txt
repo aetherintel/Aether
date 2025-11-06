@@ -4,7 +4,7 @@ transformers==4.36.2
 tokenizers==0.15.1
 sentencepiece==0.1.99
 accelerate>=0.20.0
-
+pydantic
 # IMPORTANT: tokenizers 0.15.2 has compatibility issues with XLM-RoBERTa
 # Use 0.15.1 or downgrade transformers to 4.36.x
 

@@ -6,3 +6,4 @@ requests==2.31.0
 spacy==3.7.2
 # Direct spaCy model download
 https://github.com/explosion/spacy-models/releases/download/de_core_news_sm-3.7.0/de_core_news_sm-3.7.0-py3-none-any.whl
+pydantic

@@ -1,211 +1,315 @@
-import requests
+"""
+Telegram Controller - Refactored to use QueueService
+Now enqueues jobs directly instead of HTTP calls to job-launcher
+"""
 from fastapi import HTTPException
-from pydantic import BaseModel
-from services.config import settings  # assuming you keep shared settings here
-import os # for environment variables
-LAUNCHER_URL = os.getenv("JOB_LAUNCHER_URL") or "http://job-launcher:9001"
-LAUNCHER_SECRET = os.getenv("JOB_SECRET_TOKEN") or "changeme"
+from typing import Optional
 
-class ExtendedScrapeRequest(BaseModel):
-    channel: str
-    tg_session: str
-    recursive: bool = True
-    neo4j: bool = True
-    owner_id: str
-    case_id: int = None
-    enable_translation: bool = False
-    enable_image_analysis: bool = False
-    enable_audio_transcription: bool = False
-    enable_emotion_analysis: bool = False
-    enable_label_classifier: bool = False
-    enable_geolocation_extraction: bool = False
+from aether_lib.schemas.jobs import TelegramScrapePayload
+from services.queue_service import queue_service
+from services.telegram_auth_service import load_string_session
 
-def run_similarity(channel: str, tg_session: str, owner_id: str) -> dict:
+
+def run_similarity(
+    channel: str,
+    tg_session: str,
+    owner_id: str,
+    case_id: Optional[int] = None
+) -> dict:
+    """
+    Run channel similarity analysis
+    TODO: This still needs implementation as a proper queue job
+    """
+    # For now, this could remain as-is or be converted to a queue job
+    raise NotImplementedError("Similarity analysis not yet migrated to queue service")
+
+
+def start_scraper(
+    channels: list[str],
+    tg_session: str,
+    owner_id: str,
+    case_id: int,
+    mode: str = "scrape"
+) -> str:
+    """
+    Start a basic scraper job
+    
+    Args:
+        channels: List of channel usernames
+        tg_session: Telegram session name
+        owner_id: User ID
+        case_id: Case ID
+        mode: Scraper mode (default: "scrape")
+        
+    Returns:
+        Job ID
+    """
+    # Load session string
+    session_string, user_info = load_string_session(tg_session, owner_id)
+    if not session_string:
+        raise HTTPException(status_code=404, detail="Session not found")
+    
+    # Create payload
+    payload = TelegramScrapePayload(
+        channels=channels,
+        session_name=tg_session,
+        mode=mode,
+        owner_id=owner_id,
+        case_id=case_id,
+        recursive=False,
+        neo4j_write=True,
+    )
+    
+    # Enqueue directly via queue service
     try:
-        response = requests.post(
-            f"{LAUNCHER_URL}/similar",
-            headers={"Authorization": f"Bearer {LAUNCHER_SECRET}"},
-            json={
-                "channel": channel,
-                "tg_session": tg_session,
-                "owner_id": owner_id,
-            },
-            timeout=30
-        )
-        if response.status_code != 200:
-            raise HTTPException(status_code=500, detail=response.text)
-        return response.json()
+        job_id = queue_service.enqueue_telegram_scraper(payload, session_string)
+        return job_id
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Similarity job failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to start scraper: {str(e)}")
 
-def start_scraper(channels: list[str], tg_session: str, owner_id: str, case_id: int) -> str:
-    try:
-        response = requests.post(
-            f"{LAUNCHER_URL}/scrape",
-            headers={"Authorization": f"Bearer {LAUNCHER_SECRET}"},
-            json={
-                "channels": channels,
-                "tg_session": tg_session,
-                "owner_id": owner_id,
-                "case_id": case_id,
-            },
-            timeout=10
-        )
-        if response.status_code != 200:
-            raise HTTPException(status_code=500, detail=response.text)
-        return response.json().get("container_id", "unknown")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Scraper job failed: {str(e)}")
 
 def launch_full_scrape_job(
-    channel: str, 
-    tg_session: str, 
-    recursive: bool = True, 
-    neo4j: bool = True, 
-    owner_id: str = "", 
-    case_id: int = None,
-    # NEU: Worker-Flags
+    channel: str,
+    tg_session: str,
+    recursive: bool = True,
+    neo4j: bool = True,
+    owner_id: str = "",
+    case_id: Optional[int] = None,
+    # AI Worker Flags
     enable_translation: bool = True,
     enable_image_analysis: bool = True,
     enable_audio_transcription: bool = True,
     enable_emotion_analysis: bool = False,
     enable_label_classifier: bool = False,
-    enable_geolocation_extraction: bool = False
+    enable_geolocation_extraction: bool = False,
 ) -> dict:
+    """
+    Launch a full scrape job with all AI workers enabled
+    
+    Args:
+        channel: Single channel username
+        tg_session: Telegram session name
+        recursive: Enable recursive channel discovery
+        neo4j: Write to Neo4j graph database
+        owner_id: User ID
+        case_id: Case ID
+        enable_*: Feature flags for AI workers
+        
+    Returns:
+        Job info dictionary
+    """
+    # Load session string
+    session_string, user_info = load_string_session(tg_session, owner_id)
+    if not session_string:
+        raise HTTPException(status_code=404, detail="Session not found")
+    
+    # Create payload with all flags
+    payload = TelegramScrapePayload(
+        channels=[channel],  # Single channel as list
+        session_name=tg_session,
+        mode="full",
+        recursive=recursive,
+        neo4j_write=neo4j,
+        owner_id=owner_id,
+        case_id=case_id,
+        enable_translation=enable_translation,
+        enable_image_analysis=enable_image_analysis,
+        enable_audio_transcription=enable_audio_transcription,
+        enable_emotion_analysis=enable_emotion_analysis,
+        enable_label_classifier=enable_label_classifier,
+        enable_geolocation_extraction=enable_geolocation_extraction,
+    )
+    
+    # Enqueue directly via queue service
     try:
-        response = requests.post(
-            f"{LAUNCHER_URL}/scrape",
-            headers={"Authorization": f"Bearer {LAUNCHER_SECRET}"},
-            json={
-                "channels": [channel],
-                "tg_session": tg_session,
-                "mode": "full",
-                "recursive": recursive,
-                "neo4j": neo4j,
-                "owner_id": owner_id,
-                "case_id": case_id,
-                # NEU: Flags weitergeben
-                "enable_translation": enable_translation,
-                "enable_image_analysis": enable_image_analysis,
-                "enable_audio_transcription": enable_audio_transcription,
-                "enable_emotion_analysis": enable_emotion_analysis,
-                "enable_label_classifier": enable_label_classifier,
-                "enable_geolocation_extraction": enable_geolocation_extraction,
-            },
-            timeout=15
-        )
+        job_id = queue_service.enqueue_telegram_scraper(payload, session_string)
+        return {
+            "job_id": job_id,
+            "status": "queued",
+            "message": "Full scraper job enqueued successfully"
+        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to launch scraper job: {str(e)}")
 
-def launch_live_scrape_job(channels: list[str], tg_session: str, neo4j: bool, owner_id: str, case_id: int = None) -> dict:
+
+def launch_live_scrape_job(
+    channels: list[str],
+    tg_session: str,
+    neo4j: bool,
+    owner_id: str,
+    case_id: Optional[int] = None,
+    # AI Worker Flags
+    enable_translation: bool = True,
+    enable_image_analysis: bool = True,
+    enable_audio_transcription: bool = True,
+    enable_emotion_analysis: bool = False,
+    enable_label_classifier: bool = False,
+    enable_geolocation_extraction: bool = False,
+) -> dict:
     """
-    Launch a Docker container to run live-only Telegram listener.
+    Launch a live scrape job (monitoring mode)
+    
+    Args:
+        channels: List of channel usernames
+        tg_session: Telegram session name
+        neo4j: Write to Neo4j graph database
+        owner_id: User ID
+        case_id: Case ID
+        enable_*: Feature flags for AI workers
+        
+    Returns:
+        Job info dictionary
     """
+    # Load session string
+    session_string, user_info = load_string_session(tg_session, owner_id)
+    if not session_string:
+        raise HTTPException(status_code=404, detail="Session not found")
+    
+    # Create payload
+    payload = TelegramScrapePayload(
+        channels=channels,
+        session_name=tg_session,
+        mode="live",
+        recursive=False,  # Live mode doesn't do recursive discovery
+        neo4j_write=neo4j,
+        owner_id=owner_id,
+        case_id=case_id,
+        enable_translation=enable_translation,
+        enable_image_analysis=enable_image_analysis,
+        enable_audio_transcription=enable_audio_transcription,
+        enable_emotion_analysis=enable_emotion_analysis,
+        enable_label_classifier=enable_label_classifier,
+        enable_geolocation_extraction=enable_geolocation_extraction,
+    )
+    
+    # Enqueue directly via queue service
     try:
-        response = requests.post(
-            f"{LAUNCHER_URL}/scrape",
-            headers={"Authorization": f"Bearer {LAUNCHER_SECRET}"},
-            json={
-                "channels": channels,
-                "tg_session": tg_session,
-                "neo4j": neo4j,
-                "mode": "live",
-                "owner_id": owner_id,  # Owner ID is not needed for live mode
-                "case_id": case_id
-            },
-            timeout=10
-        )
-        if response.status_code != 200:
-            raise HTTPException(status_code=500, detail=response.text)
-        return response.json()
+        job_id = queue_service.enqueue_telegram_scraper(payload, session_string)
+        return {
+            "job_id": job_id,
+            "status": "queued",
+            "message": "Live scraper job enqueued successfully"
+        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Live scraper job failed: {str(e)}")
 
-def get_container_status(owner_id: str, case_id: str = None) -> dict:
+
+def get_container_status(owner_id: str, case_id: Optional[str] = None) -> dict:
     """
-    Get container status via job_launcher
+    Get container/job status
+    Now queries the queue service instead of Docker
+    
+    Args:
+        owner_id: User ID
+        case_id: Optional case ID filter
+        
+    Returns:
+        Job status dictionary
     """
     try:
-        params = {"owner_id": owner_id}
-        if case_id:
-            params["case_id"] = case_id
+        # Convert case_id to int if provided
+        case_id_int = int(case_id) if case_id else None
+        
+        # Use queue service to list jobs
+        result = queue_service.list_jobs(
+            owner_id=owner_id,
+            case_id=case_id_int
+        )
+        
+        # Format as "containers" for backward compatibility with frontend
+        containers = []
+        for job in result.get("jobs", []):
+            # Map job status to container status
+            status_map = {
+                "queued": "created",
+                "started": "running",
+                "finished": "exited",
+                "failed": "exited"
+            }
             
-        response = requests.get(
-            f"{LAUNCHER_URL}/containers",
-            headers={"Authorization": f"Bearer {LAUNCHER_SECRET}"},
-            params=params,
-            timeout=10
-        )
-        if response.status_code != 200:
-            raise HTTPException(status_code=500, detail=response.text)
-        return response.json()
+            # Format channels display
+            channels_display = ", ".join(job.get("channels", [])) if job.get("channels") else job.get("message_id", "N/A")
+            
+            # Determine image/name based on queue
+            queue = job.get("queue", "unknown")
+            if "telegram" in queue:
+                image = "telegram-scraper"
+            elif "translation" in queue:
+                image = "translation-worker"
+            elif "image" in queue:
+                image = "image-worker"
+            elif "emotion" in queue:
+                image = "emotion-worker"
+            elif "classification" in queue:
+                image = "classification-worker"
+            else:
+                image = "unknown-worker"
+            
+            containers.append({
+                "id": job.get("job_id", "unknown"),
+                "name": f"{job.get('mode', 'job')}_{job.get('job_id', 'unknown')[:8]}",
+                "status": status_map.get(job.get("status", "unknown"), "unknown"),
+                "image": image,
+                "labels": {
+                    "case_id": str(job.get("case_id", "")),
+                    "owner_id": job.get("owner_id", ""),
+                    "channels": channels_display,
+                    "mode": job.get("mode", "unknown"),
+                    "queue": queue
+                },
+                "created": job.get("created_at"),
+                "case_id": job.get("case_id"),
+                "owner_id": job.get("owner_id"),
+                "channels": channels_display,
+                "mode": job.get("mode", "unknown"),
+                "session": "N/A",  # We don't expose session names in job data
+                "runtime": job.get("runtime"),
+                "queue": queue
+            })
+        
+        return {
+            "containers": containers,
+            "total": len(containers),
+            "filtered_by_case": case_id,
+            "user_id": owner_id,
+            "queues": result.get("queues", [])
+        }
+        
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to get container status: {str(e)}")
+        raise HTTPException(status_code=503, detail=f"Failed to get job status: {str(e)}")
 
-def start_container(container_id: str, owner_id: str) -> dict:
+
+def stop_container(container_id: str) -> dict:
     """
-    Start a container via job_launcher
+    Stop a container/job
+    Now cancels the job in the queue
     """
     try:
-        response = requests.post(
-            f"{LAUNCHER_URL}/containers/{container_id}/start",
-            headers={"Authorization": f"Bearer {LAUNCHER_SECRET}"},
-            json={"owner_id": owner_id},
-            timeout=15
-        )
-        if response.status_code != 200:
-            raise HTTPException(status_code=500, detail=response.text)
-        return response.json()
+        success = queue_service.cancel_job(container_id)
+        if not success:
+            raise HTTPException(status_code=404, detail=f"Job {container_id} not found")
+        
+        return {"success": True, "message": f"Job {container_id} cancelled"}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to start container: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to stop job: {str(e)}")
 
-def stop_container(container_id: str, owner_id: str) -> dict:
-    """
-    Stop a container via job_launcher
-    """
-    try:
-        response = requests.post(
-            f"{LAUNCHER_URL}/containers/{container_id}/stop",
-            headers={"Authorization": f"Bearer {LAUNCHER_SECRET}"},
-            json={"owner_id": owner_id},
-            timeout=15
-        )
-        if response.status_code != 200:
-            raise HTTPException(status_code=500, detail=response.text)
-        return response.json()
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to stop container: {str(e)}")
 
-def restart_container(container_id: str, owner_id: str) -> dict:
+def remove_container(container_id: str) -> dict:
     """
-    Restart a container via job_launcher
+    Remove a container/job
+    In RQ, finished jobs are automatically cleaned up, so this just confirms
     """
-    try:
-        response = requests.post(
-            f"{LAUNCHER_URL}/containers/{container_id}/restart",
-            headers={"Authorization": f"Bearer {LAUNCHER_SECRET}"},
-            json={"owner_id": owner_id},
-            timeout=15
-        )
-        if response.status_code != 200:
-            raise HTTPException(status_code=500, detail=response.text)
-        return response.json()
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to restart container: {str(e)}")
+    # For now, just return success - RQ handles cleanup automatically
+    return {"success": True, "message": f"Job {container_id} will be cleaned up automatically"}
 
-def remove_container(container_id: str, owner_id: str, force: bool = False) -> dict:
+
+def restart_container(container_id: str) -> dict:
     """
-    Remove a container via job_launcher
+    Restart a container/job
+    TODO: Implement job retry logic
     """
-    try:
-        response = requests.delete(
-            f"{LAUNCHER_URL}/containers/{container_id}",
-            headers={"Authorization": f"Bearer {LAUNCHER_SECRET}"},
-            json={"owner_id": owner_id, "force": force},
-            timeout=15
-        )
-        if response.status_code != 200:
-            raise HTTPException(status_code=500, detail=response.text)
-        return response.json()
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to remove container: {str(e)}")
+    raise NotImplementedError("Job restart not yet implemented")
+
+
+# Backward compatibility - these may be referenced elsewhere
+start_container = start_scraper

@@ -8,6 +8,15 @@ from telethon import events
 from telegram_client import client, login
 from aether_lib.neo4j_client.messages import save_message_with_processing_status
 from aether_lib.neo4j_client.channels import is_scraped, mark_scraped
+from aether_lib.queue_client.queue_client import queue_client
+from aether_lib.schemas.jobs import (
+    TranslationJobPayload,
+    ImageJobPayload,
+    AudioJobPayload,
+    EmotionJobPayload,
+    ClassificationJobPayload,
+    GeolocationJobPayload,
+)
 from utils import download_media_to_path, extract_invite_links, generate_media_path, get_media_type
 
 # Configuration
@@ -16,9 +25,6 @@ MESSAGE_BATCH_SIZE = int(os.getenv("MESSAGE_BATCH_SIZE", "500"))
 MESSAGE_BATCH_DELAY = float(os.getenv("MESSAGE_BATCH_DELAY", "0.05"))
 MAX_PARALLEL_SCRAPERS = int(os.getenv("MAX_PARALLEL_SCRAPERS", "4"))
 
-# Job Launcher Configuration
-JOB_LAUNCHER_URL = os.getenv("JOB_LAUNCHER_URL", "http://job-launcher:9001")
-JOB_SECRET_TOKEN = os.getenv("JOB_SECRET_TOKEN")
 OWNER_ID = os.getenv("OWNER_ID", "unknown")
 
 ENABLE_TRANSLATION = os.getenv('ENABLE_TRANSLATION', '1') == '1'
@@ -74,105 +80,6 @@ def needs_translation(text: str) -> tuple[bool, str]:
     print(f"[LANG] Unsupported language {detected_lang}, storing original")
     return False, detected_lang
 
-def queue_translation(message_id: str, text: str, source_language: str, case_id: int = None, owner_id: str = None) -> str:
-    """
-    Queue translation job via job-launcher
-    Returns job ID or None if failed
-    """
-    try:
-        response = requests.post(
-            f"{JOB_LAUNCHER_URL}/queue/translation",
-            json={
-                "message_id": message_id,
-                "original_text": text,
-                "source_language": source_language,
-                "owner_id": owner_id,
-                "case_id": case_id
-            },
-            headers={"Authorization": f"Bearer {JOB_SECRET_TOKEN}"},
-            timeout=10
-        )
-        response.raise_for_status()
-        job_data = response.json()
-        print(f"[TRANSLATION] ✓ Queued job {job_data['job_id']} for message {message_id}")
-        return job_data['job_id']
-    except Exception as e:
-        print(f"[TRANSLATION] ✗ Failed to queue translation: {e}")
-        return None
-
-# ===========================================================================
-# IMAGE ANALYSIS
-# ============================================================================
-
-
-def queue_image_analysis(
-    message_id: str, 
-    image_path: str, 
-    case_id: int = None, 
-    owner_id: str = None,
-    extract_text: bool = True,
-    detect_objects: bool = True,
-    translate_extracted_text: bool = True
-) -> str:
-    """
-    Queue image analysis job via job-launcher
-    Returns job ID or None if failed
-    """
-    try:
-        response = requests.post(
-            f"{JOB_LAUNCHER_URL}/queue/image",
-            json={
-                "message_id": message_id,
-                "image_path": image_path,
-                "owner_id": owner_id,
-                "case_id": case_id,
-                "extract_text": extract_text,
-                "detect_objects": detect_objects,
-                "translate_extracted_text": translate_extracted_text
-            },
-            headers={"Authorization": f"Bearer {JOB_SECRET_TOKEN}"},
-            timeout=10
-        )
-        response.raise_for_status()
-        job_data = response.json()
-        print(f"[IMAGE] ✓ Queued analysis job {job_data['job_id']} for message {message_id}")
-        return job_data['job_id']
-    except Exception as e:
-        print(f"[IMAGE] ✗ Failed to queue image analysis: {e}")
-        return None
-
-
-def queue_geolocation_extraction(
-    message_id: str,
-    text: str,
-    case_id: int = None,
-    owner_id: str = None
-) -> str:
-    """
-    Queue geolocation extraction job via job-launcher
-    Returns job ID or None if failed
-    """
-    try:
-        response = requests.post(
-            f"{JOB_LAUNCHER_URL}/queue/geolocation",
-            json={
-                "message_id": message_id,
-                "text": text,
-                "owner_id": owner_id,
-                "case_id": case_id
-            },
-            headers={"Authorization": f"Bearer {JOB_SECRET_TOKEN}"},
-            timeout=10
-        )
-        response.raise_for_status()
-        job_data = response.json()
-        print(f"[GEOLOCATION] ✓ Queued extraction job {job_data['job_id']} for message {message_id}")
-        return job_data['job_id']
-    except Exception as e:
-        print(f"[GEOLOCATION] ✗ Failed to queue geolocation extraction: {e}")
-        return None
-
-
 # ============================================================================
 #  MESSAGE PROCESSING (Updated with Translation)
 # ============================================================================
@@ -200,6 +107,9 @@ async def process_message(msg, username, found_channels, recursive=False, case_i
         detected_lang = None
         translation_status = 'none'
         geolocation_status = 'none'
+        image_analysis_status = 'none'
+        audio_transcription_status = 'none'
+
         if text:
             if len(text) >= 10 and ENABLE_TRANSLATION:
                 needs_trans, detected_lang = needs_translation(text)
@@ -208,15 +118,13 @@ async def process_message(msg, username, found_channels, recursive=False, case_i
             if len(text) >= 10 and ENABLE_GEOLOCATION_EXTRACTION:
                 geolocation_status = 'pending'
                 # Queue geolocation extraction
-                job_id = queue_geolocation_extraction(
+                geolocation_payload = GeolocationJobPayload(
                     message_id=f"{msg.chat_id}-{msg.id}",
                     text=text,
                     owner_id=owner_id,
                     case_id=case_id
                 )
-        # Initialize processing statuses
-        image_analysis_status = 'none'
-        audio_transcription_status = 'none'
+                job_id = queue_client.enqueue_geolocation(geolocation_payload)
         
         # Handle media download and processing
         media_path = None
@@ -244,30 +152,31 @@ async def process_message(msg, username, found_channels, recursive=False, case_i
                         # 1. IMAGE PROCESSING (existing)
                         if media_type == "photo" and os.path.exists(media_path) and ENABLE_IMAGE_ANALYSIS:
                             image_analysis_status = 'pending'
-                            
-                            job_id = queue_image_analysis(
+
+                            image_payload = ImageJobPayload(
                                 message_id=full_message_id,
                                 image_path=media_path,
-                                case_id=case_id,
                                 owner_id=owner_id,
+                                case_id=case_id,
                                 extract_text=True,
                                 detect_objects=False,
                                 translate_extracted_text=True
                             )
+                            job_id = queue_client.enqueue_image_analysis(image_payload)
                             print(f"[QUEUE] Image analysis queued for {full_message_id}, job: {job_id}")
                         
                         # 2. AUDIO PROCESSING (new)
                         elif media_type == "audio" and os.path.exists(media_path) and ENABLE_AUDIO_TRANSCRIPTION:
                             audio_transcription_status = 'pending'
-                            
-                            job_id = queue_audio_transcription(
+
+                            audio_payload = AudioJobPayload(
                                 message_id=full_message_id,
-                                media_path=media_path,
-                                media_type="audio",
-                                case_id=case_id,
+                                audio_path=media_path,
                                 owner_id=owner_id,
+                                case_id=case_id,
                                 translate_transcription=True
                             )
+                            job_id = queue_client.enqueue_audio_transcription(audio_payload)
                             print(f"[QUEUE] Audio transcription queued for {full_message_id}, job: {job_id}")
                         
                         # 3. VIDEO PROCESSING (check for audio track)
@@ -275,15 +184,15 @@ async def process_message(msg, username, found_channels, recursive=False, case_i
                             # Queue for audio extraction and transcription
                             # Videos often contain speech that needs transcription
                             audio_transcription_status = 'pending'
-                            
-                            job_id = queue_audio_transcription(
+
+                            audio_payload = AudioJobPayload(
                                 message_id=full_message_id,
-                                media_path=media_path,
-                                media_type="video",
-                                case_id=case_id,
+                                audio_path=media_path,
                                 owner_id=owner_id,
+                                case_id=case_id,
                                 translate_transcription=True
                             )
+                            job_id = queue_client.enqueue_audio_transcription(audio_payload)
                             print(f"[QUEUE] Video audio extraction queued for {full_message_id}, job: {job_id}")
                         
                         # 4. DOCUMENT PROCESSING (check if it's audio/video file)
@@ -291,18 +200,18 @@ async def process_message(msg, username, found_channels, recursive=False, case_i
                             # Check if document is actually an audio/video file
                             if await is_audio_video_document(msg, media_path) and ENABLE_AUDIO_TRANSCRIPTION:
                                 audio_transcription_status = 'pending'
-                                
+
                                 # Detect if it's audio or video based on mime type or extension
                                 doc_media_type = await get_document_media_type(msg, media_path)
-                                
-                                job_id = queue_audio_transcription(
+
+                                audio_payload = AudioJobPayload(
                                     message_id=full_message_id,
-                                    media_path=media_path,
-                                    media_type=doc_media_type,
-                                    case_id=case_id,
+                                    audio_path=media_path,
                                     owner_id=owner_id,
+                                    case_id=case_id,
                                     translate_transcription=True
                                 )
+                                job_id = queue_client.enqueue_audio_transcription(audio_payload)
                                 print(f"[QUEUE] Document {doc_media_type} transcription queued for {full_message_id}")
                             
                     except Exception as e:
@@ -328,15 +237,15 @@ async def process_message(msg, username, found_channels, recursive=False, case_i
                                     if os.path.exists(media_path) and ENABLE_AUDIO_TRANSCRIPTION:
                                         full_message_id = f"{msg.chat_id}-{msg.id}"
                                         audio_transcription_status = 'pending'
-                                        
-                                        job_id = queue_audio_transcription(
+
+                                        audio_payload = AudioJobPayload(
                                             message_id=full_message_id,
-                                            media_path=media_path,
-                                            media_type="audio",  # Treat voice as audio
-                                            case_id=case_id,
+                                            audio_path=media_path,
                                             owner_id=owner_id,
+                                            case_id=case_id,
                                             translate_transcription=True
                                         )
+                                        job_id = queue_client.enqueue_audio_transcription(audio_payload)
                                         print(f"[QUEUE] Voice transcription queued for {full_message_id}")
                                         media_type = "voice"  # Store as voice type
                                 except Exception as e:
@@ -364,30 +273,33 @@ async def process_message(msg, username, found_channels, recursive=False, case_i
 
         # Queue text translation if needed (existing logic)
         if needs_trans and ENABLE_TRANSLATION:
-            job_id = queue_translation(
+            translation_payload = TranslationJobPayload(
                 message_id=full_message_id,
-                text=text,
+                original_text=text,
                 source_language=detected_lang,
-                case_id=case_id,
-                owner_id=owner_id
+                owner_id=owner_id,
+                case_id=case_id
             )
+            job_id = queue_client.enqueue_translation(translation_payload)
         else:
             if text and len(text.strip()) > 10 and ENABLE_EMOTION_ANALYSIS:  # Only if meaningful text
                 print(f"🎭 Text is German, triggering emotion analysis directly")
-                await trigger_emotion_from_scraper(
+                emotion_payload = EmotionJobPayload(
                     message_id=f"{msg.chat_id}-{msg.id}",
                     text=text,
                     owner_id=owner_id,
                     case_id=case_id
                 )
+                queue_client.enqueue_emotion(emotion_payload)
             if text and len(text.strip()) > 10 and ENABLE_LABEL_CLASSIFIER:
                 print(f"🏷️ Text is German, triggering label classification directly")
-                await trigger_label_classification(
+                classification_payload = ClassificationJobPayload(
                     message_id=f"{msg.chat_id}-{msg.id}",
                     text=text,
                     owner_id=owner_id,
                     case_id=case_id
                 )
+                queue_client.enqueue_classification(classification_payload)
         # Extract invite links for recursive processing (existing logic)
         if recursive and text:
             links = extract_invite_links([text])
@@ -467,99 +379,6 @@ async def get_document_media_type(msg, file_path: str) -> str:
     # Default to audio if unsure
     return "audio"
 
-async def trigger_emotion_from_scraper(message_id: str, text: str, owner_id: str, case_id: int = None):
-    """
-    Trigger emotion analysis from scraper (async version)
-    """
-    
-    JOB_LAUNCHER_URL = os.getenv("JOB_LAUNCHER_URL", "http://job-launcher:9001")
-    JOB_SECRET_TOKEN = os.getenv("JOB_SECRET_TOKEN")
-    
-    try:
-        response = requests.post(
-            f"{JOB_LAUNCHER_URL}/queue/emotion",
-            json={
-            "message_id": message_id,
-            "text": text,
-            "owner_id": owner_id,
-            "chained_from": "scraper",
-            "threshold": 0.3,
-            "top_k": 3,
-            "case_id": case_id
-            },
-            headers={"Authorization": f"Bearer {JOB_SECRET_TOKEN}"},
-            timeout=10
-        )
-        response.raise_for_status()
-        job_data = response.json()
-        print(f"✅ Emotion analysis queued: {job_data.get('job_id')}")
-        return job_data.get('job_id')
-    except Exception as e:
-        print(f"❌ Failed to trigger emotion analysis: {e}")
-        return None
-
-async def trigger_label_classification(message_id: str, text: str, owner_id: str, case_id: int = None):
-    """
-    Trigger label classification from scraper (async version)
-    """
-    
-    JOB_LAUNCHER_URL = os.getenv("JOB_LAUNCHER_URL", "http://job-launcher:9001")
-    JOB_SECRET_TOKEN = os.getenv("JOB_SECRET_TOKEN")
-    
-    try:
-        response = requests.post(
-            f"{JOB_LAUNCHER_URL}/queue/classification",
-            json={
-                "message_id": message_id,
-                "text": text,
-                "case_id": case_id,
-                "owner_id": owner_id,
-                "chained_from": "scraper"
-            },
-            headers={"Authorization": f"Bearer {JOB_SECRET_TOKEN}"},
-            timeout=10
-        )
-        response.raise_for_status()
-        job_data = response.json()
-        print(f"✅ Label classification queued: {job_data.get('job_id')}")
-        return job_data.get('job_id')
-    except Exception as e:
-        print(f"❌ Failed to trigger label classification: {e}")
-        return None
-
-def queue_audio_transcription(
-    message_id: str,
-    media_path: str,
-    media_type: str = None,
-    case_id: int = None,
-    owner_id: str = None,
-    translate_transcription: bool = True
-) -> str:
-    """Queue audio transcription job via job launcher"""
-    try:
-        response = requests.post(
-            f"{JOB_LAUNCHER_URL}/queue/audio-transcription",
-            json={
-                "message_id": message_id,
-                "media_path": media_path,
-                "media_type": media_type,
-                "language_hint": None,  # Let Whisper auto-detect
-                "translate_transcription": translate_transcription,
-                "owner_id": owner_id,
-                "case_id": case_id
-            },
-            headers={"Authorization": f"Bearer {JOB_SECRET_TOKEN}"},
-            timeout=10
-        )
-        response.raise_for_status()
-        
-        job_data = response.json()
-        print(f"[AUDIO] ✓ Transcription job queued: {job_data['job_id']}")
-        return job_data['job_id']
-        
-    except Exception as e:
-        print(f"[ERROR] Failed to queue audio transcription: {e}")
-        return None
 # ============================================================================
 #  EXISTING SCRAPER LOGIC (Keep as is, just updated process_message call)
 # ============================================================================

@@ -7,7 +7,7 @@ COPY workers/translation_worker/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy worker file
-COPY workers/translation_worker /app/workers/translation_worker
+COPY workers/translation_worker ./workers/translation_worker
 COPY aether_lib /app/aether_lib
 
 # ✅ Create models directory
