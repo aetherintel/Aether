@@ -166,162 +166,112 @@ jobs:
       # ═══════════════════════════════════════════════════════════════
       # 🚀 DEPLOYMENT
       # ═══════════════════════════════════════════════════════════════
-      - name: Deploy to Production VM
-        uses: appleboy/ssh-action@v1.0.0
-        with:
-          host: ${{ secrets.PROD_HOST }}
-          username: ${{ secrets.PROD_USER }}
-          key: ${{ secrets.PROD_SSH_KEY }}
-          script: |
-            cd ~/app
-
-            export REGISTRY=ghcr.io
-            export GITHUB_REPOSITORY_OWNER=${{ github.repository_owner }}
-            export GITHUB_USER=${{ github.actor }}
-            export GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }}
-            export PROD_DOMAIN=${{ secrets.PROD_DOMAIN }}
-            export PROD_MAIL=${{ secrets.PROD_MAIL }}
-            export DB_USER=${{ secrets.DB_USER }}
-            export DB_PASSWORD=${{ secrets.DB_PASSWORD }}
-            export KEYCLOAK_ADMIN=${{ secrets.KEYCLOAK_ADMIN }}
-            export KEYCLOAK_ADMIN_PASSWORD=${{ secrets.KEYCLOAK_ADMIN_PASSWORD }}
-            export KEYCLOAK_CLIENT_SECRET=${{ secrets.KEYCLOAK_CLIENT_SECRET }}
-            export KEYCLOAK_ADMIN_CLIENT_SECRET=${{ secrets.KEYCLOAK_ADMIN_CLIENT_SECRET }}
-            export TG_API_ID=${{ secrets.TG_API_ID }}
-            export TG_API_HASH=${{ secrets.TG_API_HASH }}
-            export TG_PHONE=${{ secrets.TG_PHONE }}
-            export POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}
-            export NEO4J_URI=${{ secrets.NEO4J_URI }}
-            export NEO4J_PASSWORD=${{ secrets.NEO4J_PASSWORD }}
-            export JOB_SECRET_TOKEN=${{ secrets.JOB_SECRET_TOKEN }}
-            export NEO4J_USER=neo4j
-            export POSTGRES_HOST=postgres
-            export POSTGRES_PORT=5432
-            export POSTGRES_DB=telegramdb
-            export POSTGRES_USER=telegramuser
-            export MEDIA_PATH=${PWD}/shared/media
-            export ENVIRONMENT=prod
-            
-            COMPOSE_CMD="docker compose"
-            command -v docker-compose &> /dev/null && COMPOSE_CMD="docker-compose"
-            
-            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
-            
-            echo "═══════════════════════════════════════════════════════════════"
-            echo "🚀 DEPLOYMENT START"
-            echo "═══════════════════════════════════════════════════════════════"
-            
-            # ────────────────────────────────────────────────────────────────
-            # PHASE 1: Infrastructure (stateful)
-            # ────────────────────────────────────────────────────────────────
-            echo ""
-            echo "📦 Phase 1: Infrastructure"
-            
-            INFRA="postgres neo4j keycloak redis certbot-daemon"
-            for service in $INFRA; do
-              if $COMPOSE_CMD -f docker-compose.prod.yml ps "$service" 2>/dev/null | grep -q "Up"; then
-                echo "  ✅ $service"
+        - name: Deploy to Production VM
+          uses: appleboy/ssh-action@v1.0.0
+          with:
+            host: ${{ secrets.PROD_HOST }}
+            username: ${{ secrets.PROD_USER }}
+            key: ${{ secrets.PROD_SSH_KEY }}
+            command_timeout: 20m
+            script: |
+              cd ~/app
+              
+              export REGISTRY=ghcr.io
+              export GITHUB_REPOSITORY_OWNER=${{ github.repository_owner }}
+              export GITHUB_USER=${{ github.actor }}
+              export GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }}
+              export PROD_DOMAIN=${{ secrets.PROD_DOMAIN }}
+              export PROD_MAIL=${{ secrets.PROD_MAIL }}
+              export DB_USER=${{ secrets.DB_USER }}
+              export DB_PASSWORD=${{ secrets.DB_PASSWORD }}
+              export KEYCLOAK_ADMIN=${{ secrets.KEYCLOAK_ADMIN }}
+              export KEYCLOAK_ADMIN_PASSWORD=${{ secrets.KEYCLOAK_ADMIN_PASSWORD }}
+              export KEYCLOAK_CLIENT_SECRET=${{ secrets.KEYCLOAK_CLIENT_SECRET }}
+              export KEYCLOAK_ADMIN_CLIENT_SECRET=${{ secrets.KEYCLOAK_ADMIN_CLIENT_SECRET }}
+              export TG_API_ID=${{ secrets.TG_API_ID }}
+              export TG_API_HASH=${{ secrets.TG_API_HASH }}
+              export TG_PHONE=${{ secrets.TG_PHONE }}
+              export POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}
+              export NEO4J_URI=bolt://neo4j:7687
+              export NEO4J_PASSWORD=${{ secrets.NEO4J_PASSWORD }}
+              export NEO4J_USER=neo4j
+              export POSTGRES_HOST=postgres
+              export POSTGRES_PORT=5432
+              export POSTGRES_DB=telegramdb
+              export POSTGRES_USER=telegramuser
+              export MEDIA_PATH=\${PWD}/shared/media
+              export ENVIRONMENT=prod
+              
+              COMPOSE_CMD="docker compose"
+              
+              echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+              
+              echo "🚀 DEPLOYMENT START"
+              
+              # ═══════════════════════════════════════════════════════════════
+              # PHASE 1: Infrastructure
+              # ═══════════════════════════════════════════════════════════════
+              echo "📦 Infrastructure..."
+              $COMPOSE_CMD -f docker-compose.prod.yml up -d postgres neo4j keycloak redis
+              sleep 15
+              
+              # ═══════════════════════════════════════════════════════════════
+              # PHASE 2: SSL Certificate
+              # ═══════════════════════════════════════════════════════════════
+              echo "🔐 SSL Certificate..."
+              
+              if [ ! -f "certbot/conf/live/$PROD_DOMAIN/fullchain.pem" ]; then
+                echo "  Generating certificate..."
+                mkdir -p certbot/{www,conf}
+                
+                # Temp Nginx
+                docker run -d --name nginx-acme -p 80:80 \
+                  -v $(pwd)/certbot/www:/usr/share/nginx/html nginx:alpine
+                sleep 5
+                
+                # Get cert
+                docker run --rm \
+                  -v $(pwd)/certbot/conf:/etc/letsencrypt \
+                  -v $(pwd)/certbot/www:/var/www/certbot \
+                  certbot/certbot certonly \
+                  --webroot -w /var/www/certbot \
+                  -d $PROD_DOMAIN \
+                  --email $PROD_MAIL \
+                  --agree-tos \
+                  --non-interactive
+                
+                docker stop nginx-acme && docker rm nginx-acme
+                
+                if [ ! -f "certbot/conf/live/$PROD_DOMAIN/fullchain.pem" ]; then
+                  echo "❌ SSL FAILED - check DNS/firewall!"
+                  exit 1
+                fi
+                
+                echo "✅ Certificate created"
               else
-                echo "  🔄 Starting $service"
-                $COMPOSE_CMD -f docker-compose.prod.yml up -d "$service"
+                echo "✅ Certificate exists"
               fi
-            done
-            
-            echo "⏳ Waiting for databases..."
-            sleep 10
-            
-            # ────────────────────────────────────────────────────────────────
-            # PHASE 2: SSL Setup (blocking)
-            # ────────────────────────────────────────────────────────────────
-            echo ""
-            echo "🔐 Phase 2: SSL Certificate"
-            
-            if [ -f "certbot/conf/live/$PROD_DOMAIN/fullchain.pem" ]; then
-              echo "  ✅ Certificate exists"
-              EXPIRY=$(openssl x509 -enddate -noout -in "certbot/conf/live/$PROD_DOMAIN/fullchain.pem" | cut -d= -f2)
-              echo "  📅 Expires: $EXPIRY"
-            else
-              echo "  🔐 First-time certificate generation..."
-              mkdir -p certbot/{www,conf}
               
-              # Temporärer Nginx für ACME Challenge
-              docker run -d --name nginx-acme \
-                -p 80:80 \
-                -v $(pwd)/certbot/www:/usr/share/nginx/html \
-                nginx:alpine
+              # ═══════════════════════════════════════════════════════════════
+              # PHASE 3: Deploy Application
+              # ═══════════════════════════════════════════════════════════════
+              echo "📥 Pulling images..."
+              $COMPOSE_CMD -f docker-compose.prod.yml pull
               
-              sleep 5
+              echo "🔄 Deploying..."
+              $COMPOSE_CMD -f docker-compose.prod.yml up -d --force-recreate
               
-              # Certificate Request
-              $COMPOSE_CMD -f docker-compose.prod.yml run --rm \
-                --entrypoint certbot \
-                certbot certonly \
-                --webroot -w /var/www/certbot \
-                -d $PROD_DOMAIN \
-                --email $PROD_MAIL \
-                --agree-tos \
-                --non-interactive \
-                --keep-until-expiring
+              echo "📊 Scaling workers..."
+              $COMPOSE_CMD -f docker-compose.prod.yml up -d --no-recreate \
+                --scale telegram-worker=3 \
+                --scale translation-worker=1 \
+                --scale emotion-worker=1 \
+                --scale geolocation-worker=2
               
-              # Cleanup
-              docker stop nginx-acme && docker rm nginx-acme
+              sleep 10
               
-              if [ -f "certbot/conf/live/$PROD_DOMAIN/fullchain.pem" ]; then
-                echo "  ✅ Certificate created"
-              else
-                echo "  ❌ Certificate failed - continuing with HTTP"
-              fi
-            fi
-            
-            # ────────────────────────────────────────────────────────────────
-            # PHASE 3: Application Services
-            # ────────────────────────────────────────────────────────────────
-            echo ""
-            echo "📥 Phase 3: Pulling images..."
-            
-            SERVICES="frontend backend telegram-worker translation-worker image-worker audio-worker emotion-worker classification-worker geolocation-worker photon"
-            
-            for service in $SERVICES; do
-              $COMPOSE_CMD -f docker-compose.prod.yml pull "$service" 2>&1 | head -n 1
-            done
-            
-            echo ""
-            echo "🔄 Phase 4: Deploying services..."
-            
-            for service in $SERVICES; do
-              echo "  🔄 $service"
-              $COMPOSE_CMD -f docker-compose.prod.yml up -d "$service" --force-recreate --no-deps
-              sleep 2
-            done
-            
-            # ────────────────────────────────────────────────────────────────
-            # PHASE 5: Worker Scaling
-            # ────────────────────────────────────────────────────────────────
-            echo ""
-            echo "📊 Phase 5: Scaling workers..."
-            
-            $COMPOSE_CMD -f docker-compose.prod.yml up -d --no-recreate \
-              --scale telegram-worker=5 \
-              --scale translation-worker=2 \
-              --scale emotion-worker=2 \
-              --scale geolocation-worker=3
-            
-            echo ""
-            echo "✅ DEPLOYMENT COMPLETED"
-            echo ""
-            
-            # ────────────────────────────────────────────────────────────────
-            # HEALTH CHECK
-            # ────────────────────────────────────────────────────────────────
-            sleep 5
-            echo "🏥 Health Check:"
-            for service in frontend backend; do
-              if $COMPOSE_CMD -f docker-compose.prod.yml ps "$service" | grep -q "Up"; then
-                echo "  ✅ $service"
-              else
-                echo "  ❌ $service"
-              fi
-            done
-            
-            echo ""
-            echo "🔗 Application: https://$PROD_DOMAIN"
+              echo ""
+              echo "✅ DEPLOYMENT COMPLETE"
+              echo "🔗 https://$PROD_DOMAIN"
+              echo ""
+              $COMPOSE_CMD -f docker-compose.prod.yml ps

@@ -72,7 +72,7 @@ services:
       NEO4J_USER: neo4j
       NEO4J_URI: bolt://neo4j:7687
       NEO4J_PASSWORD: ${NEO4J_PASSWORD}
-      JOB_SECRET_TOKEN: ${JOB_SECRET_TOKEN}
+      
       TG_API_ID: ${TG_API_ID}
       TG_API_HASH: ${TG_API_HASH}
       TG_PHONE: ${TG_PHONE}
@@ -108,7 +108,6 @@ services:
     restart: always
     depends_on:
       - backend
-      - certbot-daemon
     networks:
       - aether-network
 
@@ -194,8 +193,7 @@ services:
       NEO4J_URI: bolt://neo4j:7687
       NEO4J_USER: neo4j
       NEO4J_PASSWORD: ${NEO4J_PASSWORD}
-      JOB_LAUNCHER_URL: http://job-launcher:9001
-      JOB_SECRET_TOKEN: ${JOB_SECRET_TOKEN}
+      
       MEDIA_ROOT: /shared/media
       REDIS_HOST: redis
       REDIS_PORT: 6379
@@ -266,7 +264,7 @@ services:
       HOME: /app/models
       PADDLEX_HOME: /app/models
       MODEL_BASE_DIR: /app/models
-      JOB_SECRET_TOKEN: ${JOB_SECRET_TOKEN}
+      
       NEO4J_URI: ${NEO4J_URI}
       NEO4J_USER: ${NEO4J_USER}
       NEO4J_PASSWORD: ${NEO4J_PASSWORD}
@@ -298,8 +296,7 @@ services:
       --job-monitoring-interval 60
     restart: unless-stopped
     environment:
-      JOB_LAUNCHER_URL: ${JOB_LAUNCHER_URL}
-      JOB_SECRET_TOKEN: ${JOB_SECRET_TOKEN}
+      
       NEO4J_URI: ${NEO4J_URI}
       NEO4J_USER: ${NEO4J_USER}
       NEO4J_PASSWORD: ${NEO4J_PASSWORD}
@@ -333,8 +330,8 @@ services:
       --job-monitoring-interval 30
     restart: unless-stopped
     environment:
-      JOB_LAUNCHER_URL: ${JOB_LAUNCHER_URL}
-      JOB_SECRET_TOKEN: ${JOB_SECRET_TOKEN}
+
+      
       NEO4J_URI: ${NEO4J_URI}
       NEO4J_USER: ${NEO4J_USER}
       NEO4J_PASSWORD: ${NEO4J_PASSWORD}
@@ -368,8 +365,8 @@ services:
       --job-monitoring-interval 30
     restart: unless-stopped
     environment:
-      JOB_LAUNCHER_URL: ${JOB_LAUNCHER_URL}
-      JOB_SECRET_TOKEN: ${JOB_SECRET_TOKEN}
+
+      
       NEO4J_URI: ${NEO4J_URI}
       NEO4J_USER: ${NEO4J_USER}
       NEO4J_PASSWORD: ${NEO4J_PASSWORD}
@@ -413,8 +410,8 @@ services:
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      JOB_LAUNCHER_URL: ${JOB_LAUNCHER_URL}
-      JOB_SECRET_TOKEN: ${JOB_SECRET_TOKEN}
+
+      
       PHOTON_URL: http://photon:2322
     volumes:
       - geolocation_models:/app/models
@@ -435,74 +432,7 @@ services:
   # ============================================================================
   # PHOTON GEOCODING SERVICE
   # ============================================================================
-  photon:
-    image: ghcr.io/${GITHUB_REPOSITORY_OWNER:-aetherintel}/aether-photon:latest
-    container_name: photon
-    restart: unless-stopped
-    ports:
-      - "127.0.0.1:2322:2322"
-    volumes:
-      - photon_data:/photon/photon_data
-    environment:
-      - JAVA_OPTS=-Xmx2g
-    networks:
-      - aether-network
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:2322/api?q=Berlin"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 60s
-    depends_on:
-      - postgres
 
-  translation-models:
-    image: ghcr.io/${GITHUB_REPOSITORY_OWNER:-aetherintel}/aether-translation-models:latest
-    restart: "no"
-    volumes:
-      - translation_models:/models
-    networks:
-      - aether-network
-
-  audio-models:
-    image: ghcr.io/${GITHUB_REPOSITORY_OWNER:-aetherintel}/aether-audio-models:latest
-    restart: "no"
-    volumes:
-      - audio_models:/models
-    networks:
-      - aether-network
-
-  emotion-models:
-    image: ghcr.io/${GITHUB_REPOSITORY_OWNER:-aetherintel}/aether-emotion-models:latest
-    restart: "no"
-    volumes:
-      - emotion_models:/models
-    networks:
-      - aether-network
-
-  classifier-models:
-    image: ghcr.io/${GITHUB_REPOSITORY_OWNER:-aetherintel}/aether-classifier-models:latest
-    restart: "no"
-    volumes:
-      - classifier_models:/models
-    networks:
-      - aether-network
-
-  image-models:
-    image: ghcr.io/${GITHUB_REPOSITORY_OWNER:-aetherintel}/aether-image-models:latest
-    restart: "no"
-    volumes:
-      - image_models:/models
-    networks:
-      - aether-network
-
-  geolocation-models:
-    image: ghcr.io/${GITHUB_REPOSITORY_OWNER:-aetherintel}/aether-geolocation-models:latest
-    restart: "no"
-    volumes:
-      - geolocation_models:/models
-    networks:
-      - aether-network
 networks:
   aether-network:
     driver: bridge
@@ -516,9 +446,16 @@ volumes:
   redis_data:
   ai_models:
   photon_data:
+    external: true
   translation_models:
+    external: true
   audio_models:
+    external: true
   emotion_models:
+    external: true
   classifier_models:
+    external: true
   image_models:
+    external: true
   geolocation_models:
+    external: true

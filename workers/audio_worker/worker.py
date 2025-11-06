@@ -12,6 +12,8 @@ import subprocess
 import tempfile
 from typing import Optional, Tuple
 
+from aether_lib.queue_client import queue_client
+
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
@@ -30,9 +32,6 @@ MODEL_BASE_DIR = Path(os.getenv("MODEL_BASE_DIR", "/app/models/audio"))
 # Global Whisper model
 WHISPER_MODEL = None
 
-# Job Launcher Configuration
-JOB_LAUNCHER_URL = os.getenv("JOB_LAUNCHER_URL", "http://job-launcher:9001")
-JOB_SECRET_TOKEN = os.getenv("JOB_SECRET_TOKEN")
 
 # Translation Configuration
 SUPPORTED_TRANSLATION_LANGUAGES = ['ru', 'ar', 'tr', 'en']
@@ -352,40 +351,6 @@ def needs_translation(text: str, detected_lang: str) -> bool:
     return False
 
 
-def queue_translation(
-    message_id: str,
-    text: str,
-    source_language: str,
-    case_id: int = None,
-    owner_id: str = None,
-    parent_job_id: str = None,
-    audio_text: bool = True
-) -> Optional[str]:
-    """Queue translation job for transcribed text"""
-    try:
-        response = requests.post(
-            f"{JOB_LAUNCHER_URL}/queue/translation",
-            json={
-                "message_id": message_id,
-                "original_text": text,
-                "source_language": source_language,
-                "owner_id": owner_id,
-                "case_id": case_id,
-                "parent_job_id": parent_job_id,
-                "chained_from": "audio-transcription",
-                "audio_text": audio_text  # Flag for audio transcription translation
-            },
-            headers={"Authorization": f"Bearer {JOB_SECRET_TOKEN}"},
-            timeout=10
-        )
-        response.raise_for_status()
-        job_data = response.json()
-        logger.info(f"✅ Translation queued: {job_data['job_id']}")
-        return job_data['job_id']
-    except Exception as e:
-        logger.error(f"❌ Failed to queue translation: {e}")
-        return None
-
 
 def get_file_type(file_path: str) -> str:
     """Determine if file is audio or video"""
@@ -489,7 +454,7 @@ def transcribe_and_update(
         if transcription and translate_transcription:
             if needs_translation(transcription, detected_lang):
                 logger.info(f"🌍 Step 3: Queueing translation ({detected_lang} -> de)...")
-                translation_job_id = queue_translation(
+                translation_job_id = queue_client.QueueClient.enqueue_translation(
                     message_id=message_id,
                     text=transcription,
                     source_language=detected_lang,
