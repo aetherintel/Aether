@@ -260,10 +260,7 @@ jobs:
             echo "✅ DEPLOYMENT COMPLETED"
 
 
-      # ═══════════════════════════════════════════════════════════════
-      # 🔐 SSL CERTIFICATE SETUP
-      # ═══════════════════════════════════════════════════════════════
-      - name: Setup SSL Certificates (if needed)
+      - name: Trigger SSL Setup (async)
         uses: appleboy/ssh-action@v1.0.0
         with:
           host: ${{ secrets.PROD_HOST }}
@@ -272,116 +269,74 @@ jobs:
           script: |
             cd ~/app
             
-            echo "═══════════════════════════════════════════════════════════════"
-            echo "🔐 SSL Certificate Check"
-            echo "═══════════════════════════════════════════════════════════════"
+            # Skip wenn Cert existiert
+            [ -f "certbot/conf/live/${{ secrets.PROD_DOMAIN }}/fullchain.pem" ] && exit 0
             
-            # Export all variables
-            export PROD_DOMAIN=${{ secrets.PROD_DOMAIN }}
-            export PROD_MAIL=${{ secrets.PROD_MAIL }}
-            export DB_USER=${{ secrets.DB_USER }}
-            export DB_PASSWORD=${{ secrets.DB_PASSWORD }}
-            export KEYCLOAK_ADMIN=${{ secrets.KEYCLOAK_ADMIN }}
-            export KEYCLOAK_ADMIN_PASSWORD=${{ secrets.KEYCLOAK_ADMIN_PASSWORD }}
-            export KEYCLOAK_CLIENT_SECRET=${{ secrets.KEYCLOAK_CLIENT_SECRET }}
-            export KEYCLOAK_ADMIN_CLIENT_SECRET=${{ secrets.KEYCLOAK_ADMIN_CLIENT_SECRET }}
-            export TG_API_ID=${{ secrets.TG_API_ID }}
-            export TG_API_HASH=${{ secrets.TG_API_HASH }}
-            export TG_PHONE=${{ secrets.TG_PHONE }}
-            export POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}
-            export NEO4J_URI=${{ secrets.NEO4J_URI }}
-            export NEO4J_PASSWORD=${{ secrets.NEO4J_PASSWORD }}
-            export JOB_SECRET_TOKEN=${{ secrets.JOB_SECRET_TOKEN }}
-            export NEO4J_USER=neo4j
-            export POSTGRES_HOST=postgres
-            export POSTGRES_PORT=5432
-            export POSTGRES_DB=telegramdb
-            export POSTGRES_USER=telegramuser
-            export MEDIA_PATH=${PWD}/shared/media
-            export ENVIRONMENT=prod
-            export GITHUB_USER=${{ github.actor }}
-            export GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }}
-            export GITHUB_REPOSITORY_OWNER=${{ github.repository_owner }}
-            export JOB_LAUNCHER_URL=http://job-launcher:9001
+            # Schreibe .env.prod (alle Variablen persistent)
+            cat > .env.prod << ENV_EOF
+            PROD_DOMAIN=${{ secrets.PROD_DOMAIN }}
+            PROD_MAIL=${{ secrets.PROD_MAIL }}
+            DB_USER=${{ secrets.DB_USER }}
+            DB_PASSWORD=${{ secrets.DB_PASSWORD }}
+            KEYCLOAK_ADMIN=${{ secrets.KEYCLOAK_ADMIN }}
+            KEYCLOAK_ADMIN_PASSWORD=${{ secrets.KEYCLOAK_ADMIN_PASSWORD }}
+            KEYCLOAK_CLIENT_SECRET=${{ secrets.KEYCLOAK_CLIENT_SECRET }}
+            KEYCLOAK_ADMIN_CLIENT_SECRET=${{ secrets.KEYCLOAK_ADMIN_CLIENT_SECRET }}
+            TG_API_ID=${{ secrets.TG_API_ID }}
+            TG_API_HASH=${{ secrets.TG_API_HASH }}
+            TG_PHONE=${{ secrets.TG_PHONE }}
+            POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}
+            NEO4J_URI=${{ secrets.NEO4J_URI }}
+            NEO4J_PASSWORD=${{ secrets.NEO4J_PASSWORD }}
+            JOB_SECRET_TOKEN=${{ secrets.JOB_SECRET_TOKEN }}
+            NEO4J_USER=neo4j
+            POSTGRES_HOST=postgres
+            POSTGRES_PORT=5432
+            POSTGRES_DB=telegramdb
+            POSTGRES_USER=telegramuser
+            MEDIA_PATH=\${PWD}/shared/media
+            ENVIRONMENT=prod
+            GITHUB_USER=${{ github.actor }}
+            GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }}
+            GITHUB_REPOSITORY_OWNER=${{ github.repository_owner }}
+            JOB_LAUNCHER_URL=http://job-launcher:9001
+            ENV_EOF
             
-            if command -v docker-compose &> /dev/null; then
-              COMPOSE_CMD="docker-compose"
-            else
-              COMPOSE_CMD="docker compose"
-            fi
+            # SSL-Setup Script (lädt .env.prod)
+            cat > ssl_setup.sh << 'SCRIPT_EOF'
+            #!/bin/bash
+            set -a
+            source .env.prod
+            set +a
             
-            # Check existing certificate
-            if [ -f "certbot/conf/live/$PROD_DOMAIN/fullchain.pem" ]; then
-              echo "✅ Certificate exists for $PROD_DOMAIN"
-              
-              # Check expiry
-              EXPIRY=$(openssl x509 -enddate -noout -in "certbot/conf/live/$PROD_DOMAIN/fullchain.pem" 2>/dev/null | cut -d= -f2)
-              echo "📅 Expires: $EXPIRY"
-              
-              # Auto-renew if needed
-              echo "🔄 Checking renewal..."
-              $COMPOSE_CMD -f docker-compose.prod.yml run --rm certbot renew --quiet || true
-              
-              echo "✅ Certificate up to date"
-              exit 0
-            fi
+            COMPOSE_CMD="docker compose"
+            command -v docker-compose &> /dev/null && COMPOSE_CMD="docker-compose"
             
-            # First-time certificate generation
-            echo ""
-            echo "📥 First deployment - generating SSL certificate..."
-            echo "   Domain: $PROD_DOMAIN"
-            echo "   Email: $PROD_MAIL"
+            echo "🔐 Starting SSL setup for $PROD_DOMAIN"
             
-            # Create directories
-            mkdir -p certbot/www certbot/conf
-            
-            # Kill any hanging certbot processes
-            pkill -f certbot || true
-            docker rm -f certbot 2>/dev/null || true
-            
-            # Ensure frontend is running
-            echo "🌐 Starting frontend..."
-            $COMPOSE_CMD -f docker-compose.prod.yml up -d frontend
-            sleep 15
-            
-            # Test if port 80 is accessible
-            if ! curl -f http://localhost/.well-known/acme-challenge/test 2>/dev/null; then
-              echo "⚠️  Warning: Frontend may not be ready"
-            fi
-            
-            # Request certificate
-            echo "🔐 Requesting certificate from Let's Encrypt..."
-            $COMPOSE_CMD -f docker-compose.prod.yml run --rm certbot \
-              certonly \
-              --webroot \
-              -w /var/www/certbot \
+            $COMPOSE_CMD -f docker-compose.prod.yml run --rm \
+              --entrypoint certbot \
+              certbot certonly \
+              --webroot -w /var/www/certbot \
               -d $PROD_DOMAIN \
               --email $PROD_MAIL \
               --agree-tos \
               --non-interactive \
-              --verbose \
-              --force-renewal
+              --keep-until-expiring
             
-            # Check result
             if [ -f "certbot/conf/live/$PROD_DOMAIN/fullchain.pem" ]; then
-              echo ""
-              echo "✅ SSL certificate generated successfully!"
-              
-              # Restart frontend to load HTTPS config
-              echo "🔄 Switching to HTTPS..."
+              echo "✅ Certificate created, restarting frontend..."
               $COMPOSE_CMD -f docker-compose.prod.yml restart frontend
-              
-              echo "✅ HTTPS enabled!"
+              echo "✅ SSL enabled"
             else
-              echo ""
               echo "❌ Certificate generation failed"
-              echo ""
-              echo "Debug info:"
-              $COMPOSE_CMD -f docker-compose.prod.yml logs --tail=50 certbot
-              echo ""
-              echo "⚠️  Continuing with HTTP-only mode"
+              exit 1
             fi
-
+            SCRIPT_EOF
+            
+            chmod +x ssl_setup.sh
+            nohup ./ssl_setup.sh > ssl_setup.log 2>&1 &
+            echo "✅ SSL setup läuft im Hintergrund (~/app/ssl_setup.log)"
 # ═══════════════════════════════════════════════════════════════
       # 🏥 HEALTH CHECK & SUMMARY
       # ═══════════════════════════════════════════════════════════════
