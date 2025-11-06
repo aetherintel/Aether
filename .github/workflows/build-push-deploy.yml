@@ -259,7 +259,8 @@ jobs:
             echo ""
             echo "✅ DEPLOYMENT COMPLETED"
 
-      # ═══════════════════════════════════════════════════════════════
+
+# ═══════════════════════════════════════════════════════════════
       # 🔐 SSL CERTIFICATE SETUP (AUTOMATIC)
       # ═══════════════════════════════════════════════════════════════
       - name: Setup SSL Certificates (if needed)
@@ -275,8 +276,32 @@ jobs:
             echo "🔐 SSL Certificate Check"
             echo "═══════════════════════════════════════════════════════════════"
             
-            PROD_DOMAIN=${{ secrets.PROD_DOMAIN }}
-            PROD_MAIL=${{ secrets.PROD_MAIL }}
+            # ═══ EXPORT ALL VARIABLES ═══
+            export PROD_DOMAIN=${{ secrets.PROD_DOMAIN }}
+            export PROD_MAIL=${{ secrets.PROD_MAIL }}
+            export DB_USER=${{ secrets.DB_USER }}
+            export DB_PASSWORD=${{ secrets.DB_PASSWORD }}
+            export KEYCLOAK_ADMIN=${{ secrets.KEYCLOAK_ADMIN }}
+            export KEYCLOAK_ADMIN_PASSWORD=${{ secrets.KEYCLOAK_ADMIN_PASSWORD }}
+            export KEYCLOAK_CLIENT_SECRET=${{ secrets.KEYCLOAK_CLIENT_SECRET }}
+            export KEYCLOAK_ADMIN_CLIENT_SECRET=${{ secrets.KEYCLOAK_ADMIN_CLIENT_SECRET }}
+            export TG_API_ID=${{ secrets.TG_API_ID }}
+            export TG_API_HASH=${{ secrets.TG_API_HASH }}
+            export TG_PHONE=${{ secrets.TG_PHONE }}
+            export POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}
+            export NEO4J_URI=${{ secrets.NEO4J_URI }}
+            export NEO4J_PASSWORD=${{ secrets.NEO4J_PASSWORD }}
+            export JOB_SECRET_TOKEN=${{ secrets.JOB_SECRET_TOKEN }}
+            export NEO4J_USER=neo4j
+            export POSTGRES_HOST=postgres
+            export POSTGRES_PORT=5432
+            export POSTGRES_DB=telegramdb
+            export POSTGRES_USER=telegramuser
+            export MEDIA_PATH=${PWD}/shared/media
+            export ENVIRONMENT=prod
+            export GITHUB_USER=${{ github.actor }}
+            export GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }}
+            export GITHUB_REPOSITORY_OWNER=${{ github.repository_owner }}
             
             if command -v docker-compose &> /dev/null; then
               COMPOSE_CMD="docker-compose"
@@ -308,7 +333,8 @@ jobs:
               -d $PROD_DOMAIN \
               --email $PROD_MAIL \
               --agree-tos \
-              --non-interactive
+              --non-interactive \
+              --verbose
             
             if [ -f "certbot/conf/live/$PROD_DOMAIN/fullchain.pem" ]; then
               echo "✅ Certificate generated!"
@@ -316,9 +342,10 @@ jobs:
               $COMPOSE_CMD -f docker-compose.prod.yml restart frontend
             else
               echo "⚠️  Certificate failed - continuing with HTTP"
+              echo "Check logs: docker compose -f docker-compose.prod.yml logs certbot"
             fi
 
-      # ═══════════════════════════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════
       # 🏥 HEALTH CHECK & SUMMARY
       # ═══════════════════════════════════════════════════════════════
       - name: Health Check & Summary
@@ -329,6 +356,9 @@ jobs:
           key: ${{ secrets.PROD_SSH_KEY }}
           script: |
             cd ~/app
+            
+            export PROD_DOMAIN=${{ secrets.PROD_DOMAIN }}
+            # ... alle anderen exports wie oben ...
             
             if command -v docker-compose &> /dev/null; then
               COMPOSE_CMD="docker-compose"
@@ -358,10 +388,10 @@ jobs:
             echo "📊 DEPLOYMENT SUMMARY"
             echo "═══════════════════════════════════════════════════════════════"
             echo "🌐 Services: ✅"
-            echo "🔐 SSL: $([ -f certbot/conf/live/${{ secrets.PROD_DOMAIN }}/fullchain.pem ] && echo '✅ Enabled' || echo '⚠️  HTTP Only')"
+            echo "🔐 SSL: $([ -f certbot/conf/live/$PROD_DOMAIN/fullchain.pem ] && echo '✅ Enabled' || echo '⚠️  HTTP Only')"
             echo "🤖 Workers: 5 Telegram, 2 Translation, 2 Emotion, 3 Geolocation"
             echo ""
             echo "🔗 URLs:"
-            echo "  • Frontend: https://${{ secrets.PROD_DOMAIN }}"
-            echo "  • API: https://${{ secrets.PROD_DOMAIN }}/api/docs"
+            echo "  • Frontend: https://$PROD_DOMAIN"
+            echo "  • API: https://$PROD_DOMAIN/api/docs"
             echo "═══════════════════════════════════════════════════════════════"
