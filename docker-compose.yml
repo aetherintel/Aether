@@ -213,6 +213,8 @@ services:
     depends_on:
       keycloak:
         condition: service_started
+      translation-models:
+        condition: service_started
     environment:
       - DATABASE_URL=postgresql://${DB_USER}:${DB_PASSWORD}@postgres:5432/${POSTGRES_DB}
       - REDIS_HOST=redis
@@ -225,7 +227,7 @@ services:
     volumes:
       # Mount local models directory
       - ./aether_lib:/app/aether_lib:ro
-      - ./models/translation:/app/models/translation
+      - translation_models:/app/models/translation
     networks:
       - aether-network
     deploy:
@@ -259,10 +261,13 @@ services:
       - ${MEDIA_PATH}:/shared/media:ro
       # Mount shared library
       - ./aether_lib:/app/aether_lib:ro
+      - image_models:/app/models/image
     networks:
       - aether-network
     depends_on:
       keycloak:
+        condition: service_started
+      image-models:
         condition: service_started
     restart: unless-stopped
     mem_limit: 4g
@@ -291,12 +296,14 @@ services:
       USE_QUANTIZATION: "true"
     volumes:
       - ./aether_lib:/app/aether_lib:ro
-      - ./models/audio:/app/models/audio
+      - audio_models:/app/models/audio
       - ${MEDIA_PATH}:/shared/media:ro
     networks:
       - aether-network
     depends_on:
       keycloak:
+        condition: service_started
+      audio-models:
         condition: service_started
     restart: unless-stopped
     mem_limit: 6g
@@ -321,11 +328,13 @@ services:
       USE_QUANTIZATION: "true"
     volumes:
       - ./aether_lib:/app/aether_lib:ro
-      - ./models/emotion:/app/models/emotion
+      - emotion_models:/app/models/emotion
     networks:
       - aether-network
     depends_on:
       keycloak:
+        condition: service_started
+      emotion-models:
         condition: service_started
     restart: unless-stopped
     mem_limit: 4g
@@ -354,7 +363,7 @@ services:
       USE_QUANTIZATION: "true"
     volumes:
       - ./aether_lib:/app/aether_lib:ro
-      - ./models/classifier:/app/models/classifier
+      - classifier_models:/app/models/classifier
       - ${MEDIA_PATH}:/shared/media:ro
     networks:
       - aether-network
@@ -362,6 +371,8 @@ services:
       keycloak:
         condition: service_started
       neo4j:
+        condition: service_started
+      classifier-models:
         condition: service_started
     restart: unless-stopped
     mem_limit: 3G
@@ -393,11 +404,13 @@ services:
       - PHOTON_URL=http://photon:2322
     volumes:
       - ./aether_lib:/app/aether_lib:ro
-      - ./models/geolocation:/app/models/geolocation  # Cache for libpostal data
+      - geolocation_models:/app/models/geolocation  # Cache for libpostal data
     networks:
       - aether-network
     depends_on:
       keycloak:
+        condition: service_started
+      geolocation-models:
         condition: service_started
     restart: unless-stopped
     deploy:
@@ -429,7 +442,49 @@ services:
       start_period: 60s
     depends_on:
       - postgres
-    
+
+  translation-models:
+    build:
+      context: ./models
+      dockerfile: translation/Dockerfile
+    volumes:
+      - translation_models:/models
+
+  audio-models:
+    build:
+      context: ./models
+      dockerfile: audio/Dockerfile
+    volumes:
+      - audio_models:/models
+
+  emotion-models:
+    build:
+      context: ./models
+      dockerfile: emotion/Dockerfile
+    volumes:
+      - emotion_models:/models
+
+  classifier-models:
+    build:
+      context: ./models
+      dockerfile: classifier/Dockerfile
+    volumes:
+      - classifier_models:/models
+
+  image-models:
+    build:
+      context: ./models
+      dockerfile: image/Dockerfile
+    volumes:
+      - image_models:/models
+
+  geolocation-models:
+    build:
+      context: ./models
+      dockerfile: geolocation/Dockerfile
+    volumes:
+      - geolocation_models:/models
+  
 volumes:
   pgdata:
   neo4j_data:
@@ -438,6 +493,11 @@ volumes:
   tg_sessions:
   redis-data:
   translation_models:
+  audio_models:
+  emotion_models:
+  classifier_models:
+  image_models:
+  geolocation_models:
 
 # ============================================================================
 # NETWORKS

@@ -93,7 +93,7 @@ def load_classification_model():
         logger.info("📦 Loading Zero-Shot Classification model...")
         
         model_name = "MoritzLaurer/mDeBERTa-v3-base-xnli-multilingual-nli-2mil7"
-        model_path = f"/app/models/classification/{model_name.split('/')[-1]}"
+        model_path = f"/app/models/classifier/{model_name.split('/')[-1]}"
         
         if os.path.exists(model_path):
             logger.info(f"📁 Loading from local path: {model_path}")
