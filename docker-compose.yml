@@ -157,8 +157,8 @@ services:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       # Job Launcher
-      JOB_LAUNCHER_URL: ${JOB_LAUNCHER_URL}
-      JOB_SECRET_TOKEN: ${JOB_SECRET_TOKEN}
+
+      
       # Media
       MEDIA_ROOT: /shared/media
       # Redis
@@ -251,8 +251,8 @@ services:
       HOME: /app/models/image
       PADDLEX_HOME: /app/models/image
       MODEL_BASE_DIR: /app/models/image
-      JOB_LAUNCHER_URL: ${JOB_LAUNCHER_URL}
-      JOB_SECRET_TOKEN: ${JOB_SECRET_TOKEN}
+
+      
       NEO4J_URI: ${NEO4J_URI}
       NEO4J_USER: ${NEO4J_USER}
       NEO4J_PASSWORD: ${NEO4J_PASSWORD}
@@ -287,8 +287,8 @@ services:
       context: .
       dockerfile: workers/audio_worker/Dockerfile
     environment:
-      JOB_LAUNCHER_URL: ${JOB_LAUNCHER_URL}
-      JOB_SECRET_TOKEN: ${JOB_SECRET_TOKEN}
+
+      
       NEO4J_URI: ${NEO4J_URI}
       NEO4J_USER: ${NEO4J_USER}
       NEO4J_PASSWORD: ${NEO4J_PASSWORD}
@@ -319,8 +319,8 @@ services:
       context: .
       dockerfile: workers/emotion_worker/Dockerfile
     environment:
-      JOB_LAUNCHER_URL: ${JOB_LAUNCHER_URL}
-      JOB_SECRET_TOKEN: ${JOB_SECRET_TOKEN}
+
+      
       NEO4J_URI: ${NEO4J_URI}
       NEO4J_USER: ${NEO4J_USER}
       NEO4J_PASSWORD: ${NEO4J_PASSWORD}
@@ -354,8 +354,8 @@ services:
       context: .
       dockerfile: workers/classification_worker/Dockerfile
     environment:
-      JOB_LAUNCHER_URL: ${JOB_LAUNCHER_URL}
-      JOB_SECRET_TOKEN: ${JOB_SECRET_TOKEN}
+
+      
       NEO4J_URI: ${NEO4J_URI}
       NEO4J_USER: ${NEO4J_USER}
       NEO4J_PASSWORD: ${NEO4J_PASSWORD}
@@ -399,7 +399,6 @@ services:
       - POSTGRES_DB=${POSTGRES_DB}
       - POSTGRES_USER=${POSTGRES_USER}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-      - JOB_LAUNCHER_URL=${JOB_LAUNCHER_URL}
       - JOB_SECRET_TOKEN=${JOB_SECRET_TOKEN}
       - PHOTON_URL=http://photon:2322
     volumes:
