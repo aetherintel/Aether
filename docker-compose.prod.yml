@@ -9,8 +9,7 @@ services:
       POSTGRES_DB: keycloak
     volumes:
       - pgdata:/var/lib/postgresql/data
-      # ⚠️ REMOVED db-init mount to prevent re-initialization on every restart
-      # Init scripts should only run on first container creation
+      - ./docker/db-init:/docker-entrypoint-initdb.d
     networks:
       - aether-network
 
@@ -176,7 +175,6 @@ services:
     command: >
       rq worker telegram-jobs
       --url redis://redis:6379
-      --timeout -1
       --worker-ttl 0
       --job-monitoring-interval 60
     restart: unless-stopped
@@ -217,7 +215,6 @@ services:
     command: >
       rq worker translation-jobs
       --url redis://redis:6379/1
-      --timeout 3600
       --worker-ttl 1800
       --job-monitoring-interval 30
     restart: unless-stopped
@@ -257,7 +254,6 @@ services:
     command: >
       rq worker image-jobs
       --url redis://redis:6379/2
-      --timeout 1800
       --worker-ttl 1800
       --job-monitoring-interval 30
     restart: unless-stopped
@@ -293,7 +289,6 @@ services:
     command: >
       rq worker audio-jobs
       --url redis://redis:6379/3
-      --timeout 7200
       --worker-ttl 3600
       --job-monitoring-interval 60
     restart: unless-stopped
@@ -328,7 +323,6 @@ services:
     command: >
       rq worker emotion-jobs
       --url redis://redis:6379/4
-      --timeout 600
       --worker-ttl 900
       --job-monitoring-interval 30
     restart: unless-stopped
@@ -364,7 +358,6 @@ services:
     command: >
       rq worker classification-jobs
       --url redis://redis:6379/5
-      --timeout 600
       --worker-ttl 900
       --job-monitoring-interval 30
     restart: unless-stopped
@@ -401,7 +394,6 @@ services:
     command: >
       rq worker geolocation-jobs
       --url redis://redis:6379/6
-      --timeout 600
       --worker-ttl 900
       --job-monitoring-interval 30
     restart: unless-stopped
