@@ -77,6 +77,7 @@ populate_volume app_emotion_models emotion/german-emotions
 populate_volume app_image_models image/easyocr
 populate_volume app_classifier_models classifier/mDeBERTa-v3-base-xnli-multilingual-nli-2mil7
 populate_volume app_geolocation_models geolocation/geonames
+populate_volume app_photon_data geocoding/photon
 
 echo ""
 echo "✅ All volumes populated!"

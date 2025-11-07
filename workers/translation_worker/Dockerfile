@@ -4,6 +4,8 @@ WORKDIR /app
 
 # Copy requirements and install dependencies
 COPY workers/translation_worker/requirements.txt .
+
+RUN pip install --no-cache-dir torch==2.2.2 --index-url https://download.pytorch.org/whl/cpu
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy worker file
