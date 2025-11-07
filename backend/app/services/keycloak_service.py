@@ -4,12 +4,16 @@ from jose import jwt, jwk, JWTError
 from typing import List
 import requests
 from services.config import settings
+import os
 
 # OAuth2 configuration for Swagger UI
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 
 # JWKS endpoint
-PUBLIC_KEY_URL = f"{settings.KEYCLOAK_URL}/protocol/openid-connect/certs"
+PUBLIC_KEY_URL = os.getenv(
+    "KEYCLOAK_JWKS_URL",
+    f"{os.getenv('KEYCLOAK_INTERNAL_URL')}/protocol/openid-connect/certs"
+)
 
 # Get and cache public keys
 try:
