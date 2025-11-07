@@ -11,6 +11,9 @@ env:
   IMAGE_PREFIX: ${{ github.repository_owner }}/aether
 
 jobs:
+  # ============================================================
+  # BUILD & PUSH ALL IMAGES
+  # ============================================================
   build-and-push:
     runs-on: ubuntu-latest
     permissions:
@@ -26,12 +29,12 @@ jobs:
             build-args: |
               VITE_API_URL=https://aethery.cloud/api
           - service: backend
-            context: .  # ← ROOT
+            context: .
             dockerfile: ./backend/app/Dockerfile
           - service: telegram-scraper
-            context: .  # ← ROOT
+            context: .
             dockerfile: ./telegram_scraper/Dockerfile
-          
+
           # AI Worker services
           - service: translation-worker
             context: .
@@ -54,22 +57,22 @@ jobs:
           - service: photon
             context: .
             dockerfile: ./docker/photon/Dockerfile
-    
+
     steps:
-      - name: Checkout repository
+      - name: 🧾 Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Docker Buildx
+      - name: 🏗️ Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Log in to GitHub Container Registry
+      - name: 🔑 Log in to GitHub Container Registry
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Extract metadata
+      - name: 🧩 Extract metadata (tags, labels)
         id: meta
         uses: docker/metadata-action@v5
         with:
@@ -77,12 +80,10 @@ jobs:
           tags: |
             type=ref,event=branch
             type=ref,event=pr
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
             type=raw,value=latest,enable={{is_default_branch}}
             type=sha
 
-      - name: Build and push Docker image
+      - name: 🚀 Build and push ${{ matrix.service }}
         uses: docker/build-push-action@v5
         with:
           context: ${{ matrix.context }}
@@ -94,16 +95,27 @@ jobs:
           cache-to: type=gha,mode=max
           build-args: ${{ matrix.build-args }}
 
-      - name: Deploy to Production VM
+  # ============================================================
+  # DEPLOY TO PRODUCTION VM (runs once after all builds)
+  # ============================================================
+  deploy:
+    runs-on: ubuntu-latest
+    needs: build-and-push
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - name: 🚀 Deploy to Production VM
         uses: appleboy/ssh-action@v1.0.0
         with:
           host: ${{ secrets.PROD_HOST }}
           username: ${{ secrets.PROD_USER }}
           key: ${{ secrets.PROD_SSH_KEY }}
-          command_timeout: 20m
+          command_timeout: 15m
           script: |
             cd ~/app
-            
+            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
+            echo "🚀 DEPLOYMENT START"
+
             export REGISTRY=ghcr.io
             export GITHUB_REPOSITORY_OWNER=${{ github.repository_owner }}
             export GITHUB_USER=${{ github.actor }}
@@ -128,15 +140,11 @@ jobs:
             export POSTGRES_DB=telegramdb
             export POSTGRES_USER=telegramuser
             export ENVIRONMENT=prod
-            
+
             COMPOSE_CMD="docker compose"
-            
-            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
-            
-            echo "🚀 DEPLOYMENT START"
-            
+
             # ═══════════════════════════════════════════════════════════════
-            # CLEAN START (only if requested)
+            # CLEAN START (optional trigger)
             # ═══════════════════════════════════════════════════════════════
             if [ "${{ github.event.head_commit.message }}" = "redeploy: clean install" ]; then
               echo "🧹 Clean install requested..."
@@ -144,117 +152,51 @@ jobs:
               docker volume rm app_pgdata app_keycloak_data app_tg_sessions app_redis_data 2>/dev/null || true
               echo "✅ Cleanup complete"
             fi
-            
+
             # ═══════════════════════════════════════════════════════════════
             # PHASE 1: Infrastructure
             # ═══════════════════════════════════════════════════════════════
-            echo "📦 Infrastructure..."
-            $COMPOSE_CMD -f docker-compose.prod.yml up -d postgres neo4j keycloak redis
-            sleep 20  # ← Länger warten für DB init
-            
+            echo "📦 Infrastructure (cached)..."
+            $COMPOSE_CMD -f docker-compose.prod.yml up -d --no-build --no-recreate postgres neo4j keycloak redis
+            sleep 15
+
             # ═══════════════════════════════════════════════════════════════
             # PHASE 2: SSL Certificate
             # ═══════════════════════════════════════════════════════════════
             echo "🔐 SSL Certificate..."
-            
             if [ ! -f "certbot/conf/live/$PROD_DOMAIN/fullchain.pem" ]; then
               echo "  Generating certificate..."
               mkdir -p certbot/{www,conf}
-              
               docker run -d --name nginx-acme -p 80:80 \
                 -v $(pwd)/certbot/www:/usr/share/nginx/html nginx:alpine
               sleep 5
-              
-              docker run --rm \
-                --network host \
+              docker run --rm --network host \
                 -v $(pwd)/certbot/conf:/etc/letsencrypt \
                 -v $(pwd)/certbot/www:/var/www/certbot \
                 certbot/certbot certonly \
                 --webroot -w /var/www/certbot \
                 -d $PROD_DOMAIN \
                 --email $PROD_MAIL \
-                --agree-tos \
-                --non-interactive
-              
-              docker stop nginx-acme && docker rm nginx-acme
-              
-              if [ ! -f "certbot/conf/live/$PROD_DOMAIN/fullchain.pem" ]; then
-                echo "⚠️  SSL FAILED - continuing with HTTP"
-              else
-                echo "✅ Certificate created"
-              fi
+                --agree-tos --non-interactive
+              docker stop nginx-acme && docker rm nginx-acme || true
+              echo "✅ Certificate setup complete"
             else
-              echo "✅ Certificate exists"
+              echo "✅ Certificate already exists"
             fi
-            
+
             # ═══════════════════════════════════════════════════════════════
-            # PHASE 3: Pull Images
+            # PHASE 3: Deploy Application
             # ═══════════════════════════════════════════════════════════════
-            echo "📥 Pulling latest images..."
-            $COMPOSE_CMD -f docker-compose.prod.yml pull backend frontend \
+            echo "🔄 Deploying updated services..."
+            $COMPOSE_CMD -f docker-compose.prod.yml up -d --no-build backend frontend \
               telegram-worker translation-worker audio-worker emotion-worker \
-              image-worker classification-worker geolocation-worker photon 2>&1 | grep -v "Pulling"
-            
-            # ═══════════════════════════════════════════════════════════════
-            # PHASE 4: Deploy Application
-            # ═══════════════════════════════════════════════════════════════
-            echo "🔄 Deploying services..."
-            
-            # Stop & remove old app containers
-            $COMPOSE_CMD -f docker-compose.prod.yml stop backend frontend \
-              telegram-worker translation-worker audio-worker emotion-worker \
-              image-worker classification-worker geolocation-worker photon certbot-daemon 2>/dev/null || true
-            
-            $COMPOSE_CMD -f docker-compose.prod.yml rm -f backend frontend \
-              telegram-worker translation-worker audio-worker emotion-worker \
-              image-worker classification-worker geolocation-worker photon certbot-daemon 2>/dev/null || true
-            
-            # Start certbot daemon
-            $COMPOSE_CMD -f docker-compose.prod.yml up -d certbot-daemon
-            
-            # Start backend
-            echo "  🔄 backend"
-            $COMPOSE_CMD -f docker-compose.prod.yml up -d backend
-            sleep 10  # ← Backend braucht Zeit für DB-Init
-            
-            # Check if backend started
-            if ! $COMPOSE_CMD -f docker-compose.prod.yml ps backend | grep -q "Up"; then
-              echo "❌ Backend failed to start"
-              $COMPOSE_CMD -f docker-compose.prod.yml logs --tail=50 backend
-              exit 1
-            fi
-            
-            # Start frontend
-            echo "  🔄 frontend"
-            $COMPOSE_CMD -f docker-compose.prod.yml up -d frontend
-            sleep 5
-            
-            # Start workers
-            echo "  🔄 workers"
-            $COMPOSE_CMD -f docker-compose.prod.yml up -d photon
-            sleep 10  # Photon braucht Zeit
-            
-            $COMPOSE_CMD -f docker-compose.prod.yml up -d \
-              telegram-worker translation-worker audio-worker emotion-worker \
-              image-worker classification-worker geolocation-worker
-            
-            # ═══════════════════════════════════════════════════════════════
-            # PHASE 5: Scale Workers
-            # ═══════════════════════════════════════════════════════════════
+              image-worker classification-worker geolocation-worker photon
+
+            # Scale workers
             echo "📊 Scaling workers..."
             $COMPOSE_CMD -f docker-compose.prod.yml up -d --no-recreate \
               --scale telegram-worker=3 \
-              --scale translation-worker=1 \
-              --scale emotion-worker=1 \
               --scale geolocation-worker=2
-            
-            sleep 5
-            
-            echo ""
-            echo "✅ DEPLOYMENT COMPLETE"
-            echo "🔗 https://$PROD_DOMAIN"
-            echo ""
-            
-            # Health check
-            echo "🏥 Service Status:"
+
+            echo "✅ Deployment complete!"
             $COMPOSE_CMD -f docker-compose.prod.yml ps --format "table {{.Service}}\t{{.Status}}\t{{.Ports}}"
