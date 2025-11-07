@@ -55,7 +55,7 @@ services:
       SWAGGER_TOKEN_URL: https://${PROD_DOMAIN:-aethery.cloud}/keycloak/realms/Aether/protocol/openid-connect/token
       KEYCLOAK_BASE_URL: https://${PROD_DOMAIN:-aethery.cloud}/keycloak
       KEYCLOAK_URL: https://${PROD_DOMAIN:-aethery.cloud}/keycloak/realms/Aether
-      KEYCLOAK_INTERNAL_URL: https://${PROD_DOMAIN:-aethery.cloud}/keycloak/realms/Aether
+      KEYCLOAK_INTERNAL_URL: http://keycloak:8080/keycloak/realms/Aether
       KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN}
       KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
       KEYCLOAK_HOSTNAME: keycloak
