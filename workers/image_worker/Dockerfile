@@ -14,7 +14,7 @@ RUN apt-get update && apt-get install -y \
 
 # Copy requirements
 COPY workers/image_worker/requirements.txt .
-
+COPY aether_lib /app/aether_lib
 # Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 

@@ -26,10 +26,10 @@ jobs:
             build-args: |
               VITE_API_URL=https://aethery.cloud/api
           - service: backend
-            context: ./backend/app
+            context: .  # ← ROOT
             dockerfile: ./backend/app/Dockerfile
           - service: telegram-scraper
-            context: ./telegram_scraper
+            context: .  # ← ROOT
             dockerfile: ./telegram_scraper/Dockerfile
           
           # AI Worker services

@@ -11,7 +11,7 @@ RUN apt-get update && apt-get install -y \
 # Copy requirements and install
 COPY workers/geolocation_worker/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
-
+COPY aether_lib /app/aether_lib
 # Copy worker code
 COPY workers/geolocation_worker/ ./workers/geolocation_worker/
 COPY aether_lib/ ./aether_lib/
