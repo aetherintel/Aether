@@ -76,7 +76,7 @@ services:
       TG_API_ID: ${TG_API_ID}
       TG_API_HASH: ${TG_API_HASH}
       TG_PHONE: ${TG_PHONE}
-      MEDIA_PATH: ./shared/media
+      MEDIA_PATH: /shared/media
       ENVIRONMENT: prod
       GITHUB_USER: ${GITHUB_USER}
       GITHUB_TOKEN: ${GITHUB_TOKEN}
@@ -469,17 +469,24 @@ volumes:
   tg_sessions:
   redis_data:
   ai_models:
-  photon_data:
-    external: true
   translation_models:
     external: true
+    name: app_translation_models  # ← Expliziter Name
   audio_models:
     external: true
+    name: app_audio_models
   emotion_models:
     external: true
+    name: app_emotion_models
   classifier_models:
     external: true
+    name: app_classifier_models
   image_models:
     external: true
+    name: app_image_models
   geolocation_models:
     external: true
+    name: app_geolocation_models
+  photon_data:
+    external: true
+    name: app_photon_data
