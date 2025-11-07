@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 # URL to wait for
-host="${KEYCLOAK_URL}"
+host="${KEYCLOAK_INTERNAL_URL}"
 
 # Wait until the URL is reachable
 until curl -s "$host" >/dev/null; do
