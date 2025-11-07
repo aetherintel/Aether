@@ -13,6 +13,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY aether_lib /app/aether_lib
 # Copy requirements and install
 COPY workers/emotion_worker/requirements.txt .
+RUN pip install --no-cache-dir torch==2.2.2 --index-url https://download.pytorch.org/whl/cpu
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy worker module files directly to /app (flat structure)
