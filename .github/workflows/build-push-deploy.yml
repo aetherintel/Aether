@@ -144,7 +144,6 @@ jobs:
             export POSTGRES_PORT=5432
             export POSTGRES_DB=telegramdb
             export POSTGRES_USER=telegramuser
-            export MEDIA_PATH=\$./shared/media
             export ENVIRONMENT=prod
             
             COMPOSE_CMD="docker compose"
@@ -153,24 +152,26 @@ jobs:
             
             echo "🚀 DEPLOYMENT START"
             
-            # Infrastructure
+            # ═══════════════════════════════════════════════════════════════
+            # PHASE 1: Infrastructure
+            # ═══════════════════════════════════════════════════════════════
             echo "📦 Infrastructure..."
             $COMPOSE_CMD -f docker-compose.prod.yml up -d postgres neo4j keycloak redis
             sleep 15
-            # GitHub Actions - SSL Teil ersetzen:
-            # SSL Certificate
+            
+            # ═══════════════════════════════════════════════════════════════
+            # PHASE 2: SSL Certificate
+            # ═══════════════════════════════════════════════════════════════
             echo "🔐 SSL Certificate..."
-
+            
             if [ ! -f "certbot/conf/live/$PROD_DOMAIN/fullchain.pem" ]; then
               echo "  Generating certificate..."
               mkdir -p certbot/{www,conf}
               
-              # Temp Nginx
               docker run -d --name nginx-acme -p 80:80 \
                 -v $(pwd)/certbot/www:/usr/share/nginx/html nginx:alpine
               sleep 5
               
-              # Certbot with IPv4-only DNS
               docker run --rm \
                 --network host \
                 -v $(pwd)/certbot/conf:/etc/letsencrypt \
@@ -194,13 +195,51 @@ jobs:
               echo "✅ Certificate exists"
             fi
             
-            # Deploy Application
-            echo "📥 Pulling images..."
-            $COMPOSE_CMD -f docker-compose.prod.yml pull
+            # ═══════════════════════════════════════════════════════════════
+            # PHASE 3: Pull Images
+            # ═══════════════════════════════════════════════════════════════
+            echo "📥 Pulling latest images..."
+            $COMPOSE_CMD -f docker-compose.prod.yml pull backend frontend \
+              telegram-worker translation-worker audio-worker emotion-worker \
+              image-worker classification-worker geolocation-worker photon
             
-            echo "🔄 Deploying..."
-            $COMPOSE_CMD -f docker-compose.prod.yml up -d --force-recreate
+            # ═══════════════════════════════════════════════════════════════
+            # PHASE 4: Deploy Application (FORCE RECREATE)
+            # ═══════════════════════════════════════════════════════════════
+            echo "🔄 Deploying application services..."
             
+            # Stop old containers
+            echo "  Stopping old containers..."
+            $COMPOSE_CMD -f docker-compose.prod.yml stop backend frontend \
+              telegram-worker translation-worker audio-worker emotion-worker \
+              image-worker classification-worker geolocation-worker photon 2>/dev/null || true
+            
+            # Remove old containers
+            echo "  Removing old containers..."
+            $COMPOSE_CMD -f docker-compose.prod.yml rm -f backend frontend \
+              telegram-worker translation-worker audio-worker emotion-worker \
+              image-worker classification-worker geolocation-worker photon 2>/dev/null || true
+            
+            # Start backend first
+            echo "  🔄 backend"
+            $COMPOSE_CMD -f docker-compose.prod.yml up -d backend
+            sleep 5
+            
+            # Start frontend
+            echo "  🔄 frontend"
+            $COMPOSE_CMD -f docker-compose.prod.yml up -d frontend
+            sleep 3
+            
+            # Start workers
+            echo "  🔄 workers"
+            $COMPOSE_CMD -f docker-compose.prod.yml up -d photon
+            $COMPOSE_CMD -f docker-compose.prod.yml up -d \
+              telegram-worker translation-worker audio-worker emotion-worker \
+              image-worker classification-worker geolocation-worker
+            
+            # ═══════════════════════════════════════════════════════════════
+            # PHASE 5: Scale Workers
+            # ═══════════════════════════════════════════════════════════════
             echo "📊 Scaling workers..."
             $COMPOSE_CMD -f docker-compose.prod.yml up -d --no-recreate \
               --scale telegram-worker=3 \
@@ -214,4 +253,11 @@ jobs:
             echo "✅ DEPLOYMENT COMPLETE"
             echo "🔗 https://$PROD_DOMAIN"
             echo ""
+            
+            # Health check
+            echo "🏥 Service Status:"
             $COMPOSE_CMD -f docker-compose.prod.yml ps
+            
+            echo ""
+            echo "🐳 Backend Image:"
+            docker inspect backend --format='{{.Config.Image}}' 2>/dev/null || echo "Backend not running"
