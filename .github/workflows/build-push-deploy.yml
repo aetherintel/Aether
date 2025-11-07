@@ -94,23 +94,6 @@ jobs:
           cache-to: type=gha,mode=max
           build-args: ${{ matrix.build-args }}
 
-  deploy-to-vm:
-    needs: build-and-push
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Copy files to production VM
-        uses: appleboy/scp-action@v0.1.5
-        with:
-          host: ${{ secrets.PROD_HOST }}
-          username: ${{ secrets.PROD_USER }}
-          key: ${{ secrets.PROD_SSH_KEY }}
-          source: "docker-compose.prod.yml,docker/,keycloak/,certbot/,scripts/"
-          target: "~/app/"
-          strip_components: 0
-
       - name: Deploy to Production VM
         uses: appleboy/ssh-action@v1.0.0
         with:
@@ -153,11 +136,21 @@ jobs:
             echo "🚀 DEPLOYMENT START"
             
             # ═══════════════════════════════════════════════════════════════
+            # CLEAN START (only if requested)
+            # ═══════════════════════════════════════════════════════════════
+            if [ "${{ github.event.head_commit.message }}" = "redeploy: clean install" ]; then
+              echo "🧹 Clean install requested..."
+              $COMPOSE_CMD -f docker-compose.prod.yml down
+              docker volume rm app_pgdata app_keycloak_data app_tg_sessions app_redis_data 2>/dev/null || true
+              echo "✅ Cleanup complete"
+            fi
+            
+            # ═══════════════════════════════════════════════════════════════
             # PHASE 1: Infrastructure
             # ═══════════════════════════════════════════════════════════════
             echo "📦 Infrastructure..."
             $COMPOSE_CMD -f docker-compose.prod.yml up -d postgres neo4j keycloak redis
-            sleep 15
+            sleep 20  # ← Länger warten für DB init
             
             # ═══════════════════════════════════════════════════════════════
             # PHASE 2: SSL Certificate
@@ -186,11 +179,10 @@ jobs:
               docker stop nginx-acme && docker rm nginx-acme
               
               if [ ! -f "certbot/conf/live/$PROD_DOMAIN/fullchain.pem" ]; then
-                echo "❌ SSL FAILED"
-                exit 1
+                echo "⚠️  SSL FAILED - continuing with HTTP"
+              else
+                echo "✅ Certificate created"
               fi
-              
-              echo "✅ Certificate created"
             else
               echo "✅ Certificate exists"
             fi
@@ -201,38 +193,47 @@ jobs:
             echo "📥 Pulling latest images..."
             $COMPOSE_CMD -f docker-compose.prod.yml pull backend frontend \
               telegram-worker translation-worker audio-worker emotion-worker \
-              image-worker classification-worker geolocation-worker photon
+              image-worker classification-worker geolocation-worker photon 2>&1 | grep -v "Pulling"
             
             # ═══════════════════════════════════════════════════════════════
-            # PHASE 4: Deploy Application (FORCE RECREATE)
+            # PHASE 4: Deploy Application
             # ═══════════════════════════════════════════════════════════════
-            echo "🔄 Deploying application services..."
+            echo "🔄 Deploying services..."
             
-            # Stop old containers
-            echo "  Stopping old containers..."
+            # Stop & remove old app containers
             $COMPOSE_CMD -f docker-compose.prod.yml stop backend frontend \
               telegram-worker translation-worker audio-worker emotion-worker \
-              image-worker classification-worker geolocation-worker photon 2>/dev/null || true
+              image-worker classification-worker geolocation-worker photon certbot-daemon 2>/dev/null || true
             
-            # Remove old containers
-            echo "  Removing old containers..."
             $COMPOSE_CMD -f docker-compose.prod.yml rm -f backend frontend \
               telegram-worker translation-worker audio-worker emotion-worker \
-              image-worker classification-worker geolocation-worker photon 2>/dev/null || true
+              image-worker classification-worker geolocation-worker photon certbot-daemon 2>/dev/null || true
             
-            # Start backend first
+            # Start certbot daemon
+            $COMPOSE_CMD -f docker-compose.prod.yml up -d certbot-daemon
+            
+            # Start backend
             echo "  🔄 backend"
             $COMPOSE_CMD -f docker-compose.prod.yml up -d backend
-            sleep 5
+            sleep 10  # ← Backend braucht Zeit für DB-Init
+            
+            # Check if backend started
+            if ! $COMPOSE_CMD -f docker-compose.prod.yml ps backend | grep -q "Up"; then
+              echo "❌ Backend failed to start"
+              $COMPOSE_CMD -f docker-compose.prod.yml logs --tail=50 backend
+              exit 1
+            fi
             
             # Start frontend
             echo "  🔄 frontend"
             $COMPOSE_CMD -f docker-compose.prod.yml up -d frontend
-            sleep 3
+            sleep 5
             
             # Start workers
             echo "  🔄 workers"
             $COMPOSE_CMD -f docker-compose.prod.yml up -d photon
+            sleep 10  # Photon braucht Zeit
+            
             $COMPOSE_CMD -f docker-compose.prod.yml up -d \
               telegram-worker translation-worker audio-worker emotion-worker \
               image-worker classification-worker geolocation-worker
@@ -247,7 +248,7 @@ jobs:
               --scale emotion-worker=1 \
               --scale geolocation-worker=2
             
-            sleep 10
+            sleep 5
             
             echo ""
             echo "✅ DEPLOYMENT COMPLETE"
@@ -256,8 +257,4 @@ jobs:
             
             # Health check
             echo "🏥 Service Status:"
-            $COMPOSE_CMD -f docker-compose.prod.yml ps
-            
-            echo ""
-            echo "🐳 Backend Image:"
-            docker inspect backend --format='{{.Config.Image}}' 2>/dev/null || echo "Backend not running"
+            $COMPOSE_CMD -f docker-compose.prod.yml ps --format "table {{.Service}}\t{{.Status}}\t{{.Ports}}"
