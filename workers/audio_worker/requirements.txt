@@ -5,7 +5,7 @@ requests==2.31.0
 pydantic
 # Audio transcription (ARM + CPU-safe versions)
 # CPU-only PyTorch (installed from official PyTorch index via Dockerfile)
-torch==2.2.2+cpu
+
 openai-whisper==20240927
 soundfile==0.12.1
 numpy<2
@@ -21,3 +21,7 @@ pytest-asyncio==0.21.1
 
 # Neo4j client (shared library)
 neo4j>=5.14.0
+
+
+--index-url https://download.pytorch.org/whl/cpu
+torch==2.2.2+cpu
