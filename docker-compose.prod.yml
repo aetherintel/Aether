@@ -76,14 +76,14 @@ services:
       TG_API_ID: ${TG_API_ID}
       TG_API_HASH: ${TG_API_HASH}
       TG_PHONE: ${TG_PHONE}
-      MEDIA_PATH: ${PWD}/shared/media
+      MEDIA_PATH: $./shared/media
       ENVIRONMENT: prod
       GITHUB_USER: ${GITHUB_USER}
       GITHUB_TOKEN: ${GITHUB_TOKEN}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - tg_sessions:/app/sessions
-      - ${PWD}/shared/media:/shared/media
+      - $./shared/media:/shared/media
     depends_on:
       - postgres
       - keycloak

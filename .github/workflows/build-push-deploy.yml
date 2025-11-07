@@ -144,7 +144,7 @@ jobs:
             export POSTGRES_PORT=5432
             export POSTGRES_DB=telegramdb
             export POSTGRES_USER=telegramuser
-            export MEDIA_PATH=\${PWD}/shared/media
+            export MEDIA_PATH=\$./shared/media
             export ENVIRONMENT=prod
             
             COMPOSE_CMD="docker compose"
