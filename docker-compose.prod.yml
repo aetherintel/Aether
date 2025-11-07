@@ -76,14 +76,14 @@ services:
       TG_API_ID: ${TG_API_ID}
       TG_API_HASH: ${TG_API_HASH}
       TG_PHONE: ${TG_PHONE}
-      MEDIA_PATH: $./shared/media
+      MEDIA_PATH: ./shared/media
       ENVIRONMENT: prod
       GITHUB_USER: ${GITHUB_USER}
       GITHUB_TOKEN: ${GITHUB_TOKEN}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - tg_sessions:/app/sessions
-      - $./shared/media:/shared/media
+      - ./shared/media:/shared/media
     depends_on:
       - postgres
       - keycloak
@@ -439,7 +439,24 @@ services:
   # ============================================================================
   # PHOTON GEOCODING SERVICE
   # ============================================================================
-
+  photon:
+    image: ghcr.io/${GITHUB_REPOSITORY_OWNER:-aetherintel}/aether-photon:latest
+    container_name: photon
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:2322:2322"
+    volumes:
+      - photon_data:/photon/photon_data
+    environment:
+      - JAVA_OPTS=-Xmx2g
+    networks:
+      - aether-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:2322/api?q=Berlin"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
 networks:
   aether-network:
     driver: bridge
