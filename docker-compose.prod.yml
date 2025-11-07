@@ -270,7 +270,7 @@ services:
       NEO4J_USER: ${NEO4J_USER}
       NEO4J_PASSWORD: ${NEO4J_PASSWORD}
     volumes:
-      - ${MEDIA_PATH}:/shared/media:ro
+      - ./shared/media:/shared/media:ro
       - image_models:/app/models
     depends_on:
       - redis
@@ -306,7 +306,7 @@ services:
       USE_QUANTIZATION: "true"
     volumes:
       - audio_models:/app/models
-      - ${MEDIA_PATH}:/shared/media:ro
+      - ./shared/media:/shared/media:ro
     depends_on:
       - redis
       - neo4j
@@ -378,7 +378,7 @@ services:
       USE_QUANTIZATION: "true"
     volumes:
       - classifier_models:/app/models
-      - ${MEDIA_PATH}:/shared/media:ro
+      - ./shared/media:/shared/media:ro
     depends_on:
       - redis
       - neo4j
