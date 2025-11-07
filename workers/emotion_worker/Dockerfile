@@ -10,7 +10,7 @@ WORKDIR /app
 # Install system dependencies (if needed for torch)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
-
+COPY aether_lib /app/aether_lib
 # Copy requirements and install
 COPY workers/emotion_worker/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt

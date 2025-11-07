@@ -8,7 +8,7 @@ RUN apt-get update && apt-get install -y \
 
 # Set working directory
 WORKDIR /app
-
+COPY aether_lib /app/aether_lib
 # Copy requirements and install
 COPY workers/classification_worker/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt

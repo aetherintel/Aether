@@ -3,7 +3,7 @@ WORKDIR /app/telegram_job
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
-
+COPY aether_lib /app/aether_lib
 # Kopiere alles direkt ins WORKDIR
 COPY telegram_job/*.py ./
 
