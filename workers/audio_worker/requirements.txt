@@ -5,7 +5,7 @@ requests==2.31.0
 pydantic
 # Audio transcription (ARM + CPU-safe versions)
 # CPU-only PyTorch (installed from official PyTorch index via Dockerfile)
-torch==2.2.2
+torch==2.2.2+cpu
 openai-whisper==20240927
 soundfile==0.12.1
 numpy<2
