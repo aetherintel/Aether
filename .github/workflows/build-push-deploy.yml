@@ -170,10 +170,9 @@ jobs:
                 -v $(pwd)/certbot/www:/usr/share/nginx/html nginx:alpine
               sleep 5
               
-              # Certbot MIT DNS
+              # Certbot with IPv4-only DNS
               docker run --rm \
-                --dns 8.8.8.8 \
-                --dns 1.1.1.1 \
+                --network host \
                 -v $(pwd)/certbot/conf:/etc/letsencrypt \
                 -v $(pwd)/certbot/www:/var/www/certbot \
                 certbot/certbot certonly \
@@ -187,7 +186,6 @@ jobs:
               
               if [ ! -f "certbot/conf/live/$PROD_DOMAIN/fullchain.pem" ]; then
                 echo "❌ SSL FAILED"
-                echo "Debug: Check if port 80 is accessible from outside"
                 exit 1
               fi
               
