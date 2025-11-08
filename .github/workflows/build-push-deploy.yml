@@ -109,16 +109,16 @@ jobs:
           username: ${{ secrets.PROD_USER }}
           key: ${{ secrets.PROD_SSH_KEY }}
           command_timeout: 15m
+          # .github/workflows/deploy.yml - deploy job script section
           script: |
             cd ~/app
             echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
 
             echo "🚀 DEPLOYMENT START"
 
+            # ENV vars
             export REGISTRY=ghcr.io
             export GITHUB_REPOSITORY_OWNER=${{ github.repository_owner }}
-            export GITHUB_USER=${{ github.actor }}
-            export GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }}
             export PROD_DOMAIN=${{ secrets.PROD_DOMAIN }}
             export PROD_MAIL=${{ secrets.PROD_MAIL }}
             export DB_USER=${{ secrets.DB_USER }}
@@ -143,26 +143,30 @@ jobs:
             COMPOSE_CMD="docker compose"
 
             # ═══════════════════════════════════════════════════════════════
-            # CLEAN START (optional trigger)
+            # PHASE 1: Pull Latest Images
             # ═══════════════════════════════════════════════════════════════
-            if [ "${{ github.event.head_commit.message }}" = "redeploy: clean install" ]; then
-              echo "🧹 Clean install requested..."
-              $COMPOSE_CMD -f docker-compose.prod.yml down
-              docker volume rm app_pgdata app_keycloak_data app_tg_sessions app_redis_data 2>/dev/null || true
-              echo "✅ Cleanup complete"
-            fi
+            echo "📦 Pulling latest images..."
+            $COMPOSE_CMD -f docker-compose.prod.yml pull
 
             # ═══════════════════════════════════════════════════════════════
-            # PHASE 1: Infrastructure
+            # PHASE 2: Infrastructure (keep running, don't recreate)
             # ═══════════════════════════════════════════════════════════════
-            echo "📦 Infrastructure (cached)..."
-            $COMPOSE_CMD -f docker-compose.prod.yml up -d --no-build --no-recreate postgres neo4j keycloak redis
+            echo "🗄️ Ensuring infrastructure is running..."
+            $COMPOSE_CMD -f docker-compose.prod.yml up -d --no-recreate postgres neo4j redis
+
+            # ═══════════════════════════════════════════════════════════════
+            # PHASE 3: Keycloak (force recreate to fix config)
+            # ═══════════════════════════════════════════════════════════════
+            echo "🔐 Updating Keycloak..."
+            docker stop keycloak 2>/dev/null || true
+            docker rm keycloak 2>/dev/null || true
+            $COMPOSE_CMD -f docker-compose.prod.yml up -d keycloak
             sleep 15
 
             # ═══════════════════════════════════════════════════════════════
-            # PHASE 2: SSL Certificate
+            # PHASE 4: SSL Certificate
             # ═══════════════════════════════════════════════════════════════
-            echo "🔐 SSL Certificate..."
+            echo "🔐 Checking SSL Certificate..."
             if [ ! -f "certbot/conf/live/$PROD_DOMAIN/fullchain.pem" ]; then
               echo "  Generating certificate..."
               mkdir -p certbot/{www,conf}
@@ -178,24 +182,38 @@ jobs:
                 --email $PROD_MAIL \
                 --agree-tos --non-interactive
               docker stop nginx-acme && docker rm nginx-acme || true
-              echo "✅ Certificate setup complete"
-            else
-              echo "✅ Certificate already exists"
             fi
 
             # ═══════════════════════════════════════════════════════════════
-            # PHASE 3: Deploy Application
+            # PHASE 5: Application Services (force recreate)
             # ═══════════════════════════════════════════════════════════════
-            echo "🔄 Deploying updated services..."
-            $COMPOSE_CMD -f docker-compose.prod.yml up -d --no-build backend frontend \
-              telegram-worker translation-worker audio-worker emotion-worker \
-              image-worker classification-worker geolocation-worker photon
+            echo "🔄 Deploying application services..."
+            $COMPOSE_CMD -f docker-compose.prod.yml up -d --force-recreate \
+              backend frontend photon
 
-            # Scale workers
-            echo "📊 Scaling workers..."
-            $COMPOSE_CMD -f docker-compose.prod.yml up -d --no-recreate \
+            # ═══════════════════════════════════════════════════════════════
+            # PHASE 6: Workers (stop old, remove, start new with scale)
+            # ═══════════════════════════════════════════════════════════════
+            echo "👷 Updating workers..."
+            
+            # Stop & remove all old workers
+            docker stop $(docker ps -q --filter "name=worker") 2>/dev/null || true
+            docker rm $(docker ps -aq --filter "name=worker") 2>/dev/null || true
+            
+            # Start new workers with scaling
+            $COMPOSE_CMD -f docker-compose.prod.yml up -d \
               --scale telegram-worker=3 \
-              --scale geolocation-worker=2
+              --scale translation-worker=2 \
+              --scale emotion-worker=2 \
+              --scale geolocation-worker=2 \
+              telegram-worker translation-worker audio-worker emotion-worker \
+              image-worker classification-worker geolocation-worker
+
+            # ═══════════════════════════════════════════════════════════════
+            # PHASE 7: Cleanup Old Images
+            # ═══════════════════════════════════════════════════════════════
+            echo "🧹 Cleaning up old images..."
+            docker image prune -af --filter "until=24h"
 
             echo "✅ Deployment complete!"
-            $COMPOSE_CMD -f docker-compose.prod.yml ps --format "table {{.Service}}\t{{.Status}}\t{{.Ports}}"
+            $COMPOSE_CMD -f docker-compose.prod.yml ps
