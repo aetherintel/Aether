@@ -149,19 +149,20 @@ jobs:
             $COMPOSE_CMD -f docker-compose.prod.yml pull
 
             # ═══════════════════════════════════════════════════════════════
-            # PHASE 2: Infrastructure (keep running, don't recreate)
+            # PHASE 2: Infrastructure (keep running)
             # ═══════════════════════════════════════════════════════════════
             echo "🗄️ Ensuring infrastructure is running..."
             $COMPOSE_CMD -f docker-compose.prod.yml up -d --no-recreate postgres neo4j redis
 
             # ═══════════════════════════════════════════════════════════════
-            # PHASE 3: Keycloak (force recreate to fix config)
+            # PHASE 3: Keycloak (complete rebuild)
             # ═══════════════════════════════════════════════════════════════
             echo "🔐 Updating Keycloak..."
             docker stop keycloak 2>/dev/null || true
             docker rm keycloak 2>/dev/null || true
-            $COMPOSE_CMD -f docker-compose.prod.yml up -d keycloak
-            sleep 15
+            $COMPOSE_CMD -f docker-compose.prod.yml up -d keycloak --force-recreate --no-build
+            echo "⏳ Waiting for Keycloak to initialize..."
+            sleep 30
 
             # ═══════════════════════════════════════════════════════════════
             # PHASE 4: SSL Certificate
@@ -185,35 +186,42 @@ jobs:
             fi
 
             # ═══════════════════════════════════════════════════════════════
-            # PHASE 5: Application Services (force recreate)
+            # PHASE 5: Application Services (complete rebuild)
             # ═══════════════════════════════════════════════════════════════
             echo "🔄 Deploying application services..."
-            $COMPOSE_CMD -f docker-compose.prod.yml up -d --force-recreate \
-            backend frontend photon \
-            -e KEYCLOAK_BASE_URL="http://keycloak:8080/keycloak" \
-            -e KEYCLOAK_INTERNAL_URL="http://keycloak:8080/keycloak/realms/Aether"
+            docker stop backend frontend photon 2>/dev/null || true
+            docker rm backend frontend photon 2>/dev/null || true
+            
+            $COMPOSE_CMD -f docker-compose.prod.yml up -d \
+              backend frontend photon \
+              --force-recreate --no-build
 
+            echo "⏳ Verifying backend startup..."
+            sleep 10
+            if ! docker ps | grep -q backend; then
+              echo "❌ Backend failed to start!"
+              docker logs backend --tail 50
+              exit 1
+            fi
 
             # ═══════════════════════════════════════════════════════════════
-            # PHASE 6: Workers (stop old, remove, start new with scale)
+            # PHASE 6: Workers (complete rebuild)
             # ═══════════════════════════════════════════════════════════════
             echo "👷 Updating workers..."
-            
-            # Stop & remove all old workers
             docker stop $(docker ps -q --filter "name=worker") 2>/dev/null || true
             docker rm $(docker ps -aq --filter "name=worker") 2>/dev/null || true
             
-            # Start new workers with scaling
             $COMPOSE_CMD -f docker-compose.prod.yml up -d \
               --scale telegram-worker=3 \
               --scale translation-worker=2 \
               --scale emotion-worker=2 \
               --scale geolocation-worker=2 \
+              --force-recreate --no-build \
               telegram-worker translation-worker audio-worker emotion-worker \
               image-worker classification-worker geolocation-worker
 
             # ═══════════════════════════════════════════════════════════════
-            # PHASE 7: Cleanup Old Images
+            # PHASE 7: Cleanup
             # ═══════════════════════════════════════════════════════════════
             echo "🧹 Cleaning up old images..."
             docker image prune -af --filter "until=24h"
