@@ -188,10 +188,11 @@ jobs:
             # PHASE 5: Application Services (force recreate)
             # ═══════════════════════════════════════════════════════════════
             echo "🔄 Deploying application services..."
-            export KEYCLOAK_BASE_URL="http://keycloak:8080/keycloak"
-            export KEYCLOAK_INTERNAL_URL="http://keycloak:8080/keycloak/realms/Aether"
             $COMPOSE_CMD -f docker-compose.prod.yml up -d --force-recreate \
-              backend frontend photon
+            backend frontend photon \
+            -e KEYCLOAK_BASE_URL="http://keycloak:8080/keycloak" \
+            -e KEYCLOAK_INTERNAL_URL="http://keycloak:8080/keycloak/realms/Aether"
+
 
             # ═══════════════════════════════════════════════════════════════
             # PHASE 6: Workers (stop old, remove, start new with scale)
