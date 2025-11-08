@@ -27,5 +27,3 @@ RUN touch /app/workers/__init__.py && \
     touch /app/workers/audio_worker/__init__.py
 
 ENV PYTHONPATH=/app:$PYTHONPATH
-
-CMD ["rq", "worker", "--url", "redis://redis:6379/3", "audio-jobs"]

@@ -30,10 +30,3 @@ RUN touch /app/workers/__init__.py && \
 ENV PYTHONUNBUFFERED=1 \
     MODELS_PATH=/app/models/emotion \
     PYTHONPATH=/app:/app/workers:/app/aether_lib
-
-# Run RQ worker listening to emotion-jobs queue
-CMD ["rq", "worker", "emotion-jobs", \
-     "--with-scheduler", \
-     "-u", "redis://redis:6379/4", \
-     "--worker-ttl", "420", \
-     "--job-monitoring-interval", "30"]
