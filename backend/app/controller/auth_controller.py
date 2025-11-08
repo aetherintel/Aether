@@ -108,7 +108,7 @@ def send_verification_email(user_id: str, admin_token: str):
         "Content-Type": "application/json"
     }
     # FIX: Container-interne URL für Admin API
-    email_url = f"{os.getenv('KEYCLOAK_INTERNAL_URL')}/admin/realms/Aether/users/{user_id}/execute-actions-email"
+    email_url = f"{os.getenv('KEYCLOAK_BASE_URL')}/admin/realms/Aether/users/{user_id}/execute-actions-email"
 
     # Query Parameter für Redirect (EXTERN URL!)
     params = {
