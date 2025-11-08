@@ -176,7 +176,7 @@ def resend_verification(email_address: str):  # Parameter umbenannt
     headers = {"Authorization": f"Bearer {token}"}
     
     # User by email finden - KORRIGIERT!
-    users_url = f"{os.getenv('KEYCLOAK_INTERNAL_URL')}/admin/realms/Aether/users?email={email_address}"
+    users_url = f"{os.getenv('KEYCLOAK_BASE_URL')}/admin/realms/Aether/users?email={email_address}"
     response = requests.get(users_url, headers=headers)
     
     if response.status_code == 200 and response.json():
@@ -184,12 +184,12 @@ def resend_verification(email_address: str):  # Parameter umbenannt
         user_id = user['id']
         
         # Required Actions setzen und Email senden
-        user_url = f"{os.getenv('KEYCLOAK_INTERNAL_URL')}/admin/realms/Aether/users/{user_id}"
+        user_url = f"{os.getenv('KEYCLOAK_BASE_URL')}/admin/realms/Aether/users/{user_id}"
         update_payload = {"requiredActions": ["VERIFY_EMAIL"]}
         requests.put(user_url, headers=headers, json=update_payload)
         
         # Email senden
-        email_url = f"{os.getenv('KEYCLOAK_INTERNAL_URL')}/admin/realms/Aether/users/{user_id}/execute-actions-email"
+        email_url = f"{os.getenv('KEYCLOAK_BASE_URL')}/admin/realms/Aether/users/{user_id}/execute-actions-email"
         email_response = requests.put(email_url, headers=headers, json=["VERIFY_EMAIL"])
         
         if email_response.status_code == 204:
