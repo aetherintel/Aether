@@ -26,6 +26,3 @@ RUN touch /app/workers/__init__.py && \
 # Set environment variables
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONPATH=/app
-
-# Run worker
-CMD ["rq", "worker", "--url", "redis://redis:6379/5", "classification-jobs"]

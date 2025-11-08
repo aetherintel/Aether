@@ -25,5 +25,3 @@ RUN mkdir -p /app/models/image/easyocr
 COPY workers/image_worker/ ./workers/image_worker/
 RUN touch /app/workers/__init__.py && \
     touch /app/workers/image_worker/__init__.py
-
-CMD ["rq", "worker", "--url",  "redis://redis:6379/2", "image-jobs"]

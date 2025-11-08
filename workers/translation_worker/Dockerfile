@@ -24,9 +24,4 @@ ENV PYTHONUNBUFFERED=1 \
 # ensure package init files exist
 RUN touch /app/workers/__init__.py && \
     touch /app/workers/translation_worker/__init__.py
-# ✅ Entrypoint: run RQ with correct module path
-CMD ["rq", "worker", "translation-jobs", \
-     "--with-scheduler", \
-     "-u", "redis://redis:6379/1", \
-     "--worker-ttl", "420", \
-     "--job-monitoring-interval", "30"]
+

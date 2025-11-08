@@ -24,5 +24,3 @@ ENV PYTHONPATH=/app
 ENV PYTHONUNBUFFERED=1
 ENV GEONAMES_DATA_DIR=/app/models/geolocation/geonames
 ENV PHOTON_URL=http://photon:2322
-
-CMD ["rq", "worker", "--url", "redis://redis:6379/6", "geolocation-jobs"]
