@@ -133,7 +133,7 @@ def register(data: RegisterRequest):
         "Authorization": f"Bearer {token}",
         "Content-Type": "application/json"
     }
-    user_url = f"{os.getenv('KEYCLOAK_INTERNAL_URL')}/admin/realms/Aether/users"
+    user_url = f"{os.getenv('KEYCLOAK_BASE_URL')}/admin/realms/Aether/users"
     
     # User payload MIT Email Verification
     user_payload = {
