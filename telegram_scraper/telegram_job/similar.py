@@ -1,7 +1,7 @@
 from telethon import functions, types
 from .telegram_client import client
 from telethon.errors.rpcerrorlist import UsernameInvalidError
-from scraper import run_scraper
+from .scraper import run_scraper
 
 async def similar_channels(username: str):
     entity = await client.get_input_entity(username)
