@@ -28,9 +28,9 @@ async def _search_fallback(query: str, limit: int = 15):
 
 async def similar_channels_flexible(user_input: str, limit: int = 15):
     # 1️⃣ ensure client is connected
-    from telegram_client import login
-    await login()
-
+    from .telegram_client import login
+    await login(session_string=user_input.get('session_string'))
+    
     # 2️⃣ try the “official” recommendations API
     try:
         recs = await similar_channels(user_input)
