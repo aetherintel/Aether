@@ -193,46 +193,34 @@ jobs:
             fi
 
             # PHASE 5: Application Services (complete rebuild)
+            # PHASE 5: Application Services
             echo "🔄 Deploying application services..."
 
-            # 1. Stoppe Container
-            docker stop backend frontend photon 2>/dev/null || true
+            # Stop & Remove
+            docker stop backend frontend 2>/dev/null || true
+            docker rm -f backend frontend 2>/dev/null || true
 
-            # 2. WARTE bis sie wirklich gestoppt sind
-            timeout 30 bash -c 'until ! docker ps | grep -q backend; do sleep 1; done' || true
+            # Start NUR backend & frontend (photon bleibt laufen)
+            $COMPOSE_CMD -f docker-compose.prod.yml up -d \
+              --pull always \
+              --force-recreate \
+              --remove-orphans \
+              backend frontend
 
-            # 3. Entferne Container komplett
-            docker rm -f backend frontend photon 2>/dev/null || true
-
-            # 4. Prufe Images (optional, nur wenn wirklich nötig)
-            if docker images | grep -q "aether-backend.*<none>"; then
-              docker image prune -f
-            fi
-
-            # 5. Starte mit down/up statt nur up
-            $COMPOSE_CMD -f docker-compose.prod.yml up -d backend frontend photon --pull always
-
-            # 6. Warte und verifiziere
+            # Verification
             sleep 15
             echo "🔍 Verifying backend configuration..."
-
-            KEYCLOAK_BASE=$(docker exec backend printenv KEYCLOAK_BASE_URL 2>/dev/null || echo "FAILED")
+            KEYCLOAK_BASE=$(docker exec backend printenv KEYCLOAK_BASE_URL)
             echo "KEYCLOAK_BASE_URL: $KEYCLOAK_BASE"
 
-            if [[ "$KEYCLOAK_BASE" == *"https://"* ]]; then
-              echo "❌ Backend has wrong KEYCLOAK_BASE_URL: $KEYCLOAK_BASE"
-              echo "Expected: http://keycloak:8080/keycloak"
-              docker logs backend --tail 100
+            if [[ "$KEYCLOAK_BASE" != "http://keycloak:8080/keycloak" ]]; then
+              echo "❌ Wrong KEYCLOAK_BASE_URL!"
+              echo "📄 Compose config:"
+              $COMPOSE_CMD -f docker-compose.prod.yml config | grep -A 5 KEYCLOAK_BASE_URL
               exit 1
             fi
 
-            if ! docker ps --format '{{.Names}}' | grep -q "^backend$"; then
-              echo "❌ Backend container not running!"
-              docker logs backend --tail 100
-              exit 1
-            fi
-
-            echo "✅ Backend running with correct configuration"
+            echo "✅ Backend configured correctly"
 
             # ═══════════════════════════════════════════════════════════════
             # PHASE 6: Workers (complete rebuild)
