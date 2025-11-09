@@ -2,11 +2,11 @@
 import os, json, sys, asyncio
 
 # GEÄNDERT: Relative Imports verwenden
-from similar import similar_channels_flexible as similar_channels
-from scraper import run_scraper, run_live_listener_only
+from .similar import similar_channels_flexible as similar_channels
+from .scraper import run_scraper, run_live_listener_only
 from aether_lib.neo4j_client.channels import write_recommendations, is_scraped
 from aether_lib.neo4j_client.connection import init_driver, close_driver
-from telegram_client import login
+from .telegram_client import login
 
 # ========================================
 # NEU: RQ Worker Entry Point

@@ -5,7 +5,7 @@ import time
 import requests
 from langdetect import detect, LangDetectException
 from telethon import events
-from telegram_client import client, login
+from .telegram_client import client, login
 from aether_lib.neo4j_client.messages import save_message_with_processing_status
 from aether_lib.neo4j_client.channels import is_scraped, mark_scraped
 from aether_lib.queue_client.queue_client import queue_client
@@ -17,7 +17,7 @@ from aether_lib.schemas.jobs import (
     ClassificationJobPayload,
     GeolocationJobPayload,
 )
-from utils import download_media_to_path, extract_invite_links, generate_media_path, get_media_type
+from .utils import download_media_to_path, extract_invite_links, generate_media_path, get_media_type
 
 # Configuration
 RATE_LIMIT_DELAY = float(os.getenv("RATE_LIMIT_DELAY", "1.0"))
