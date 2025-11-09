@@ -208,7 +208,7 @@ async def mark_scraped(username: str):
 
 
 @_with_constraints
-async def message_exists(channel_id, message_id):
+async def message_exists(channel_id, message_id, owner_id):
     full_mid = f"{channel_id}-{message_id}"
     async with _get_driver().session() as session:
         rec = await (
@@ -218,19 +218,18 @@ async def message_exists(channel_id, message_id):
                 RETURN count(m) > 0 AS exists
                 """,
                 mid=full_mid,
-                owner=OWNER_ID,
+                owner=owner_id,
             )
         ).single()
         return rec and rec["exists"]
 
 
 @_with_constraints
-async def save_message_if_new(channel_id, username, message, sender, media_path=None):
-    if await message_exists(channel_id, message.id):
+async def save_message_if_new(channel_id, username, message, sender, media_path=None, owner_id=None):
+    if await message_exists(channel_id, message.id, owner_id):
         print(f"[SKIP] Message {message.id} already exists in Neo4j")
         return
-    await save_message(channel_id, username, message, sender, media_path)
-
+    await save_message(channel_id, username, message, sender, media_path, owner_id=owner_id)
 # telegram_job/neo4j_client.py
 # ADD THESE FUNCTIONS to your existing neo4j_client.py
 
