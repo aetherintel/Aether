@@ -102,6 +102,18 @@ jobs:
     needs: build-and-push
     if: github.ref == 'refs/heads/main'
     steps:
+      - name: 🧾 Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: 📤 Upload compose file
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.PROD_HOST }}
+          username: ${{ secrets.PROD_USER }}
+          key: ${{ secrets.PROD_SSH_KEY }}
+          source: "docker-compose.prod.yml"
+          target: "~/app/"
+          overwrite: true
       - name: 🚀 Deploy to Production VM
         uses: appleboy/ssh-action@v1.0.0
         with:
@@ -148,6 +160,31 @@ jobs:
             export MEDIA_PATH=/shared/media
 
             COMPOSE_CMD="docker compose"
+
+            cd ~/app
+            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
+            echo "🚀 DEPLOYMENT START"
+            
+            # ═══════════════════════════════════════════════════════════════
+            # PHASE 0: Update compose file
+            # ═══════════════════════════════════════════════════════════════
+            echo "📄 Updating docker-compose.prod.yml..."
+            
+            # Backup old compose
+            cp docker-compose.prod.yml docker-compose.prod.yml.backup 2>/dev/null || true
+            
+            # Download latest compose from repo
+            curl -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+              -H 'Accept: application/vnd.github.v3.raw' \
+              -o docker-compose.prod.yml \
+              -L https://api.github.com/repos/${{ github.repository }}/contents/docker-compose.prod.yml
+            
+            echo "✅ Compose file updated"
+            
+            # Verify
+            echo "🔍 Checking new compose file:"
+            grep "KEYCLOAK_BASE_URL:" docker-compose.prod.yml | head -1
 
             # ═══════════════════════════════════════════════════════════════
             # PHASE 1: Pull Latest Images
