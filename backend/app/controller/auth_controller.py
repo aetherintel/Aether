@@ -17,6 +17,7 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 router = APIRouter(prefix="/auth", tags=["auth"])
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 docker_client = docker.from_env()
+KEYCLOAK_BASE_URL = "http://keycloak:8080/keycloak"
 
 
 def user_ctx(token_data: dict = Depends(get_current_user)) -> UserCtx:
@@ -108,12 +109,12 @@ def send_verification_email(user_id: str, admin_token: str):
         "Content-Type": "application/json"
     }
     # FIX: Container-interne URL für Admin API
-    email_url = f"{os.getenv('KEYCLOAK_BASE_URL')}/admin/realms/Aether/users/{user_id}/execute-actions-email"
+    email_url = f"{KEYCLOAK_BASE_URL}/admin/realms/Aether/users/{user_id}/execute-actions-email"
 
     # Query Parameter für Redirect (EXTERN URL!)
     params = {
         # TODO: redirect URL einfügen
-        "redirect_uri": os.getenv("FRONTEND_URL", "http://46.243.55.90/"),
+        "redirect_uri": os.getenv("FRONTEND_URL", "http://65.108.38.53/"),
         "client_id": os.getenv("KEYCLOAK_CLIENT_ID")
     }
     print(f"Sending verification email to user {user_id} with params: {params}")
@@ -133,7 +134,7 @@ def register(data: RegisterRequest):
         "Authorization": f"Bearer {token}",
         "Content-Type": "application/json"
     }
-    user_url = f"{os.getenv('KEYCLOAK_BASE_URL')}/admin/realms/Aether/users"
+    user_url = f"{KEYCLOAK_BASE_URL}/admin/realms/Aether/users"
     
     # User payload MIT Email Verification
     user_payload = {
@@ -176,7 +177,7 @@ def resend_verification(email_address: str):  # Parameter umbenannt
     headers = {"Authorization": f"Bearer {token}"}
     
     # User by email finden - KORRIGIERT!
-    users_url = f"{os.getenv('KEYCLOAK_BASE_URL')}/admin/realms/Aether/users?email={email_address}"
+    users_url = f"{KEYCLOAK_BASE_URL}/admin/realms/Aether/users?email={email_address}"
     response = requests.get(users_url, headers=headers)
     
     if response.status_code == 200 and response.json():
@@ -184,12 +185,12 @@ def resend_verification(email_address: str):  # Parameter umbenannt
         user_id = user['id']
         
         # Required Actions setzen und Email senden
-        user_url = f"{os.getenv('KEYCLOAK_BASE_URL')}/admin/realms/Aether/users/{user_id}"
+        user_url = f"{KEYCLOAK_BASE_URL}/admin/realms/Aether/users/{user_id}"
         update_payload = {"requiredActions": ["VERIFY_EMAIL"]}
         requests.put(user_url, headers=headers, json=update_payload)
         
         # Email senden
-        email_url = f"{os.getenv('KEYCLOAK_BASE_URL')}/admin/realms/Aether/users/{user_id}/execute-actions-email"
+        email_url = f"{KEYCLOAK_BASE_URL}/admin/realms/Aether/users/{user_id}/execute-actions-email"
         email_response = requests.put(email_url, headers=headers, json=["VERIFY_EMAIL"])
         
         if email_response.status_code == 204:
