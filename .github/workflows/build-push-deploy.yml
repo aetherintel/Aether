@@ -139,6 +139,13 @@ jobs:
             export POSTGRES_DB=telegramdb
             export POSTGRES_USER=telegramuser
             export ENVIRONMENT=prod
+            export KEYCLOAK_BASE_URL=http://keycloak:8080/keycloak
+            export KEYCLOAK_INTERNAL_URL=http://keycloak:8080/keycloak/realms/Aether
+            export KEYCLOAK_URL=https://${PROD_DOMAIN}/keycloak/realms/Aether
+            export KEYCLOAK_HOSTNAME=keycloak
+            export KEYCLOAK_CLIENT_ID=Aether
+            export FRONTEND_URL=https://${PROD_DOMAIN}/
+            export MEDIA_PATH=/shared/media
 
             COMPOSE_CMD="docker compose"
 
