@@ -8,6 +8,7 @@ logger = logging.getLogger(__name__)
 
 @_with_constraints
 async def save_message_with_processing_status(
+    owner_id,
     channel_id,
     username,
     message,
@@ -25,6 +26,7 @@ async def save_message_with_processing_status(
     async with get_driver().session() as session:
         await session.execute_write(
             _save_message_tx,
+            owner_id,
             channel_id,
             username,
             message,
@@ -41,6 +43,7 @@ async def save_message_with_processing_status(
 
 async def _save_message_tx(
     tx,
+    owner_id,
     channel_id,
     username,
     message,
@@ -104,11 +107,9 @@ async def _save_message_tx(
     if message.reply_to_msg_id:
         reply_to_mid = f"{channel_id}-{message.reply_to_msg_id}"
     
-    owner = get_owner_id()
-    
     await tx.run(
         cypher,
-        owner=owner,
+        owner=owner_id,
         cid=str(channel_id),
         uname=username,
         uid=sender_id,
@@ -133,11 +134,11 @@ async def _save_message_tx(
 
 
 @_with_constraints
-async def message_exists(channel_id, message_id):
+async def message_exists(channel_id, message_id, owner_id):
     """Check if a message exists"""
     full_mid = f"{channel_id}-{message_id}"
     async with get_driver().session() as session:
-        owner = get_owner_id()
+        
         rec = await (
             await session.run(
                 """
@@ -145,21 +146,22 @@ async def message_exists(channel_id, message_id):
                 RETURN count(m) > 0 AS exists
                 """,
                 mid=full_mid,
-                owner=owner,
+                owner=owner_id,
             )
         ).single()
         return rec and rec["exists"]
 
 
 @_with_constraints
-async def save_message_if_new(channel_id, username, message, sender, media_path=None):
+async def save_message_if_new(channel_id, username, message, sender, media_path=None, owner_id=None):
     """Save message only if it doesn't exist (legacy function)"""
-    if await message_exists(channel_id, message.id):
+    if await message_exists(channel_id, message.id, owner_id):
         print(f"[SKIP] Message {message.id} already exists in Neo4j")
         return
     
     # Use new function with default processing status
     await save_message_with_processing_status(
+        owner_id=owner_id,
         channel_id=channel_id,
         username=username,
         message=message,
@@ -331,29 +333,6 @@ async def mark_translation_failed(driver, message_id: str, error: str, owner_id:
             owner=owner_id,
         )
         logger.info(f"❌ Marked message {message_id} as failed")
-
-async def check_message_exists(driver, message_id: str):
-    """Check if message exists"""
-    async with driver.session() as session:
-        owner_id = get_owner_id()
-        result = await session.run(
-            """
-            MATCH (m:Message {mid: $mid, owner_id: $owner})
-            RETURN m.mid as mid, 
-                   m.original_text as original_text,
-                   m.translation_status as status
-            """,
-            mid=message_id,
-            owner=owner_id,
-        )
-        record = await result.single()
-        
-        if record:
-            logger.info(f"✅ Found message: status={record.get('status')}")
-            return True
-        else:
-            logger.warning(f"⚠️ Message NOT found")
-            return False
 
     
 # Add to aether_lib/neo4j_client/messages.py

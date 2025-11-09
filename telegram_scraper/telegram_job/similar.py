@@ -1,15 +1,15 @@
 from telethon import functions, types
-from .telegram_client import client
+from .telegram_client import get_client
 from telethon.errors.rpcerrorlist import UsernameInvalidError
 from .scraper import run_scraper
 
 async def similar_channels(username: str):
-    entity = await client.get_input_entity(username)
+    entity = await get_client().get_input_entity(username)
     if not isinstance(entity, (types.InputChannel, types.InputPeerChannel)):
         raise ValueError("not a channel")
 
     input_ch = types.InputChannel(entity.channel_id, entity.access_hash)
-    rec = await client(functions.channels.GetChannelRecommendationsRequest(
+    rec = await get_client()(functions.channels.GetChannelRecommendationsRequest(
         channel=input_ch))
     print(rec)
     print(input_ch)
@@ -18,7 +18,7 @@ async def similar_channels(username: str):
 
 async def _search_fallback(query: str, limit: int = 15):
     """Use contacts.search as a best-effort fallback."""
-    res = await client(functions.contacts.SearchRequest(q=query, limit=limit))
+    res = await get_client()(functions.contacts.SearchRequest(q=query, limit=limit))
     chans = [
         {"username": ch.username, "title": ch.title, "id": ch.id}
         for ch in res.chats

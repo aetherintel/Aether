@@ -39,10 +39,6 @@ services:
       timeout: 5s
       retries: 10
 
-  # ============================================================================
-  # AUTHENTICATION & BACKEND
-  # ============================================================================
-
   keycloak:
     image: quay.io/keycloak/keycloak:24.0.2
     container_name: keycloak
@@ -79,7 +75,9 @@ services:
       - aether-network
 
   backend:
-    build: ./backend/app
+    build:
+      context: .
+      dockerfile: backend/app/Dockerfile
     restart: on-failure
     env_file:
       - .env.dev
@@ -88,7 +86,7 @@ services:
       KEYCLOAK_URL: http://${KEYCLOAK_HOSTNAME}:8080/realms/Aether
       SWAGGER_TOKEN_URL: http://localhost:8080/realms/Aether/protocol/openid-connect/token
       ENVIRONMENT: ${ENVIRONMENT}
-      PYTHONPATH: /app:/app/lib
+      PYTHONPATH: /app
       REDIS_HOST: redis
       REDIS_PORT: 6379
     volumes:
@@ -110,10 +108,6 @@ services:
     networks:
       - aether-network
 
-  # ============================================================================
-  # FRONTEND
-  # ============================================================================
-
   frontend:
     build:
       context: ./frontend
@@ -132,42 +126,44 @@ services:
     networks:
       - aether-network
 
-  # ============================================================================
-  # TELEGRAM SCRAPER (Updated with lib/)
-  # ============================================================================
+  redis:
+    image: redis:7-alpine
+    container_name: aether-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - aether-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   telegram-worker:
     build:
-      context: ./telegram_scraper
+      context: .
+      dockerfile: telegram_scraper/Dockerfile
     image: telegram-job:latest
-    command: rq worker --url redis://redis:6379 telegram-jobs
+    command: rq worker telegram-jobs --url redis://redis:6379 --worker-ttl 0 --job-monitoring-interval 60
     restart: unless-stopped
     environment:
-      # Telegram API
       TG_API_ID: ${TG_API_ID}
       TG_API_HASH: ${TG_API_HASH}
-      # Neo4j
       NEO4J_URI: ${NEO4J_URI}
       NEO4J_USER: ${NEO4J_USER}
       NEO4J_PASSWORD: ${NEO4J_PASSWORD}
-      # Postgres
       POSTGRES_HOST: ${POSTGRES_HOST}
       POSTGRES_PORT: ${POSTGRES_PORT}
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      # Job Launcher
-
-      
-      # Media
       MEDIA_ROOT: /shared/media
-      # Redis
       REDIS_HOST: redis
       REDIS_PORT: 6379
-      # Owner ID
       OWNER_ID: ${OWNER_ID:-unknown}
-      # Python path for lib/
-      PYTHONPATH: /app:/app/lib
+      PYTHONPATH: /app
     volumes:
       - tg_sessions:/app/sessions
       - ./shared/media:/shared/media
@@ -186,26 +182,6 @@ services:
     networks:
       - aether-network
 
-  # ============================================================================
-  # TRANSLATION WORKER (NEW)
-  # ============================================================================
-
-  redis:
-    image: redis:7-alpine
-    container_name: aether-redis
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis-data:/data
-    networks:
-      - aether-network
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  # Translation worker (multiple instances for parallelism)
   translation-worker:
     build:
       context: .
@@ -216,22 +192,21 @@ services:
       translation-models:
         condition: service_started
     environment:
-      - DATABASE_URL=postgresql://${DB_USER}:${DB_PASSWORD}@postgres:5432/${POSTGRES_DB}
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-      - MODELS_PATH=/app/models
-      - USE_QUANTIZATION=true
-      - NEO4J_URI=bolt://neo4j:7687
-      - NEO4J_USER=${NEO4J_USER}
-      - NEO4J_PASSWORD=${NEO4J_PASSWORD}
+      DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      MODELS_PATH: /app/models
+      USE_QUANTIZATION: "true"
+      NEO4J_URI: bolt://neo4j:7687
+      NEO4J_USER: ${NEO4J_USER}
+      NEO4J_PASSWORD: ${NEO4J_PASSWORD}
     volumes:
-      # Mount local models directory
       - ./aether_lib:/app/aether_lib:ro
       - translation_models:/app/models/translation
     networks:
       - aether-network
     deploy:
-      replicas: 1  # Run 2 worker instances for parallel processing
+      replicas: 1
       resources:
         limits:
           cpus: '2'
@@ -239,27 +214,20 @@ services:
         reservations:
           cpus: '1'
           memory: 2G
-  # ============================================================================
-  # IMAGE ANALYSIS WORKER (NEW)
-  # ============================================================================
+
   image-worker:
     build:
       context: .
       dockerfile: workers/image_worker/Dockerfile
     environment:
-      # CRITICAL: These must match the mounted volume path
       HOME: /app/models/image
       PADDLEX_HOME: /app/models/image
       MODEL_BASE_DIR: /app/models/image
-
-      
       NEO4J_URI: ${NEO4J_URI}
       NEO4J_USER: ${NEO4J_USER}
       NEO4J_PASSWORD: ${NEO4J_PASSWORD}
     volumes:
-      # Mount shared media directory for accessing images
       - ${MEDIA_PATH}:/shared/media:ro
-      # Mount shared library
       - ./aether_lib:/app/aether_lib:ro
       - image_models:/app/models/image
     networks:
@@ -272,23 +240,12 @@ services:
     restart: unless-stopped
     mem_limit: 4g
     mem_reservation: 2g
-    healthcheck:
-      test: ["CMD", "rq", "info", "--url", "redis://redis:6379/2"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 10s
 
-  # ===========================================================================
-  # AUDIO TRANSCRIPTION WORKER
-  # ============================================================================
   audio-worker:
     build:
       context: .
       dockerfile: workers/audio_worker/Dockerfile
     environment:
-
-      
       NEO4J_URI: ${NEO4J_URI}
       NEO4J_USER: ${NEO4J_USER}
       NEO4J_PASSWORD: ${NEO4J_PASSWORD}
@@ -307,20 +264,12 @@ services:
         condition: service_started
     restart: unless-stopped
     mem_limit: 6g
-    deploy:
-      resources:
-        limits:
-          memory: 6G
-        reservations:
-          memory: 1G
 
   emotion-worker:
     build:
       context: .
       dockerfile: workers/emotion_worker/Dockerfile
     environment:
-
-      
       NEO4J_URI: ${NEO4J_URI}
       NEO4J_USER: ${NEO4J_USER}
       NEO4J_PASSWORD: ${NEO4J_PASSWORD}
@@ -338,24 +287,12 @@ services:
         condition: service_started
     restart: unless-stopped
     mem_limit: 4g
-    deploy:
-      replicas: 1
-      resources:
-        limits:
-          memory: 4G
-        reservations:
-          memory: 1G
 
-  # ============================================================================
-  # Classification WORKER
-  # ============================================================================
   classification-worker:
     build:
       context: .
       dockerfile: workers/classification_worker/Dockerfile
     environment:
-
-      
       NEO4J_URI: ${NEO4J_URI}
       NEO4J_USER: ${NEO4J_USER}
       NEO4J_PASSWORD: ${NEO4J_PASSWORD}
@@ -376,34 +313,27 @@ services:
         condition: service_started
     restart: unless-stopped
     mem_limit: 3G
-    deploy:
-      resources:
-        limits:
-          memory: 3G
-        reservations:
-          memory: 1G
 
-  # Add to docker-compose.yml
   geolocation-worker:
     build:
       context: .
       dockerfile: workers/geolocation_worker/Dockerfile
     environment:
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-      - NEO4J_URI=${NEO4J_URI}
-      - NEO4J_USER=${NEO4J_USER}
-      - NEO4J_PASSWORD=${NEO4J_PASSWORD}
-      - POSTGRES_HOST=${POSTGRES_HOST}
-      - POSTGRES_PORT=${POSTGRES_PORT}
-      - POSTGRES_DB=${POSTGRES_DB}
-      - POSTGRES_USER=${POSTGRES_USER}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-      - JOB_SECRET_TOKEN=${JOB_SECRET_TOKEN}
-      - PHOTON_URL=http://photon:2322
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      NEO4J_URI: ${NEO4J_URI}
+      NEO4J_USER: ${NEO4J_USER}
+      NEO4J_PASSWORD: ${NEO4J_PASSWORD}
+      POSTGRES_HOST: ${POSTGRES_HOST}
+      POSTGRES_PORT: ${POSTGRES_PORT}
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      JOB_SECRET_TOKEN: ${JOB_SECRET_TOKEN}
+      PHOTON_URL: http://photon:2322
     volumes:
       - ./aether_lib:/app/aether_lib:ro
-      - geolocation_models:/app/models/geolocation  # Cache for libpostal data
+      - geolocation_models:/app/models/geolocation
     networks:
       - aether-network
     depends_on:
@@ -413,12 +343,13 @@ services:
         condition: service_started
     restart: unless-stopped
     deploy:
-      replicas: 1  # Parallel processing
+      replicas: 1
       resources:
         limits:
           memory: 2G
         reservations:
           memory: 512M
+
   photon:
     build:
       context: .
@@ -429,7 +360,7 @@ services:
     volumes:
       - ./models/geocoding/photon/photon_data:/photon/photon_data
     environment:
-      - JAVA_OPTS=-Xmx2g
+      JAVA_OPTS: -Xmx2g
     networks:
       - aether-network
     restart: unless-stopped
@@ -497,10 +428,6 @@ volumes:
   classifier_models:
   image_models:
   geolocation_models:
-
-# ============================================================================
-# NETWORKS
-# ============================================================================
 
 networks:
   aether-network:

@@ -5,7 +5,7 @@ import time
 import requests
 from langdetect import detect, LangDetectException
 from telethon import events
-from .telegram_client import client, login
+from .telegram_client import get_client, login
 from aether_lib.neo4j_client.messages import save_message_with_processing_status
 from aether_lib.neo4j_client.channels import is_scraped, mark_scraped
 from aether_lib.queue_client.queue_client import queue_client
@@ -142,7 +142,7 @@ async def process_message(msg, username, found_channels, recursive=False, case_i
                         os.makedirs(os.path.dirname(media_path), exist_ok=True)
                         if not os.path.exists(media_path):
                             print(f"[DOWNLOAD] {username}: Downloading media for message {msg.id}")
-                            await download_media_to_path(username, msg, client, media_path)
+                            await download_media_to_path(username, msg, get_client(), media_path)
                         
                         # Build full message ID for processing
                         full_message_id = f"{msg.chat_id}-{msg.id}"
@@ -232,7 +232,7 @@ async def process_message(msg, username, found_channels, recursive=False, case_i
                                     os.makedirs(os.path.dirname(media_path), exist_ok=True)
                                     if not os.path.exists(media_path):
                                         print(f"[DOWNLOAD] {username}: Downloading voice message {msg.id}")
-                                        await download_media_to_path(username, msg, client, media_path)
+                                        await download_media_to_path(username, msg, get_client(), media_path)
                                     
                                     if os.path.exists(media_path) and ENABLE_AUDIO_TRANSCRIPTION:
                                         full_message_id = f"{msg.chat_id}-{msg.id}"
@@ -256,6 +256,7 @@ async def process_message(msg, username, found_channels, recursive=False, case_i
         
         # Save message to Neo4j with processing status
         await save_message_with_processing_status(
+            owner_id=owner_id,
             channel_id=msg.chat_id,
             username=username,
             message=msg,
@@ -388,9 +389,9 @@ async def get_entity_safe(identifier):
     try:
         if isinstance(identifier, str) and (identifier.lstrip('-').isdigit()):
             chat_id = int(identifier)
-            entity = await client.get_entity(chat_id)
+            entity = await get_client().get_entity(chat_id)
         else:
-            entity = await client.get_entity(identifier)
+            entity = await get_client().get_entity(identifier)
         
         clean_name = getattr(entity, 'username', None) or str(entity.id)
         print(f"[ENTITY] Resolved {identifier} to: {clean_name}")
@@ -417,7 +418,7 @@ async def scrape_channel_complete(channel_name, recursive=False, case_id=None, o
             message_count = 0
             
             # Process ALL messages in the channel
-            async for msg in client.iter_messages(entity, reverse=True):
+            async for msg in get_client().iter_messages(entity, reverse=True):
                 if not msg.message and not msg.media:
                     continue
                     
@@ -453,7 +454,7 @@ async def try_join_channel(channel_name):
         if '+' in channel_name:
             slug = channel_name.split('+')[-1]
             from telethon.tl.functions.messages import ImportChatInviteRequest
-            result = await client(ImportChatInviteRequest(slug))
+            result = await get_client()(ImportChatInviteRequest(slug))
             joined = result.chats[0]
             username = getattr(joined, 'username', None) or str(joined.id)
             print(f"[JOIN] ✅ Joined via invite: {username}")
@@ -538,7 +539,7 @@ async def run_parallel_scraper(channels, recursive=False, case_id=None, owner_id
         all_seen_channels.add(normalized_ch)
         await found_channels_queue.put((normalized_ch, None))
     
-    async with client:
+    async with get_client():
         # Start channel processor workers
         workers = []
         for i in range(MAX_PARALLEL_SCRAPERS):
@@ -586,7 +587,7 @@ async def run_live_monitor(channels, case_id=None, owner_id=None):
     
     entities = [entity for entity, _ in resolved_entities]
     
-    @client.on(events.NewMessage(chats=entities))
+    @get_client().on(events.NewMessage(chats=entities))
     async def handle_new_message(event):
         try:
             channel_name = None
@@ -608,7 +609,7 @@ async def run_live_monitor(channels, case_id=None, owner_id=None):
     
     print("[LIVE] ✅ Live monitor active (with translation)")
     
-    async with client:
+    async with get_client():
         while True:
             await asyncio.sleep(60)
             print("[LIVE] Monitor running...")
