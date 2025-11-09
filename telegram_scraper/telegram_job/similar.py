@@ -1,5 +1,5 @@
 from telethon import functions, types
-from telegram_client import client
+from .telegram_client import client
 from telethon.errors.rpcerrorlist import UsernameInvalidError
 from scraper import run_scraper
 
