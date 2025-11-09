@@ -38,6 +38,8 @@ services:
       KC_PROXY_HEADERS: xforwarded
       KC_HTTP_ENABLED: "true"
       KC_SPI_LOGIN_PROTOCOL_OPENID_CONNECT_LEGACY_LOGOUT_REDIRECT_URI: "true"
+      KC_HOSTNAME_URL: https://${PROD_DOMAIN:-aethery.cloud}/keycloak  # ← NEU!
+      KC_HOSTNAME_ADMIN_URL: https://${PROD_DOMAIN:-aethery.cloud}/keycloak 
     volumes:
       - keycloak_data:/opt/keycloak/data
       - ./keycloak/exports:/opt/keycloak/data/import
