@@ -97,7 +97,7 @@ class QueueService:
         logger.info(f"   Session: {payload.session_name}")
         
         job = self.queues['telegram'].enqueue(
-            'rq_worker.run_job',
+            'telegram_job.entry.run_job',
             kwargs={
                 'mode': payload.mode,
                 'channels': payload.channels,
