@@ -279,7 +279,7 @@ jobs:
             # PHASE 7: Cleanup
             # ═══════════════════════════════════════════════════════════════
             echo "🧹 Cleaning up old images..."
-            docker image prune -af --filter "until=24h"
+            docker image prune -af 
 
             echo "✅ Deployment complete!"
             $COMPOSE_CMD -f docker-compose.prod.yml ps
