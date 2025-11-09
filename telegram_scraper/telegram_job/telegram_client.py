@@ -15,8 +15,10 @@ SESSION_STRING = os.getenv("SESSION_STRING")
 
 client = TelegramClient(StringSession(SESSION_STRING), API_ID, API_HASH)
 
-async def login():
-    if not SESSION_STRING:
+async def login(session_string=None):
+    if not session_string:
+        session_string = os.getenv("SESSION_STRING")
+    if not session_string:
         raise ValueError("SESSION_STRING environment variable is required but not set.")
     try:
         await client.connect()

@@ -107,7 +107,7 @@ async def main(owner_id=None, case_id=None):
     print("[INIT] Neo4j driver initialized")
 
     try:
-        await login()
+        await login(session_string=SESSION_STRING)
         print(f"[DEBUG] Logged in with {MODE}")
         if not CHANNELS:
             print("[]")
