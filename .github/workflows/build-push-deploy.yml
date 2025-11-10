@@ -192,15 +192,22 @@ jobs:
             $COMPOSE_CMD -f docker-compose.prod.yml up -d --no-recreate postgres neo4j redis
 
             # ═══════════════════════════════════════════════════════════════
-            # PHASE 3: Keycloak (complete rebuild)
+            # PHASE 3: Keycloak (smart rebuild)
             # ═══════════════════════════════════════════════════════════════
-            echo "🔐 Updating Keycloak..."
-            docker stop keycloak 2>/dev/null || true
-            docker network disconnect -f app_aether-network keycloak 2>/dev/null || true
-            docker rm keycloak 2>/dev/null || true
-            $COMPOSE_CMD -f docker-compose.prod.yml up -d keycloak --force-recreate --no-build
-            echo "⏳ Waiting for Keycloak to initialize..."
-            sleep 30
+            echo "🔐 Checking Keycloak..."
+
+            if docker ps --format '{{.Names}}' | grep -q "^keycloak$"; then
+              echo "✅ Keycloak is running - skipping rebuild"
+            else
+              echo "🔄 Rebuilding Keycloak..."
+              # Cleanup ghosts
+              docker rm -f $(docker ps -aq --filter "name=keycloak") 2>/dev/null || true
+              docker network disconnect -f app_aether-network keycloak 2>/dev/null || true
+              
+              $COMPOSE_CMD -f docker-compose.prod.yml up -d keycloak --force-recreate
+              echo "⏳ Waiting for Keycloak to initialize..."
+              sleep 30
+            fi
 
             # ═══════════════════════════════════════════════════════════════
             # PHASE 4: SSL Certificate
@@ -227,10 +234,10 @@ jobs:
             # PHASE 5: Application Services
             # ═══════════════════════════════════════════════════════════════
             echo "🔄 Deploying application services..."
-            docker stop backend frontend 2>/dev/null || true
+            docker rm -f $(docker ps -aq --filter "name=backend") 2>/dev/null || true
+            docker rm -f $(docker ps -aq --filter "name=frontend") 2>/dev/null || true
             docker network disconnect -f app_aether-network backend 2>/dev/null || true
             docker network disconnect -f app_aether-network frontend 2>/dev/null || true
-            docker rm -f backend frontend 2>/dev/null || true
 
             $COMPOSE_CMD -f docker-compose.prod.yml pull backend frontend
             $COMPOSE_CMD -f docker-compose.prod.yml up -d --force-recreate backend frontend
