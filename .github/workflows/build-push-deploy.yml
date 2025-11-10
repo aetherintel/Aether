@@ -229,33 +229,55 @@ jobs:
               docker stop nginx-acme && docker rm nginx-acme || true
             fi
 
-            # PHASE 5: Application Services (complete rebuild)
+            # ═══════════════════════════════════════════════════════════════
             # PHASE 5: Application Services
+            # ═══════════════════════════════════════════════════════════════
             echo "🔄 Deploying application services..."
 
-            # Stop & Remove
+            # Aggressive cleanup
             docker stop backend frontend 2>/dev/null || true
             docker rm -f backend frontend 2>/dev/null || true
+            docker network disconnect -f app_aether-network backend 2>/dev/null || true
+            docker network disconnect -f app_aether-network frontend 2>/dev/null || true
 
-            # Start NUR backend & frontend (photon bleibt laufen)
+            # Pull & recreate
+            $COMPOSE_CMD -f docker-compose.prod.yml pull backend frontend
             $COMPOSE_CMD -f docker-compose.prod.yml up -d \
-              --pull always \
               --force-recreate \
               --remove-orphans \
               backend frontend
 
+            # Wait for startup
+            echo "⏳ Waiting for services..."
+            for i in {1..30}; do
+              if docker exec backend printenv KEYCLOAK_BASE_URL >/dev/null 2>&1; then
+                break
+              fi
+              echo -n "."
+              sleep 2
+            done
+            echo ""
+
             # Verification
-            sleep 15
             echo "🔍 Verifying backend configuration..."
-            KEYCLOAK_BASE=$(docker exec backend printenv KEYCLOAK_BASE_URL)
+            KEYCLOAK_BASE=$(docker exec backend printenv KEYCLOAK_BASE_URL 2>/dev/null || echo "ERROR")
+
+            if [[ "$KEYCLOAK_BASE" == "ERROR" ]]; then
+              echo "❌ Backend not running!"
+              docker logs backend --tail 50
+              exit 1
+            fi
+
             echo "KEYCLOAK_BASE_URL: $KEYCLOAK_BASE"
 
             if [[ "$KEYCLOAK_BASE" != "http://keycloak:8080/keycloak" ]]; then
               echo "❌ Wrong KEYCLOAK_BASE_URL!"
-              echo "📄 Compose config:"
-              $COMPOSE_CMD -f docker-compose.prod.yml config | grep -A 5 KEYCLOAK_BASE_URL
+              echo "📄 Expected: http://keycloak:8080/keycloak"
+              echo "📄 Got: $KEYCLOAK_BASE"
               exit 1
             fi
+
+            echo "✅ Backend configured correctly"
 
             echo "✅ Backend configured correctly"
 
