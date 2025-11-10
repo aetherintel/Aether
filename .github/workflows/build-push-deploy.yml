@@ -170,19 +170,12 @@ jobs:
             # PHASE 0: Update compose file
             # ═══════════════════════════════════════════════════════════════
             echo "📄 Updating docker-compose.prod.yml..."
-            
-            # Backup old compose
             cp docker-compose.prod.yml docker-compose.prod.yml.backup 2>/dev/null || true
-            
-            # Download latest compose from repo
             curl -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
               -H 'Accept: application/vnd.github.v3.raw' \
               -o docker-compose.prod.yml \
               -L https://api.github.com/repos/${{ github.repository }}/contents/docker-compose.prod.yml
-            
             echo "✅ Compose file updated"
-            
-            # Verify
             echo "🔍 Checking new compose file:"
             grep "KEYCLOAK_BASE_URL:" docker-compose.prod.yml | head -1
 
@@ -203,6 +196,7 @@ jobs:
             # ═══════════════════════════════════════════════════════════════
             echo "🔐 Updating Keycloak..."
             docker stop keycloak 2>/dev/null || true
+            docker network disconnect -f app_aether-network keycloak 2>/dev/null || true
             docker rm keycloak 2>/dev/null || true
             $COMPOSE_CMD -f docker-compose.prod.yml up -d keycloak --force-recreate --no-build
             echo "⏳ Waiting for Keycloak to initialize..."
@@ -233,21 +227,14 @@ jobs:
             # PHASE 5: Application Services
             # ═══════════════════════════════════════════════════════════════
             echo "🔄 Deploying application services..."
-
-            # Aggressive cleanup
             docker stop backend frontend 2>/dev/null || true
-            docker rm -f backend frontend 2>/dev/null || true
             docker network disconnect -f app_aether-network backend 2>/dev/null || true
             docker network disconnect -f app_aether-network frontend 2>/dev/null || true
+            docker rm -f backend frontend 2>/dev/null || true
 
-            # Pull & recreate
             $COMPOSE_CMD -f docker-compose.prod.yml pull backend frontend
-            $COMPOSE_CMD -f docker-compose.prod.yml up -d \
-              --force-recreate \
-              --remove-orphans \
-              backend frontend
+            $COMPOSE_CMD -f docker-compose.prod.yml up -d --force-recreate backend frontend
 
-            # Wait for startup
             echo "⏳ Waiting for services..."
             for i in {1..30}; do
               if docker exec backend printenv KEYCLOAK_BASE_URL >/dev/null 2>&1; then
@@ -258,7 +245,6 @@ jobs:
             done
             echo ""
 
-            # Verification
             echo "🔍 Verifying backend configuration..."
             KEYCLOAK_BASE=$(docker exec backend printenv KEYCLOAK_BASE_URL 2>/dev/null || echo "ERROR")
 
@@ -279,15 +265,13 @@ jobs:
 
             echo "✅ Backend configured correctly"
 
-            echo "✅ Backend configured correctly"
-
             # ═══════════════════════════════════════════════════════════════
             # PHASE 6: Workers (complete rebuild)
             # ═══════════════════════════════════════════════════════════════
             echo "👷 Updating workers..."
             docker stop $(docker ps -q --filter "name=worker") 2>/dev/null || true
             docker rm $(docker ps -aq --filter "name=worker") 2>/dev/null || true
-            
+
             $COMPOSE_CMD -f docker-compose.prod.yml up -d \
               --scale telegram-worker=3 \
               --scale translation-worker=2 \
