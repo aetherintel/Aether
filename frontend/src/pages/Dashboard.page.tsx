@@ -1,29 +1,54 @@
+// src/pages/Dashboard.page.tsx
 import { useEffect } from 'react';
-import { Grid } from '@mantine/core';
+import { Container, Title, Text, Group, Button } from '@mantine/core';
+import { IconLayoutDashboard, IconHelp } from '@tabler/icons-react';
 import BreadcrumbsBar from '@/components/BreadcrumbsBar/BreadcrumbsBar';
-import { DashboardCaseWidget } from '@/components/DashboardCaseWidget/DashboardCaseWidget';
-import { TopMessagesWidget } from '@/components/TopMessagesWidget/TopMessagesWidget';
-import { TopUserWidget } from '@/components/TopUserWidget/TopUserWidget';
+import { WidgetGrid } from '@/components/WidgetGrid/WidgetGrid';
+import { useWidgetStore } from '@/store/client/widgetStore';
+import classes from './Dashboard.module.css';
 
 export function Dashboard() {
+  const { layouts, activeLayoutId, setActiveLayout } = useWidgetStore();
+
   useEffect(() => {
     document.title = 'Dashboard - Æther';
-  }, []);
+    
+    // Set default active layout if not set
+    if (!activeLayoutId && layouts.length > 0) {
+      setActiveLayout(layouts[0].id);
+    }
+  }, [activeLayoutId, layouts, setActiveLayout]);
 
   return (
-    <>
+    <Container fluid className={classes.container}>
       <BreadcrumbsBar />
-      <Grid gutter="md">
-        <Grid.Col span={{ base: 12, sm: 4, lg: 3 }}>
-          <DashboardCaseWidget />
-        </Grid.Col>
-        <Grid.Col span={{ base: 12, sm: 4, lg: 4.5 }}>
-          <TopMessagesWidget />
-        </Grid.Col>
-        <Grid.Col span={{ base: 12, sm: 4, lg: 4.5 }}>
-          <TopUserWidget />
-        </Grid.Col>
-      </Grid>
-    </>
+      
+      {/* Dashboard Header */}
+      <Group justify="space-between" mb="lg">
+        <div>
+          <Group gap="xs" mb="xs">
+            <IconLayoutDashboard size={24} />
+            <Title order={2}>Dashboard</Title>
+          </Group>
+          <Text size="sm" c="dimmed">
+            Monitor and analyze your Telegram channels with customizable widgets
+          </Text>
+        </div>
+        
+        <Button
+          variant="subtle"
+          leftSection={<IconHelp size={16} />}
+          onClick={() => {
+            // TODO: Open help modal or documentation
+            console.log('Open help documentation');
+          }}
+        >
+          Help
+        </Button>
+      </Group>
+
+      {/* Widget Grid */}
+      <WidgetGrid category="dashboard" />
+    </Container>
   );
 }

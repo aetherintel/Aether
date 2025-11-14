@@ -1,4 +1,4 @@
-import { IconArchive, IconTrash } from '@tabler/icons-react';
+import { IconArchive, IconSettings, IconTrash } from '@tabler/icons-react';
 import { Link } from 'react-router-dom';
 import {
   ActionIcon,
@@ -14,6 +14,7 @@ import {
 } from '@mantine/core';
 import { CaseFile } from '../CaseFileList/CaseFileList';
 import classes from './CaseCard.module.css';
+import { Icon } from 'iconsax-react';
 
 interface CaseCardProps {
   caseFile: CaseFile;
@@ -106,6 +107,13 @@ export default function CaseCard({
           </Menu.Target>
 
           <Menu.Dropdown>
+            <Menu.Item
+              leftSection={<IconSettings style={{ width: rem(14), height: rem(14) }} />}
+              component={Link}
+              to={`/cases/${caseFile.id}?tab=scraper`}
+            >
+              Settings
+            </Menu.Item>
             {!caseFile.archived ? (
               <Menu.Item
                 leftSection={<IconArchive style={{ width: rem(14), height: rem(14) }} />}

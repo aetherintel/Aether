@@ -1,0 +1,160 @@
+/* src/components/WidgetGrid/WidgetGrid.module.css */
+.gridContainer {
+  padding: var(--mantine-spacing-md);
+  min-height: calc(100vh - 200px);
+}
+
+.gridLayout {
+  background-color: transparent;
+}
+
+.gridLayout .react-grid-item {
+  transition: all 200ms ease;
+  transition-property: left, top, width, height;
+}
+
+.gridLayout .react-grid-item.cssTransforms {
+  transition-property: transform;
+}
+
+.gridLayout .react-grid-item.resizing {
+  transition: none;
+  z-index: 100;
+}
+
+.gridLayout .react-grid-item.react-draggable-dragging {
+  transition: none;
+  z-index: 100;
+  opacity: 0.9;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+}
+
+.gridLayout .react-grid-item.dropping {
+  visibility: hidden;
+}
+
+.gridLayout .react-grid-placeholder {
+  background: var(--mantine-color-blue-2);
+  opacity: 0.3;
+  transition-duration: 100ms;
+  z-index: 2;
+  border-radius: var(--mantine-radius-md);
+  border: 2px dashed var(--mantine-color-blue-6);
+}
+
+.widgetWrapper {
+  height: 100%;
+  width: 100%;
+}
+
+.emptyState {
+  min-height: 300px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: var(--mantine-color-gray-0);
+}
+
+[data-mantine-color-scheme="dark"] .emptyState {
+  background: var(--mantine-color-dark-6);
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .gridContainer {
+    padding: var(--mantine-spacing-sm);
+  }
+  
+  .gridLayout .react-grid-item {
+    margin-bottom: var(--mantine-spacing-sm);
+  }
+}
+
+/* Edit mode styles */
+.gridLayout.editMode .react-grid-item {
+  cursor: move;
+}
+
+.gridLayout.editMode .react-grid-item .react-resizable-handle {
+  opacity: 1;
+}
+
+.gridLayout:not(.editMode) .react-grid-item .react-resizable-handle {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Resize handle customization */
+.react-resizable-handle {
+  position: absolute;
+  width: 20px;
+  height: 20px;
+  background-repeat: no-repeat;
+  background-origin: content-box;
+  box-sizing: border-box;
+  background-image: url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2IDYiIHN0eWxlPSJiYWNrZ3JvdW5kLWNvbG9yOiNmZmZmZmYwMCIgeD0iMHB4IiB5PSIwcHgiIHdpZHRoPSI2cHgiIGhlaWdodD0iNnB4Ij48ZyBvcGFjaXR5PSIwLjMwMiI+PHBhdGggZD0iTSA2IDYgTCAwIDYgTCAwIDQuMiBMIDQuMiA0LjIgTCA0LjIgMS44IEwgMS44IDEuOCBMIDEuOCAwIEwgNiAwIEwgNiA2IFoiIGZpbGw9IiMwMDAwMDAiLz48L2c+PC9zdmc+');
+  background-position: bottom right;
+  padding: 0 3px 3px 0;
+}
+
+.react-resizable-handle-sw {
+  bottom: 0;
+  left: 0;
+  cursor: sw-resize;
+  transform: rotate(90deg);
+}
+
+.react-resizable-handle-se {
+  bottom: 0;
+  right: 0;
+  cursor: se-resize;
+}
+
+.react-resizable-handle-nw {
+  top: 0;
+  left: 0;
+  cursor: nw-resize;
+  transform: rotate(180deg);
+}
+
+.react-resizable-handle-ne {
+  top: 0;
+  right: 0;
+  cursor: ne-resize;
+  transform: rotate(270deg);
+}
+
+.react-resizable-handle-w,
+.react-resizable-handle-e {
+  top: 50%;
+  margin-top: -10px;
+  cursor: ew-resize;
+}
+
+.react-resizable-handle-w {
+  left: 0;
+  transform: rotate(135deg);
+}
+
+.react-resizable-handle-e {
+  right: 0;
+  transform: rotate(315deg);
+}
+
+.react-resizable-handle-n,
+.react-resizable-handle-s {
+  left: 50%;
+  margin-left: -10px;
+  cursor: ns-resize;
+}
+
+.react-resizable-handle-n {
+  top: 0;
+  transform: rotate(225deg);
+}
+
+.react-resizable-handle-s {
+  bottom: 0;
+  transform: rotate(45deg);
+}

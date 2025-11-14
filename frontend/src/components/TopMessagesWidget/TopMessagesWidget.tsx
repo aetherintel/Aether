@@ -3,6 +3,7 @@ import { IconBrandTelegram, IconSettings } from '@tabler/icons-react';
 import {
   Accordion,
   ActionIcon,
+  Anchor,
   Badge,
   Box,
   Button,
@@ -23,15 +24,32 @@ interface Author {
   name: string;
 }
 
+interface ChannelInfo {
+  id?: string;
+  username?: string;
+  title?: string;
+}
+
 interface Message {
   message_id: string;
   channel_id: string;
-  original_text: string;
-  translated_text?: string;
+
+  // new backend fields
+  original_text?: string;
+  translated_text?: string | null;
+  original_language?: string;
+  translation_status?: string;
+
+  // widget uses this as the "display text" (filled from above)
   text: string;
+
   date: string;
   channel_title?: string;
   author?: Author;
+  channel?: ChannelInfo;
+
+  // keep any other properties from the backend
+  [key: string]: any;
 }
 
 interface SearchParams {
@@ -127,8 +145,9 @@ export function TopMessagesWidget() {
     setLoading(true);
     try {
       const base = apiUrl ?? 'http://localhost:8000/api';
-      const channelInfoMap = new Map();
+      const channelInfoMap = new Map<string, { title: string }>();
 
+      // Load channel info (titles)
       try {
         const channelsRes = await authFetch(`${base}/messages/channels`);
         const channelsData = await channelsRes.json();
@@ -152,17 +171,36 @@ export function TopMessagesWidget() {
             const res = await authFetch(url.toString());
             const data = await res.json();
 
-            return {
-              channelId,
-              messages: data.map((msg: any) => ({
+            const channelTitleFromMap = channelInfoMap.get(channelId)?.title;
+
+            const mappedMessages: Message[] = data.map((msg: any) => {
+              const channelTitle =
+                channelTitleFromMap ||
+                msg.channel?.title ||
+                msg.channel?.username ||
+                channelId;
+
+              const translated = (msg.translated_text || '').trim();
+              const original = (msg.original_text || '').trim();
+              const fallback = (msg.text || '').trim();
+
+              const finalText = translated || original || fallback || '';
+
+              return {
                 ...msg,
                 channel_id: channelId,
-                channel_title: channelInfoMap.get(channelId)?.title || channelId,
-              })),
+                channel_title: channelTitle,
+                text: finalText,
+              };
+            });
+
+            return {
+              channelId,
+              messages: mappedMessages,
             };
           } catch (error) {
             console.error(`Error fetching messages for channel ${channelId}:`, error);
-            return { channelId, messages: [] };
+            return { channelId, messages: [] as Message[] };
           }
         })
       );
@@ -195,7 +233,7 @@ export function TopMessagesWidget() {
           }
         });
 
-        // sort messages for the rest
+        // distribute remaining messages
         while (remainingMessages > 0) {
           let distributed = false;
           for (const channel of sortedChannels) {
@@ -277,26 +315,85 @@ export function TopMessagesWidget() {
     return messageDate.toLocaleDateString();
   };
 
-  // mark keywords in text
-  const highlightText = (text: string, query: string) => {
-    if (!query) {
-      return text;
-    }
+  // --- highlighting logic from MessagesTab (URL-aware) ---
+  function escapeRegExp(str: string) {
+    return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  }
 
-    const keywords = query.split(' ').filter((k) => k.length > 0);
-    const regex = new RegExp(`(${keywords.join('|')})`, 'gi');
-    const parts = text.split(regex);
+  function highlightText(text: string, query: string) {
+    const urlRegex = /https?:\/\/[^\s]+/gi;
+    const queryTrimmed = query.trim();
+    const queryRegex = queryTrimmed
+      ? new RegExp(`(${escapeRegExp(queryTrimmed)})`, 'gi')
+      : null;
 
-    return parts.map((part, index) =>
-      regex.test(part) ? (
-        <mark key={index} className={classes.highlight}>
-          {part}
-        </mark>
-      ) : (
-        part
-      )
-    );
-  };
+    const urlParts = text.split(urlRegex);
+    const urls = text.match(urlRegex);
+    const result: React.ReactNode[] = [];
+
+    urlParts.forEach((part, i) => {
+      if (queryRegex) {
+        const highlighted = part
+          .split(queryRegex)
+          .map((p, idx) =>
+            queryRegex.test(p) ? (
+              <mark key={`highlight-${i}-${idx}`} className={classes.highlight}>
+                {p}
+              </mark>
+            ) : (
+              p
+            )
+          );
+        result.push(...highlighted);
+      } else {
+        result.push(part);
+      }
+
+      if (urls && urls[i]) {
+        const url = urls[i];
+        if (queryRegex) {
+          const highlightedLink = url
+            .split(queryRegex)
+            .map((p, idx) =>
+              queryRegex.test(p) ? (
+                <mark key={`link-highlight-${i}-${idx}`} className={classes.highlight}>
+                  {p}
+                </mark>
+              ) : (
+                p
+              )
+            );
+          result.push(
+            <Anchor
+              key={`link-${i}`}
+              href={url}
+              fz="xs"
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ lineHeight: 1 }}
+            >
+              {highlightedLink}
+            </Anchor>
+          );
+        } else {
+          result.push(
+            <Anchor
+              key={`link-${i}`}
+              href={url}
+              fz="xs"
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ lineHeight: 1 }}
+            >
+              {url}
+            </Anchor>
+          );
+        }
+      }
+    });
+
+    return result;
+  }
 
   // toggle-function for config
   const toggleConfig = (e: React.MouseEvent) => {
@@ -364,16 +461,19 @@ export function TopMessagesWidget() {
                           >
                             <Group gap="xs" wrap="nowrap">
                               <Badge color="blue" radius="sm">
-                                {message.channel_title || message.channel_id}
+                                {message.channel_title ||
+                                  message.channel?.username ||
+                                  message.channel?.title ||
+                                  message.channel_id}
                               </Badge>
                               {message.author && (
-                                <Text size="xs" color="dimmed" className={classes.authorName}>
+                                <Text size="xs" c="dimmed" className={classes.authorName}>
                                   {message.author.name}
                                 </Text>
                               )}
                             </Group>
                             <Group gap="xs" className={classes.dateGroup} wrap="nowrap">
-                              <Text size="xs" color="dimmed" className={classes.dateText}>
+                              <Text size="xs" c="dimmed" className={classes.dateText}>
                                 {formatRelativeTime(message.date)}
                               </Text>
                               <IconBrandTelegram size={16} className={classes.telegramIcon} />
@@ -384,7 +484,10 @@ export function TopMessagesWidget() {
                           <Text className={classes.messageText}>
                             {expandedMessages.includes(message.message_id)
                               ? highlightText(message.text, searchParams.keywords)
-                              : highlightText(truncateText(message.text), searchParams.keywords)}
+                              : highlightText(
+                                  truncateText(message.text),
+                                  searchParams.keywords
+                                )}
                           </Text>
                           {shouldTruncateText(message.text) && (
                             <Button

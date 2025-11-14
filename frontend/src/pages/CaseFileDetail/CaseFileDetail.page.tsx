@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { IconEye, IconInfoCircle, IconMessage, IconUsersGroup } from '@tabler/icons-react';
-import { useParams } from 'react-router-dom';
+import { useLocation, useParams } from 'react-router-dom';
 import { Badge, Card, Grid, Group, Loader, Stack, Tabs, Text, Title } from '@mantine/core';
 import BreadcrumbsBar from '@/components/BreadcrumbsBar/BreadcrumbsBar';
 import ChannelsTab from '@/components/ChannelsTab';
@@ -25,7 +25,12 @@ export function CaseFileDetail() {
   const [loading, setLoading] = useState(true);
 
   const [searchQuery, setSearchQuery] = useState('');
-  const [activeTab, setActiveTab] = useState<string | null>('messages'); // Add tab state
+  const location = useLocation();
+
+  const queryParams = new URLSearchParams(location.search);
+  const initialTab = queryParams.get("tab") || "messages";
+
+  const [activeTab, setActiveTab] = useState<string | null>(initialTab);
 
   const [graphUser, setGraphUser] = useState<string | null>(null);
   const [graphType, setGraphType] = useState<string | null>(null);

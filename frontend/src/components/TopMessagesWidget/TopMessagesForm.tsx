@@ -6,9 +6,15 @@ const apiUrl = import.meta.env.VITE_API_URL;
 
 interface Channel {
   channel_id: string;
-  title: string;
-  username: string;
+  title?: string;
+  username?: string;
+  channel?: {
+    id?: string;
+    title?: string;
+    username?: string;
+  };
   is_scraped: boolean;
+  message_count?: number;
 }
 
 interface SearchParams {
@@ -34,7 +40,6 @@ export function TopMessagesForm({
   const [channels, setChannels] = useState<Channel[]>([]);
   const [loading, setLoading] = useState(false);
 
-  // load channels
   useEffect(() => {
     const fetchChannels = async () => {
       setLoading(true);
@@ -43,18 +48,10 @@ export function TopMessagesForm({
         const res = await authFetch(`${base}/messages/channels`);
         const data = await res.json();
 
-        console.log('all available channels:', data);
-
-        // get only channels that have been scraped or have messages
-        const scrapedChannels = data.filter((channel: any) => {
-          // Debug for every channel
-          console.log(
-            `Channel ${channel.username}: is_scraped=${channel.is_scraped}, message_count=${channel.message_count}`
-          );
-          return channel.is_scraped === true || channel.message_count > 0;
+        const scrapedChannels = data.filter((channel: Channel) => {
+          return channel.is_scraped === true || (channel.message_count ?? 0) > 0;
         });
 
-        console.log('scraped Channels:', scrapedChannels);
         setChannels(scrapedChannels);
       } catch (error) {
         console.error('Error fetching channels:', error);
@@ -87,7 +84,12 @@ export function TopMessagesForm({
           placeholder="Choose Channel"
           data={channels.map((channel) => ({
             value: channel.channel_id,
-            label: channel.title || channel.username || channel.channel_id,
+            label:
+              channel.title ||
+              channel.username ||
+              channel.channel?.title ||
+              channel.channel?.username ||
+              channel.channel_id,
           }))}
           value={searchParams.channelIds}
           onChange={(value) => setSearchParams((prev) => ({ ...prev, channelIds: value }))}
@@ -99,7 +101,7 @@ export function TopMessagesForm({
 
         <TextInput
           label="Keywords"
-          placeholder="eg. climate, corona, news, ..."
+          placeholder="e.g. climate, corona, news..."
           value={searchParams.keywords}
           onChange={(e) => setSearchParams((prev) => ({ ...prev, keywords: e.target.value }))}
           required
