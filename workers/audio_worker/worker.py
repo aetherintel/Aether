@@ -454,14 +454,17 @@ def transcribe_and_update(
         if transcription and translate_transcription:
             if needs_translation(transcription, detected_lang):
                 logger.info(f"🌍 Step 3: Queueing translation ({detected_lang} -> de)...")
+                translation_payload = {
+                    'message_id': message_id,
+                    'original_text': transcription, 
+                    'source_language': detected_lang,
+                    'case_id': case_id,
+                    'owner_id': owner_id,
+                    'parent_job_id': job_id,
+                    'audio_text': True
+                }
                 translation_job_id = queue_client.QueueClient.enqueue_translation(
-                    message_id=message_id,
-                    text=transcription,
-                    source_language=detected_lang,
-                    case_id=case_id,
-                    owner_id=owner_id,
-                    parent_job_id=job_id,
-                    audio_text=True
+                    translation_payload=translation_payload
                 )
                 if translation_job_id:
                     logger.info(f"✅ Step 3: Translation queued")

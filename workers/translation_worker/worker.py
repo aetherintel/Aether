@@ -180,6 +180,7 @@ def translate_and_update(
     source_language: str,
     owner_id: str = None,
     case_id: int = None,
+    parent_job_id: str = None,
     image_text: bool = False,
     audio_text: bool = False,
     target_language: str = "de"

@@ -14,6 +14,11 @@ import {
 } from '@tabler/icons-react';
 
 import { TopPostsWidget } from '@/components/widgets/TopPostsWidget';
+import { TopInfluencersWidget } from '@/components/widgets/TopInfluencersWidget';
+import { EmotionAnalysisWidget } from '@/components/widgets/EmotionAnalysisWidget';
+import { LocationHeatmapWidget } from '@/components/widgets/LocationHeatmapWidget';
+import { LocationMapWidget } from '@/components/widgets/LocationMapWidget';
+
 
 class WidgetRegistry {
   private widgets: Map<WidgetType, WidgetDefinition> = new Map();
@@ -75,6 +80,134 @@ class WidgetRegistry {
               { value: 'recent', label: 'Most Recent' },
               { value: 'engagement', label: 'Engagement' }
             ]
+          }
+        ]
+      }
+      
+    });
+    this.register({
+  type: 'top-influencers',
+  name: 'Top Influencers',
+  description: 'Display the top 5 most active and influential posters',
+  icon: IconUsers,
+  component: TopInfluencersWidget,
+  defaultConfig: {
+    refreshInterval: 60000,
+    filters: {
+      channelIds: [],
+      limit: 5,
+      sortBy: 'engagement'
+    }
+  },
+  defaultSize: { w: 6, h: 4, minW: 4, minH: 3 },
+  categories: ['dashboard', 'analytics'],
+  configSchema: {
+    fields: [
+      {
+        name: 'filters.channelIds',
+        label: 'Channels',
+        type: 'channel-multiselect',
+        validation: { required: true }
+      },
+      {
+        name: 'filters.limit',
+        label: 'Number of Influencers',
+        type: 'number',
+        defaultValue: 5,
+        validation: { min: 1, max: 20, required: true }
+      }
+    ]
+  }
+});
+
+this.register({
+  type: 'emotion-analysis',
+  name: 'Emotion Analysis',
+  description: 'Analyze and visualize emotional sentiment distribution',
+  icon: IconMoodSmile,
+  component: EmotionAnalysisWidget,
+  defaultConfig: {
+    refreshInterval: 60000,
+    filters: {
+      channelIds: [],
+      limit: 5
+    }
+  },
+  defaultSize: { w: 6, h: 3, minW: 4, minH: 3 },
+  categories: ['dashboard', 'analytics'],
+  configSchema: {
+    fields: [
+      {
+        name: 'filters.channelIds',
+        label: 'Channels',
+        type: 'channel-multiselect',
+        validation: { required: true }
+      },
+      {
+        name: 'filters.limit',
+        label: 'Number of Emotions',
+        type: 'number',
+        defaultValue: 5,
+        validation: { min: 3, max: 10, required: true }
+      }
+    ]
+  }
+});
+
+this.register({
+  type: 'location-heatmap',
+  name: 'Location Heatmap',
+  description: 'Display the top mentioned locations',
+  icon: IconMapPin,
+  component: LocationHeatmapWidget,
+  defaultConfig: {
+    refreshInterval: 60000,
+    filters: {
+      channelIds: [],
+      limit: 5
+    }
+  },
+  defaultSize: { w: 6, h: 4, minW: 4, minH: 3 },
+  categories: ['dashboard', 'analytics'],
+  configSchema: {
+    fields: [
+      {
+        name: 'filters.channelIds',
+        label: 'Channels',
+        type: 'channel-multiselect',
+        validation: { required: true }
+      },
+      {
+        name: 'filters.limit',
+        label: 'Number of Locations',
+        type: 'number',
+        defaultValue: 5,
+        validation: { min: 1, max: 20, required: true }
+      }
+    ]
+  }
+});
+    this.register({
+      type: 'location-map',
+      name: 'Location Map',
+      description: 'Interactive map showing message locations',
+      icon: IconMap,
+      component: LocationMapWidget,
+      defaultConfig: {
+        refreshInterval: 60000,
+        filters: {
+          channelIds: []
+        }
+      },
+      defaultSize: { w: 6, h: 4, minW: 4, minH: 3 },
+      categories: ['dashboard', 'analytics'],
+      configSchema: {
+        fields: [
+          {
+            name: 'filters.channelIds',
+            label: 'Channels',
+            type: 'channel-multiselect',
+            validation: { required: true }
           }
         ]
       }

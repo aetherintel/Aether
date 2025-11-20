@@ -30,9 +30,9 @@ OWNER_ID = os.getenv("OWNER_ID", "unknown")
 ENABLE_TRANSLATION = os.getenv('ENABLE_TRANSLATION', '1') == '1'
 ENABLE_IMAGE_ANALYSIS = os.getenv('ENABLE_IMAGE_ANALYSIS', '1') == '1'
 ENABLE_AUDIO_TRANSCRIPTION = os.getenv('ENABLE_AUDIO_TRANSCRIPTION', '1') == '1'
-ENABLE_EMOTION_ANALYSIS = os.getenv('ENABLE_EMOTION_ANALYSIS', '0') == '1'
-ENABLE_LABEL_CLASSIFIER = os.getenv('ENABLE_LABEL_CLASSIFIER', '0') == '1'
-ENABLE_GEOLOCATION_EXTRACTION = os.getenv('ENABLE_GEOLOCATION_EXTRACTION', '0') == '1'
+ENABLE_EMOTION_ANALYSIS = os.getenv('ENABLE_EMOTION_ANALYSIS', '1') == '1'
+ENABLE_LABEL_CLASSIFIER = os.getenv('ENABLE_LABEL_CLASSIFIER', '1') == '1'
+ENABLE_GEOLOCATION_EXTRACTION = os.getenv('ENABLE_GEOLOCATION_EXTRACTION', '1') == '1'
 
 # Translation Configuration
 SUPPORTED_TRANSLATION_LANGUAGES = ['ru', 'ar', 'trk', 'en']
@@ -109,7 +109,8 @@ async def process_message(msg, username, found_channels, recursive=False, case_i
         geolocation_status = 'none'
         image_analysis_status = 'none'
         audio_transcription_status = 'none'
-
+        print(f"[PROCESS] {username}: Processing message {msg.id}")
+        print(f"Workers enabled: Translation={ENABLE_TRANSLATION}, ImageAnalysis={ENABLE_IMAGE_ANALYSIS}, AudioTranscription={ENABLE_AUDIO_TRANSCRIPTION}, GeolocationExtraction={ENABLE_GEOLOCATION_EXTRACTION}, EmotionAnalysis={ENABLE_EMOTION_ANALYSIS}, LabelClassifier={ENABLE_LABEL_CLASSIFIER}")
         if text:
             if len(text) >= 10 and ENABLE_TRANSLATION:
                 needs_trans, detected_lang = needs_translation(text)

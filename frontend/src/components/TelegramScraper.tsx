@@ -303,7 +303,7 @@ const TelegramScraper: React.FC<TelegramScraperProps> = ({ case_id }) => {
             recursive,
             neo4j: true,
             case_id: case_id || undefined,
-            enable_translation: enableTranslation,
+            enable_translation: true,
             enable_image_analysis: enableImageAnalysis,
             enable_audio_transcription: enableAudioTranscription,
             enable_emotion_analysis: enableEmotionAnalysis,
@@ -450,7 +450,7 @@ const TelegramScraper: React.FC<TelegramScraperProps> = ({ case_id }) => {
           <Divider label="Worker Options" labelPosition="center" />
 
           <Stack gap="xs">
-            <Checkbox
+            {/* <Checkbox
               label={
                 <Group gap="xs">
                   <IconLanguage size={16} />
@@ -460,7 +460,7 @@ const TelegramScraper: React.FC<TelegramScraperProps> = ({ case_id }) => {
               description="Automatically translate messages to German"
               checked={enableTranslation}
               onChange={(e) => setEnableTranslation(e.currentTarget.checked)}
-            />
+            /> */}
 
             <Checkbox
               label={

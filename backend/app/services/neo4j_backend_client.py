@@ -720,3 +720,46 @@ async def get_total_message_count_for_channels(
         result = await session.run(cypher, params)
         record = await result.single()
         return record["total_count"] if record else 0
+    
+async def get_channel_locations_data(channel_id: str, owner_id: str | None, limit: int):
+    """Fetch location data from Neo4j for a specific channel."""
+    async with get_session(owner_id) as session:
+        query = """
+        MATCH (ch:Channel)-[:HAS_MESSAGE]->(m:Message)-[:MENTIONS_LOCATION]->(l:Location)
+        WHERE toLower(ch.channel_id) = toLower($channel_id)
+          AND ($ownerId IS NULL OR m.owner_id = $ownerId)
+          AND l.location IS NOT NULL
+        RETURN m.id as message_id,
+               l.location as location,
+               l.canonical_name as canonical_name,
+               l.latitude as latitude,
+               l.longitude as longitude,
+               l.country as country,
+               l.mention_count as mention_count,
+               m.text as text
+        LIMIT $limit
+        """
+        
+        result = await session.run(
+            query,
+            {"channel_id": str(channel_id), "ownerId": owner_id, "limit": limit}
+        )
+        
+        messages = []
+        async for record in result:
+            location = record["location"]
+            
+            if location:
+                messages.append({
+                    "message_id": record["message_id"],
+                    "location": {
+                        "lat": location.y if hasattr(location, 'y') else record["latitude"],
+                        "lng": location.x if hasattr(location, 'x') else record["longitude"]
+                    },
+                    "canonical_name": record.get("canonical_name"),
+                    "country": record.get("country"),
+                    "mention_count": record.get("mention_count", 1),
+                    "text": record.get("text")
+                })
+        
+        return messages

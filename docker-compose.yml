@@ -119,7 +119,7 @@ services:
     volumes:
       - ./frontend:/app
       - ./frontend/nginx-dev.conf:/etc/nginx/conf.d/default.conf:ro
-      - ./shared/media:/usr/share/nginx/html/app/public/media
+      - ${MEDIA_PATH}:/usr/share/nginx/html/app/public/media
     restart: always
     depends_on:
       - backend
@@ -146,7 +146,11 @@ services:
       context: .
       dockerfile: telegram_scraper/Dockerfile
     image: telegram-job:latest
-    command: rq worker telegram-jobs --url redis://redis:6379 --worker-ttl 0 --job-monitoring-interval 60
+    command: >
+      rq worker telegram-jobs
+      --url redis://redis:6379
+      --worker-ttl 0
+      --job-monitoring-interval 60
     restart: unless-stopped
     environment:
       TG_API_ID: ${TG_API_ID}
@@ -166,7 +170,7 @@ services:
       PYTHONPATH: /app
     volumes:
       - tg_sessions:/app/sessions
-      - ./shared/media:/shared/media
+      - ${MEDIA_PATH}:/shared/media
       - ./aether_lib:/app/aether_lib:ro
     deploy:
       replicas: 2
@@ -186,11 +190,12 @@ services:
     build:
       context: .
       dockerfile: workers/translation_worker/Dockerfile
-    depends_on:
-      keycloak:
-        condition: service_started
-      translation-models:
-        condition: service_started
+    command: >
+      rq worker translation-jobs
+      --url redis://redis:6379/1
+      --worker-ttl 900
+      --job-monitoring-interval 30
+    restart: unless-stopped
     environment:
       DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@postgres:5432/${POSTGRES_DB}
       REDIS_HOST: redis
@@ -202,23 +207,32 @@ services:
       NEO4J_PASSWORD: ${NEO4J_PASSWORD}
     volumes:
       - ./aether_lib:/app/aether_lib:ro
-      - translation_models:/app/models/translation
+      - app_translation_models:/app/models
+    depends_on:
+      - redis
+      - neo4j
+      - postgres
+      - translation-models
     networks:
       - aether-network
     deploy:
       replicas: 1
       resources:
         limits:
-          cpus: '2'
           memory: 4G
         reservations:
-          cpus: '1'
           memory: 2G
 
   image-worker:
     build:
       context: .
       dockerfile: workers/image_worker/Dockerfile
+    command: >
+      rq worker image-jobs
+      --url redis://redis:6379/2
+      --worker-ttl 900
+      --job-monitoring-interval 30
+    restart: unless-stopped
     environment:
       HOME: /app/models/image
       PADDLEX_HOME: /app/models/image
@@ -229,22 +243,30 @@ services:
     volumes:
       - ${MEDIA_PATH}:/shared/media:ro
       - ./aether_lib:/app/aether_lib:ro
-      - image_models:/app/models/image
+      - app_image_models:/app/models/image
+    depends_on:
+      - redis
+      - neo4j
+      - image-models
     networks:
       - aether-network
-    depends_on:
-      keycloak:
-        condition: service_started
-      image-models:
-        condition: service_started
-    restart: unless-stopped
-    mem_limit: 4g
-    mem_reservation: 2g
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+        reservations:
+          memory: 2G
 
   audio-worker:
     build:
       context: .
       dockerfile: workers/audio_worker/Dockerfile
+    command: >
+      rq worker audio-jobs
+      --url redis://redis:6379/3
+      --worker-ttl 900
+      --job-monitoring-interval 30
+    restart: unless-stopped
     environment:
       NEO4J_URI: ${NEO4J_URI}
       NEO4J_USER: ${NEO4J_USER}
@@ -253,22 +275,31 @@ services:
       USE_QUANTIZATION: "true"
     volumes:
       - ./aether_lib:/app/aether_lib:ro
-      - audio_models:/app/models/audio
+      - app_audio_models:/app/models/audio
       - ${MEDIA_PATH}:/shared/media:ro
+    depends_on:
+      - redis
+      - neo4j
+      - audio-models
     networks:
       - aether-network
-    depends_on:
-      keycloak:
-        condition: service_started
-      audio-models:
-        condition: service_started
-    restart: unless-stopped
-    mem_limit: 6g
+    deploy:
+      resources:
+        limits:
+          memory: 6G
+        reservations:
+          memory: 2G
 
   emotion-worker:
     build:
       context: .
       dockerfile: workers/emotion_worker/Dockerfile
+    command: >
+      rq worker emotion-jobs
+      --url redis://redis:6379/4
+      --worker-ttl 900
+      --job-monitoring-interval 30
+    restart: unless-stopped
     environment:
       NEO4J_URI: ${NEO4J_URI}
       NEO4J_USER: ${NEO4J_USER}
@@ -277,21 +308,30 @@ services:
       USE_QUANTIZATION: "true"
     volumes:
       - ./aether_lib:/app/aether_lib:ro
-      - emotion_models:/app/models/emotion
+      - app_emotion_models:/app/models
+    depends_on:
+      - redis
+      - neo4j
+      - emotion-models
     networks:
       - aether-network
-    depends_on:
-      keycloak:
-        condition: service_started
-      emotion-models:
-        condition: service_started
-    restart: unless-stopped
-    mem_limit: 4g
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+        reservations:
+          memory: 1G
 
   classification-worker:
     build:
       context: .
       dockerfile: workers/classification_worker/Dockerfile
+    command: >
+      rq worker classification-jobs
+      --url redis://redis:6379/5
+      --worker-ttl 900
+      --job-monitoring-interval 30
+    restart: unless-stopped
     environment:
       NEO4J_URI: ${NEO4J_URI}
       NEO4J_USER: ${NEO4J_USER}
@@ -300,24 +340,31 @@ services:
       USE_QUANTIZATION: "true"
     volumes:
       - ./aether_lib:/app/aether_lib:ro
-      - classifier_models:/app/models/classifier
+      - app_classifier_models:/app/models/classifier
       - ${MEDIA_PATH}:/shared/media:ro
+    depends_on:
+      - redis
+      - neo4j
+      - classifier-models
     networks:
       - aether-network
-    depends_on:
-      keycloak:
-        condition: service_started
-      neo4j:
-        condition: service_started
-      classifier-models:
-        condition: service_started
-    restart: unless-stopped
-    mem_limit: 3G
+    deploy:
+      resources:
+        limits:
+          memory: 3G
+        reservations:
+          memory: 512M
 
   geolocation-worker:
     build:
       context: .
       dockerfile: workers/geolocation_worker/Dockerfile
+    command: >
+      rq worker geolocation-jobs
+      --url redis://redis:6379/6
+      --worker-ttl 900
+      --job-monitoring-interval 30
+    restart: unless-stopped
     environment:
       REDIS_HOST: redis
       REDIS_PORT: 6379
@@ -333,15 +380,16 @@ services:
       PHOTON_URL: http://photon:2322
     volumes:
       - ./aether_lib:/app/aether_lib:ro
-      - geolocation_models:/app/models/geolocation
+      - app_geolocation_models:/app/models/geolocation
+      - app_photon_data:/app/photon_data
+    depends_on:
+      - redis
+      - neo4j
+      - postgres
+      - photon
+      - geolocation-models
     networks:
       - aether-network
-    depends_on:
-      keycloak:
-        condition: service_started
-      geolocation-models:
-        condition: service_started
-    restart: unless-stopped
     deploy:
       replicas: 1
       resources:
@@ -378,42 +426,42 @@ services:
       context: ./models
       dockerfile: translation/Dockerfile
     volumes:
-      - translation_models:/models
+      - app_translation_models:/models
 
   audio-models:
     build:
       context: ./models
       dockerfile: audio/Dockerfile
     volumes:
-      - audio_models:/models
+      - app_audio_models:/models
 
   emotion-models:
     build:
       context: ./models
       dockerfile: emotion/Dockerfile
     volumes:
-      - emotion_models:/models
+      - app_emotion_models:/models
 
   classifier-models:
     build:
       context: ./models
       dockerfile: classifier/Dockerfile
     volumes:
-      - classifier_models:/models
+      - app_classifier_models:/models
 
   image-models:
     build:
       context: ./models
       dockerfile: image/Dockerfile
     volumes:
-      - image_models:/models
+      - app_image_models:/models
 
   geolocation-models:
     build:
       context: ./models
       dockerfile: geolocation/Dockerfile
     volumes:
-      - geolocation_models:/models
+      - app_geolocation_models:/models
   
 volumes:
   pgdata:
@@ -422,12 +470,13 @@ volumes:
   keycloak_data:
   tg_sessions:
   redis-data:
-  translation_models:
-  audio_models:
-  emotion_models:
-  classifier_models:
-  image_models:
-  geolocation_models:
+  app_translation_models:
+  app_audio_models:
+  app_emotion_models:
+  app_classifier_models:
+  app_image_models:
+  app_geolocation_models:
+  app_photon_data:
 
 networks:
   aether-network:
