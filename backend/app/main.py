@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+from contextlib import asynccontextmanager
 
 from controller import message_controller
 from controller import auth_controller
@@ -7,9 +8,18 @@ from controller import graph_controller
 from controller import telegram_auth_controller
 from controller import queue_controller
 from controller import scraper_controller
+from controller import report_controller
+from services.scheduler_service import start_scheduler
 from fastapi.middleware.cors import CORSMiddleware
 
-app = FastAPI(title="FastAPI with Keycloak",root_path="/api")
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup
+    start_scheduler()
+    yield
+    # Shutdown (if needed)
+
+app = FastAPI(title="FastAPI with Keycloak", root_path="/api", lifespan=lifespan)
 
 app.include_router(auth_controller.router)
 app.include_router(casefile_controller.router)
@@ -18,6 +28,7 @@ app.include_router(graph_controller.router)
 app.include_router(telegram_auth_controller.router)
 app.include_router(scraper_controller.router)
 app.include_router(queue_controller.router)
+app.include_router(report_controller.router)
 
 origins = [
     "http://localhost",

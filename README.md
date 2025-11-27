@@ -100,7 +100,7 @@ NEO4J_PASSWORD=secretpass
 JOB_LAUNCHER_URL=http://job-launcher:9001
 JOB_SECRET_TOKEN=supersecure
 
-MEDIA_PATH=${PWD}/shared/media
+MEDIA_PATH=$./shared/media
 
 FRONTEND_URL=http://localhost/
 ENVIRONMENT=dev

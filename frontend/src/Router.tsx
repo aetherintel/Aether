@@ -9,6 +9,7 @@ import { Login } from './pages/Login/Login.page';
 import { Register } from './pages/Register/Register.page';
 import { Settings } from './pages/Settings.page';
 
+
 const router = createBrowserRouter([
   {
     path: '/',

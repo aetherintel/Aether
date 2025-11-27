@@ -5,14 +5,11 @@ requests==2.31.0
 pydantic
 # Audio transcription (ARM + CPU-safe versions)
 # CPU-only PyTorch (installed from official PyTorch index via Dockerfile)
-torch==2.2.2
-openai-whisper==20240927
-soundfile==0.12.1
-numpy<2
+# torch, openai-whisper, soundfile, numpy are in shared libs
 
 # Language detection & utils
 langdetect==1.0.9
-Pillow==10.1.0
+# Pillow is in shared libs
 python-json-logger==2.0.7
 
 # Optional: testing utilities (not used in production)

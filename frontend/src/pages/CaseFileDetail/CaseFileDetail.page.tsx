@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
-import { IconEye, IconInfoCircle, IconMessage, IconUsersGroup } from '@tabler/icons-react';
+import { IconEye, IconInfoCircle, IconMessage, IconUsersGroup, IconFileAnalytics } from '@tabler/icons-react';
 import { useLocation, useParams } from 'react-router-dom';
 import { Badge, Card, Grid, Group, Loader, Stack, Tabs, Text, Title } from '@mantine/core';
 import BreadcrumbsBar from '@/components/BreadcrumbsBar/BreadcrumbsBar';
 import ChannelsTab from '@/components/ChannelsTab';
 import GraphVisualization from '@/components/GraphVisualization/GraphVisualization';
 import MessagesTab from '@/components/MessagesTab/MessagesTab';
+import DownloadsTab from '@/components/DownloadsTab/DownloadsTab';
 import TgChannelsCheckboxList from '@/components/TgChannelsCheckboxList';
 import { authFetch } from '@/utils/authFetch';
 import type {
@@ -209,6 +210,9 @@ export function CaseFileDetail() {
                   <Tabs.Tab value="visuals" leftSection={<IconEye size={16} />}>
                     Graph
                   </Tabs.Tab>
+                  <Tabs.Tab value="downloads" leftSection={<IconFileAnalytics size={16} />}>
+                    Downloads
+                  </Tabs.Tab>
                   <Tabs.Tab value="details" leftSection={<IconInfoCircle size={16} />}>
                     Details
                   </Tabs.Tab>
@@ -237,6 +241,16 @@ export function CaseFileDetail() {
                     searchQuery={searchQuery}
                     user={graphUser}
                     type={graphType}
+                  />
+                </Tabs.Panel>
+
+                <Tabs.Panel value="downloads" mt="md">
+                  <DownloadsTab
+                    caseId={id!}
+                    initialConfig={{
+                      report_frequency: caseFile.report_frequency,
+                      report_sections: caseFile.report_sections,
+                    }}
                   />
                 </Tabs.Panel>
 

@@ -59,6 +59,11 @@ async def get_unified_timeline_messages(
             toLower(m.text) CONTAINS toLower($query)
         )
         AND ($before IS NULL OR m.date < $before)
+
+        WITH m, ch, u
+        ORDER BY (CASE WHEN u.username = ch.username THEN 1 ELSE 0 END)
+        WITH m, ch, head(collect(u)) as u
+
         OPTIONAL MATCH (m)-[:REPLY_TO]->(reply:Message)
         
         RETURN m.original_text      AS original_text,
@@ -225,6 +230,11 @@ async def get_messages_for_channel(
             toLower(coalesce(m.original_text, m.text, '')) CONTAINS toLower($query)
           )
           AND ($before IS NULL OR m.date < $before)
+
+        WITH m, ch, u
+        ORDER BY (CASE WHEN u.username = ch.username THEN 1 ELSE 0 END)
+        WITH m, ch, head(collect(u)) as u
+
         OPTIONAL MATCH (m)-[:REPLY_TO]->(reply:Message)
         RETURN
             m.original_text          AS original_text,
@@ -322,7 +332,7 @@ async def get_channel_list(owner_id: str | None, usernames: list[str] | None = N
           AND m.date IS NOT NULL
           AND (m.original_text IS NOT NULL OR m.text IS NOT NULL)
         WITH ch, COUNT { (ch)-[:HAS_MESSAGE]->(m) } AS msg_count, MAX(m.date) AS latest
-        WHERE msg_count > 0
+        WHERE msg_count > 0 OR ($usernames IS NOT NULL AND size($usernames) > 0)
 
         // Count recommendations (who points to this channel)
         OPTIONAL MATCH (other:Channel)-[:RECOMMENDS]->(ch)
@@ -387,7 +397,7 @@ WHERE toLower(ch.channel_id) = toLower($channel_id)
 
         RETURN
             ch.channel_id             AS channel_id,
-            coalesce(ch.username, '') AS username,
+            coalesce(ch.username, ch.channel_id) AS username,
             ch.title                  AS title,
             count(DISTINCT m)         AS message_count,
             min(m.date)               AS first_message,
@@ -640,7 +650,7 @@ async def get_case_channels_with_recommendations(
                 )
                 AND rec.username IS NOT NULL AND rec.username <> ''
                 RETURN
-                trim(replace(toLower(c.username), '"', '')) AS input_key,
+                trim(replace(toLower(coalesce(c.username, c.channel_id)), '"', '')) AS input_key,
                 [r IN COLLECT(DISTINCT rec.username) | trim(replace(toLower(r), '"', ''))] AS recs
                 """
 

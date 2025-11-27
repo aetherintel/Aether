@@ -47,19 +47,15 @@ async def write_recommendations(root, recs):
         for r in recs:
             await s.run(
                 """
-                MERGE (root:Channel {channel_id:$root_id, owner_id:$owner})
-                  SET root.username=$root_username, root.title=$root_title
-
-                MERGE (rec:Channel {channel_id:$rec_id, owner_id:$owner})
-                  SET rec.username=$rec_username, rec.title=$rec_title
+                MATCH (root:Channel {username:$root_id, owner_id:$owner})
+                
+                MERGE (rec:Channel {username:$rec_username, owner_id:$owner})
+                ON CREATE SET rec.title=$rec_title
 
                 MERGE (root)-[:RECOMMENDS]->(rec)
                 """,
                 owner=owner,
                 root_id=root,
-                root_username=None,
-                root_title=None,
-                rec_id=r["id"],
                 rec_username=r.get("username"),
                 rec_title=r.get("title"),
             )

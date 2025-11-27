@@ -121,6 +121,11 @@ async def main(owner_id=None, case_id=None):
     if not SESSION_STRING:
         raise ValueError("SESSION_STRING environment variable is required but not set.")
 
+    # ✅ Set owner_id in context
+    from aether_lib.neo4j_client.connection import set_owner_id
+    set_owner_id(owner_id)
+    print(f"[INIT] Owner ID set to: {owner_id}")
+
     # ✅ Initialize Neo4j driver once at startup
     await init_driver()
     print("[INIT] Neo4j driver initialized")

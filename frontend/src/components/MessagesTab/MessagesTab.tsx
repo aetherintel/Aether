@@ -214,7 +214,7 @@ const MessagesTab: React.FC<MessagesTabProps> = ({
   }: MessageContentProps) => {
     const { measureRef, needsTruncation } = useMeasureText();
     const [showOriginal, setShowOriginal] = useState(false);
-
+    console.log(message);
     const hasTranslation =
       !!message.translated_text &&
       message.translated_text.trim().length > 0 &&
@@ -971,16 +971,32 @@ const MessagesTab: React.FC<MessagesTabProps> = ({
           <Box>
             <div className={classes.authorRow}>
               <Text size="sm" fw={500} className={classes.authorName}>
-                <Anchor
-                  onClick={() => message.author?.name && onUpdateGraph('user', message.author.name)}
+                {(!message.channel?.username ||
+                  message.author?.name.toLowerCase() !== message.channel.username.toLowerCase()) && (
+                  <Anchor
+                    onClick={() =>
+                      message.author?.name && onUpdateGraph('user', message.author.name)
+                    }
+                  >
+                    {message.author?.name || 'Unknown Author'}
+                  </Anchor>
+                )}
+                <span
+                  className={classes.channelName}
+                  style={{
+                    marginLeft:
+                      !message.channel?.username ||
+                      message.author?.name.toLowerCase() !==
+                        message.channel.username.toLowerCase()
+                        ? '0.25rem'
+                        : 0,
+                  }}
                 >
-                  {message.author?.name || 'Unknown Author'}
-                </Anchor>
-                <span className={classes.channelName} style={{ marginLeft: '0.25rem' }}>
                   [
                   <Anchor
                     onClick={() =>
-                      message.channel?.username && onUpdateGraph('channel', message.channel.username)
+                      message.channel?.username &&
+                      onUpdateGraph('channel', message.channel.username)
                     }
                     className={classes.channelName}
                   >

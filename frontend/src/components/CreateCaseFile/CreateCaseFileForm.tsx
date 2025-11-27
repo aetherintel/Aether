@@ -10,9 +10,18 @@ import {
   Text,
   Textarea,
   TextInput,
+  Checkbox,
+  Divider,
 } from '@mantine/core';
 import { useForm } from '@mantine/form';
 import { notifications } from '@mantine/notifications';
+import { 
+  IconPhoto, 
+  IconVolume, 
+  IconMoodSmile, 
+  IconActivity, 
+  IconExclamationCircle 
+} from '@tabler/icons-react';
 import { authFetch } from '@/utils/authFetch';
 import { TgChannelMultiSelect } from '../TgChannelMultiSelect';
 
@@ -28,6 +37,13 @@ interface CaseFileFormValues {
   terms: string[];
   duration: number;
   tg_session: string;
+  // AI Worker Flags
+  enable_translation: boolean;
+  enable_image_analysis: boolean;
+  enable_audio_transcription: boolean;
+  enable_emotion_analysis: boolean;
+  enable_label_classifier: boolean;
+  enable_geolocation_extraction: boolean;
 }
 
 interface SessionInfo {
@@ -84,6 +100,12 @@ export function CreateCaseFileForm() {
       terms: [],
       duration: 20,
       tg_session: '',
+      enable_translation: true,
+      enable_image_analysis: true,
+      enable_audio_transcription: true,
+      enable_emotion_analysis: false,
+      enable_label_classifier: false,
+      enable_geolocation_extraction: false,
     },
   });
 
@@ -251,15 +273,74 @@ export function CreateCaseFileForm() {
                   }
                 />
 
+                <Divider label="AI Worker Configuration" labelPosition="center" mt="md" />
+                
+                <Stack gap="xs">
+                  <Checkbox
+                    label={
+                      <Group gap="xs">
+                        <IconPhoto size={16} />
+                        <Text size="sm">Enable Image Analysis</Text>
+                      </Group>
+                    }
+                    description="Extract text from images using OCR"
+                    {...form.getInputProps('enable_image_analysis', { type: 'checkbox' })}
+                  />
+
+                  <Checkbox
+                    label={
+                      <Group gap="xs">
+                        <IconVolume size={16} />
+                        <Text size="sm">Enable Audio Transcription</Text>
+                      </Group>
+                    }
+                    description="Transcribe audio and video files"
+                    {...form.getInputProps('enable_audio_transcription', { type: 'checkbox' })}
+                  />
+
+                  <Checkbox
+                    label={
+                      <Group gap="xs">
+                        <IconMoodSmile size={16} />
+                        <Text size="sm">Enable Emotion Analysis</Text>
+                      </Group>
+                    }
+                    description="Analyze sentiment and emotions in messages"
+                    {...form.getInputProps('enable_emotion_analysis', { type: 'checkbox' })}
+                  />
+                  
+                  <Checkbox
+                    label={
+                      <Group gap="xs">
+                        <IconActivity size={16} />
+                        <Text size="sm">Enable Label Classifier</Text>
+                      </Group>
+                    }
+                    description="Classify messages using label classifier"
+                    {...form.getInputProps('enable_label_classifier', { type: 'checkbox' })}
+                  />
+                  
+                  <Checkbox
+                    label={
+                      <Group gap="xs">
+                        <IconExclamationCircle size={16} />
+                        <Text size="sm">Enable Geolocation Extraction</Text>
+                      </Group>
+                    }
+                    description="Extract geolocation data from messages"
+                    {...form.getInputProps('enable_geolocation_extraction', { type: 'checkbox' })}
+                  />
+                </Stack>
+
                 {!canStartScraper && form.values.tgchannels.length > 0 && (
-                  <Text size="sm" color="orange">
+                  <Text size="sm" c="orange" mt="sm">
                     ⚠️ Full scraper cannot start automatically - no active Telegram session
                     available
                   </Text>
                 )}
 
                 {canStartScraper && (
-                  <Text size="sm" color="green">
+                  <Text size="sm" c="green" mt="sm">
                     ✅ Full scraper will start automatically when case is created
                   </Text>
                 )}
