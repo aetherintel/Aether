@@ -29,6 +29,13 @@ def run_job(**kwargs):
     os.environ['NEO4J_WRITE'] = '1' if kwargs.get('neo4j_write', False) else '0'
     os.environ['SKIP_HISTORY'] = '0'
     os.environ['OWNER_ID'] = kwargs.get('owner_id', 'unknown')
+    os.environ['ENABLE_TRANSLATION'] = '1' if kwargs.get('enable_translation', True) else '0'
+    os.environ['ENABLE_IMAGE_ANALYSIS'] = '1' if kwargs.get('enable_image_analysis', True) else '0'
+    os.environ['ENABLE_AUDIO_TRANSCRIPTION'] = '1' if kwargs.get('enable_audio_transcription', True) else '0'
+    os.environ['ENABLE_EMOTION_ANALYSIS'] = '1' if kwargs.get('enable_emotion_analysis', True) else '0'
+    os.environ['ENABLE_LABEL_CLASSIFIER'] = '1' if kwargs.get('enable_label_classifier', True) else '0'
+    os.environ['ENABLE_GEOLOCATION_EXTRACTION'] = '1' if kwargs.get('enable_geolocation_extraction', True) else '0'
+    reload_config()
     
     # Optional parameters
     if kwargs.get('parent_container_id'):
@@ -56,6 +63,18 @@ def run_job(**kwargs):
 # ========================================
 # Globale Variablen - NUR für direkten Aufruf
 # ========================================
+
+def reload_config():
+    """Lädt alle Konfigurationsvariablen aus den aktuellen ENV-Variablen neu."""
+    global ENABLE_TRANSLATION, ENABLE_IMAGE_ANALYSIS, ENABLE_AUDIO_TRANSCRIPTION
+    global ENABLE_EMOTION_ANALYSIS, ENABLE_LABEL_CLASSIFIER, ENABLE_GEOLOCATION_EXTRACTION
+    
+    ENABLE_TRANSLATION = os.getenv('ENABLE_TRANSLATION', '1') == '1'
+    ENABLE_IMAGE_ANALYSIS = os.getenv('ENABLE_IMAGE_ANALYSIS', '1') == '1'
+    ENABLE_AUDIO_TRANSCRIPTION = os.getenv('ENABLE_AUDIO_TRANSCRIPTION', '1') == '1'
+    ENABLE_EMOTION_ANALYSIS = os.getenv('ENABLE_EMOTION_ANALYSIS', '1') == '1'
+    ENABLE_LABEL_CLASSIFIER = os.getenv('ENABLE_LABEL_CLASSIFIER', '1') == '1'
+    ENABLE_GEOLOCATION_EXTRACTION = os.getenv('ENABLE_GEOLOCATION_EXTRACTION', '1') == '1'
 # WICHTIG: Diese werden beim Import ausgeführt, aber nur für __main__ gebraucht
 
 def get_env_vars():
@@ -101,6 +120,11 @@ async def main(owner_id=None, case_id=None):
 
     if not SESSION_STRING:
         raise ValueError("SESSION_STRING environment variable is required but not set.")
+
+    # ✅ Set owner_id in context
+    from aether_lib.neo4j_client.connection import set_owner_id
+    set_owner_id(owner_id)
+    print(f"[INIT] Owner ID set to: {owner_id}")
 
     # ✅ Initialize Neo4j driver once at startup
     await init_driver()

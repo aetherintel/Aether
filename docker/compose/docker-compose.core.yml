@@ -208,6 +208,7 @@ services:
     volumes:
       - ./aether_lib:/app/aether_lib:ro
       - app_translation_models:/app/models
+      - shared_ml_libs:/app/shared_libs:ro
     depends_on:
       - redis
       - neo4j
@@ -244,6 +245,7 @@ services:
       - ${MEDIA_PATH}:/shared/media:ro
       - ./aether_lib:/app/aether_lib:ro
       - app_image_models:/app/models/image
+      - shared_ml_libs:/app/shared_libs:ro
     depends_on:
       - redis
       - neo4j
@@ -277,6 +279,7 @@ services:
       - ./aether_lib:/app/aether_lib:ro
       - app_audio_models:/app/models/audio
       - ${MEDIA_PATH}:/shared/media:ro
+      - shared_ml_libs:/app/shared_libs:ro
     depends_on:
       - redis
       - neo4j
@@ -309,6 +312,7 @@ services:
     volumes:
       - ./aether_lib:/app/aether_lib:ro
       - app_emotion_models:/app/models
+      - shared_ml_libs:/app/shared_libs:ro
     depends_on:
       - redis
       - neo4j
@@ -342,6 +346,7 @@ services:
       - ./aether_lib:/app/aether_lib:ro
       - app_classifier_models:/app/models/classifier
       - ${MEDIA_PATH}:/shared/media:ro
+      - shared_ml_libs:/app/shared_libs:ro
     depends_on:
       - redis
       - neo4j
@@ -382,6 +387,7 @@ services:
       - ./aether_lib:/app/aether_lib:ro
       - app_geolocation_models:/app/models/geolocation
       - app_photon_data:/app/photon_data
+      - shared_ml_libs:/app/shared_libs:ro
     depends_on:
       - redis
       - neo4j
@@ -420,6 +426,13 @@ services:
       start_period: 60s
     depends_on:
       - postgres
+
+  ml-libs:
+    build:
+      context: .
+      dockerfile: docker/ml-libs/Dockerfile
+    volumes:
+      - shared_ml_libs:/ml-libs
 
   translation-models:
     build:
@@ -477,6 +490,7 @@ volumes:
   app_image_models:
   app_geolocation_models:
   app_photon_data:
+  shared_ml_libs:
 
 networks:
   aether-network:

@@ -20,7 +20,7 @@ RUN mkdir -p /app/models/geolocation/geonames
 RUN touch /app/workers/__init__.py && \
     touch /app/workers/geolocation_worker/__init__.py
 
-ENV PYTHONPATH=/app
+ENV PYTHONPATH=/app:/app/shared_libs
 ENV PYTHONUNBUFFERED=1
 ENV GEONAMES_DATA_DIR=/app/models/geolocation/geonames
 ENV PHOTON_URL=http://photon:2322

@@ -8,9 +8,6 @@ COPY aether_lib /app/aether_lib
 # Copy requirements first (for better Docker caching)
 COPY workers/audio_worker/requirements.txt .
 
-# Install ARM-compatible CPU-only PyTorch first (from official index)
-RUN pip install --no-cache-dir torch==2.2.2 --index-url https://download.pytorch.org/whl/cpu
-
 # Install the rest of your dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
@@ -26,4 +23,4 @@ RUN mkdir -p /app/models/audio/whisper
 RUN touch /app/workers/__init__.py && \
     touch /app/workers/audio_worker/__init__.py
 
-ENV PYTHONPATH=/app:$PYTHONPATH
+ENV PYTHONPATH=/app:/app/shared_libs:$PYTHONPATH

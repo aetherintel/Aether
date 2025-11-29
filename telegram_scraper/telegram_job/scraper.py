@@ -30,9 +30,9 @@ OWNER_ID = os.getenv("OWNER_ID", "unknown")
 ENABLE_TRANSLATION = os.getenv('ENABLE_TRANSLATION', '1') == '1'
 ENABLE_IMAGE_ANALYSIS = os.getenv('ENABLE_IMAGE_ANALYSIS', '1') == '1'
 ENABLE_AUDIO_TRANSCRIPTION = os.getenv('ENABLE_AUDIO_TRANSCRIPTION', '1') == '1'
-ENABLE_EMOTION_ANALYSIS = os.getenv('ENABLE_EMOTION_ANALYSIS', '0') == '1'
-ENABLE_LABEL_CLASSIFIER = os.getenv('ENABLE_LABEL_CLASSIFIER', '0') == '1'
-ENABLE_GEOLOCATION_EXTRACTION = os.getenv('ENABLE_GEOLOCATION_EXTRACTION', '0') == '1'
+ENABLE_EMOTION_ANALYSIS = os.getenv('ENABLE_EMOTION_ANALYSIS', '1') == '1'
+ENABLE_LABEL_CLASSIFIER = os.getenv('ENABLE_LABEL_CLASSIFIER', '1') == '1'
+ENABLE_GEOLOCATION_EXTRACTION = os.getenv('ENABLE_GEOLOCATION_EXTRACTION', '1') == '1'
 
 # Translation Configuration
 SUPPORTED_TRANSLATION_LANGUAGES = ['ru', 'ar', 'trk', 'en']
@@ -98,6 +98,34 @@ async def process_message(msg, username, found_channels, recursive=False, case_i
         
         # Get sender
         sender = await msg.get_sender()
+        sender_username = None
+        sender_id = None
+
+        # DEBUG LOGGING
+        print(f"[DEBUG] Msg ID: {msg.id}")
+        print(f"[DEBUG] Sender Type: {type(sender)}")
+        print(f"[DEBUG] Sender ID: {getattr(sender, 'id', 'N/A')}")
+        print(f"[DEBUG] Sender Username: {getattr(sender, 'username', 'N/A')}")
+        print(f"[DEBUG] Msg.from_id: {msg.from_id}")
+        print(f"[DEBUG] Msg.post_author: {getattr(msg, 'post_author', 'N/A')}")
+        
+        if sender:
+            sender_id = sender.id
+            # Priorität: username > first_name+last_name > phone > id
+            if hasattr(sender, 'username') and sender.username:
+                sender_username = sender.username
+            elif hasattr(sender, 'first_name'):
+                parts = [sender.first_name]
+                if hasattr(sender, 'last_name') and sender.last_name:
+                    parts.append(sender.last_name)
+                sender_username = ' '.join(parts)
+            elif hasattr(sender, 'phone'):
+                sender_username = f"+{sender.phone}"
+            else:
+                sender_username = f"user_{sender_id}"
+        else:
+            sender_username = "unknown"
+            sender_id = msg.from_id.user_id if msg.from_id else None
         
         # Extract text
         text = msg.message or ""
@@ -109,7 +137,8 @@ async def process_message(msg, username, found_channels, recursive=False, case_i
         geolocation_status = 'none'
         image_analysis_status = 'none'
         audio_transcription_status = 'none'
-
+        print(f"[PROCESS] {username}: Processing message {msg.id}")
+        print(f"Workers enabled: Translation={ENABLE_TRANSLATION}, ImageAnalysis={ENABLE_IMAGE_ANALYSIS}, AudioTranscription={ENABLE_AUDIO_TRANSCRIPTION}, GeolocationExtraction={ENABLE_GEOLOCATION_EXTRACTION}, EmotionAnalysis={ENABLE_EMOTION_ANALYSIS}, LabelClassifier={ENABLE_LABEL_CLASSIFIER}")
         if text:
             if len(text) >= 10 and ENABLE_TRANSLATION:
                 needs_trans, detected_lang = needs_translation(text)

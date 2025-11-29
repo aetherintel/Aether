@@ -12,7 +12,8 @@ from services.neo4j_backend_client import (
     get_user_channels,
     get_user_messages,
     get_unified_timeline_messages,
-    get_case_channels_with_recommendations
+    get_case_channels_with_recommendations,
+    get_channel_locations_data,
 )
 from starlette.responses import FileResponse
 from model.message_model import (
@@ -235,3 +236,23 @@ async def get_messages_for_user(
         return messages
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Fehler beim Abrufen der Nachrichten für Benutzer {user_id}: {str(e)}")
+
+@router.get("/channels/{channel_id}/locations")
+async def get_channel_locations(
+    channel_id: str,
+    limit: int = Query(1000, ge=1, le=5000),
+    user: UserCtx = Depends(user_ctx),
+):
+    """Get all messages with location data for a channel."""
+    owner = None if is_admin(user) else user["id"]
+    
+    try:
+        locations = await get_channel_locations_data(channel_id, owner, limit)
+        return locations
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Fehler beim Abrufen der Location-Daten: {str(e)}"
+        )
+
+

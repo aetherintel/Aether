@@ -1,5 +1,6 @@
 # Core ML libraries - must match your other workers for consistency
 torch>=2.0.0,<3.0.0
+numpy==1.24.0
 transformers==4.36.2
 tokenizers==0.15.1
 sentencepiece==0.1.99

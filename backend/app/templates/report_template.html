@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Report: {{ case.name }}</title>
+</head>
+<body>
+    <h1>{{ case.name }} - {{ period|capitalize }} Report</h1>
+    <p><strong>Period:</strong> {{ start_date.strftime('%Y-%m-%d') }} to {{ end_date.strftime('%Y-%m-%d') }}</p>
+    <p><strong>Generated:</strong> {{ generated_at.strftime('%Y-%m-%d %H:%M') }}</p>
+    
+    <h2>Statistics</h2>
+    <table>
+        <tr><td>Total Messages</td><td>{{ stats.total_messages }}</td></tr>
+        <tr><td>Active Channels</td><td>{{ stats.active_channels }}</td></tr>
+        <tr><td>Unique Users</td><td>{{ stats.unique_users }}</td></tr>
+    </table>
+    
+    <div class="chart">
+        <h2>Message Distribution</h2>
+        <img src="{{ charts.message_distribution }}" style="width: 100%;">
+    </div>
+    
+    <div class="chart">
+        <h2>Sentiment Analysis</h2>
+        <img src="{{ charts.sentiment_chart }}" style="width: 100%;">
+    </div>
+    
+    <h2>Recent Messages</h2>
+    <table>
+        <thead>
+            <tr><th>Date</th><th>Channel</th><th>Message</th></tr>
+        </thead>
+        <tbody>
+            {% for msg in messages %}
+            <tr>
+                <td>{{ msg.date.strftime('%Y-%m-%d') }}</td>
+                <td>{{ msg.channel_name }}</td>
+                <td>{{ msg.text[:100] }}...</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</body>
+</html>

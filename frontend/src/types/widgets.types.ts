@@ -31,7 +31,8 @@ export type WidgetType =
   | 'message-timeline'
   | 'geographic-map'
   | 'neo4j-network'
-  | 'ai-chatbot';
+  | 'ai-chatbot'
+  | 'location-map';
 
 export interface WidgetConfig {
   refreshInterval?: number;

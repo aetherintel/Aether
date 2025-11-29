@@ -4,7 +4,7 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from typing import List, Optional
-from sqlalchemy import Column, Integer, String, create_engine, Text, DateTime, Boolean
+from sqlalchemy import Column, Integer, String, create_engine, Text, DateTime, Boolean, text
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session
@@ -46,6 +46,10 @@ class CaseFileModel(Base):
     duration   = Column(Integer)
     created_at  = Column(DateTime(timezone=True), server_default=func.now())
     archived   = Column(Boolean, default=False)
+    
+    # NEW: Report Configuration
+    report_frequency = Column(String, default="daily") # daily, weekly, monthly, none
+    report_sections = Column(ARRAY(String), default=["stats", "charts", "messages"])
 
 # --- Schemas ------------------------------------------------------------
 class CaseFileCreate(BaseModel):
@@ -60,15 +64,34 @@ class CaseFileCreate(BaseModel):
     duration: Optional[int] = None
     tg_session: Optional[str] = None  # NEW: From frontend
     scraper_mode: Optional[str] = "full"
+    
+    # NEW: Report Config in Create (optional)
+    report_frequency: Optional[str] = "daily"
+    report_sections: List[str] = ["stats", "charts", "messages"]
+
+    # NEW: AI Worker Configuration
+    enable_translation: bool = True
+    enable_image_analysis: bool = True
+    enable_audio_transcription: bool = True
+    enable_emotion_analysis: bool = False
+    enable_label_classifier: bool = False
+    enable_geolocation_extraction: bool = False
 
 class CaseFile(CaseFileCreate):
     id: int
     owner_id: str
     created_at: datetime
     archived: bool
+    # Ensure these are included in response
+    report_frequency: str
+    report_sections: List[str]
 
     class Config:
         from_attributes = True
+
+class ReportConfigUpdate(BaseModel):
+    report_frequency: str
+    report_sections: List[str]
 
 # --- Helpers ------------------------------------------------------------
 def get_db():
@@ -78,25 +101,32 @@ def get_db():
     finally:
         db.close()
 
+# Auto-migration for new columns
+def check_and_migrate_db():
+    try:
+        with engine.connect() as conn:
+            # Check if columns exist
+            result = conn.execute(text("SELECT column_name FROM information_schema.columns WHERE table_name='casefiles'"))
+            columns = [row[0] for row in result]
+            
+            if 'report_frequency' not in columns:
+                print("Migrating DB: Adding report_frequency column")
+                conn.execute(text("ALTER TABLE casefiles ADD COLUMN report_frequency VARCHAR DEFAULT 'daily'"))
+                
+            if 'report_sections' not in columns:
+                print("Migrating DB: Adding report_sections column")
+                conn.execute(text("ALTER TABLE casefiles ADD COLUMN report_sections VARCHAR[] DEFAULT ARRAY['stats', 'charts', 'messages']"))
+            
+            conn.commit()
+    except Exception as e:
+        print(f"DB Migration Warning: {e}")
+
 Base.metadata.create_all(bind=engine)
+check_and_migrate_db()
 
 # -----------------------------------------------------------------------
 # Routes – every one now receives `user` and decides `owner`
 # -----------------------------------------------------------------------
-
-# Update your CaseFileCreate Pydantic model:
-class CaseFileCreate(BaseModel):
-    title: str
-    description: Optional[str] = None
-    category: Optional[str] = None
-    postCount: Optional[int] = None
-    tgchannels: List[str] = []
-    topics: List[str] = []
-    terms: List[str] = []
-    thumbnails: List[str] = []
-    duration: Optional[int] = None
-    tg_session: Optional[str] = None  # NEW: From frontend
-    scraper_mode: Optional[str] = "full"  # NEW: Always "full" from frontend
 
 # Import the telegram controller function
 from controller.telegram_controller import launch_full_scrape_job
@@ -108,7 +138,16 @@ def create_casefile(
     user: UserCtx = Depends(user_ctx),
 ):
     # Create the case file (exclude scraper-specific fields from database)
-    case_data = payload.model_dump(exclude={"tg_session", "scraper_mode"})
+    case_data = payload.model_dump(exclude={
+        "tg_session", 
+        "scraper_mode",
+        "enable_translation",
+        "enable_image_analysis",
+        "enable_audio_transcription",
+        "enable_emotion_analysis",
+        "enable_label_classifier",
+        "enable_geolocation_extraction"
+    })
     db_case = CaseFileModel(**case_data, owner_id=user["id"])
     db.add(db_case)
     db.commit()
@@ -125,7 +164,13 @@ def create_casefile(
                     recursive=True,  # Always recursive for full scrape
                     neo4j=True,     # Always write to Neo4j
                     owner_id=user["id"],
-                    case_id=db_case.id  # Link to this case
+                    case_id=db_case.id,  # Link to this case
+                    enable_translation=payload.enable_translation,
+                    enable_image_analysis=payload.enable_image_analysis,
+                    enable_audio_transcription=payload.enable_audio_transcription,
+                    enable_emotion_analysis=payload.enable_emotion_analysis,
+                    enable_label_classifier=payload.enable_label_classifier,
+                    enable_geolocation_extraction=payload.enable_geolocation_extraction
                 )
                 
                 print(f"Auto-started full scraper for channel '{channel}' in case {db_case.id}: {container_info}")
@@ -152,7 +197,16 @@ def create_casefile_with_status(
     user: UserCtx = Depends(user_ctx),
 ):
     # Create the case file
-    case_data = payload.model_dump(exclude={"tg_session", "scraper_mode"})
+    case_data = payload.model_dump(exclude={
+        "tg_session", 
+        "scraper_mode",
+        "enable_translation",
+        "enable_image_analysis",
+        "enable_audio_transcription",
+        "enable_emotion_analysis",
+        "enable_label_classifier",
+        "enable_geolocation_extraction"
+    })
     db_case = CaseFileModel(**case_data, owner_id=user["id"])
     db.add(db_case)
     db.commit()
@@ -171,7 +225,13 @@ def create_casefile_with_status(
                     recursive=True,
                     neo4j=True,
                     owner_id=user["id"],
-                    case_id=db_case.id
+                    case_id=db_case.id,
+                    enable_translation=payload.enable_translation,
+                    enable_image_analysis=payload.enable_image_analysis,
+                    enable_audio_transcription=payload.enable_audio_transcription,
+                    enable_emotion_analysis=payload.enable_emotion_analysis,
+                    enable_label_classifier=payload.enable_label_classifier,
+                    enable_geolocation_extraction=payload.enable_geolocation_extraction
                 )
                 scrapers_started += 1
                 print(f"Auto-started full scraper for channel '{channel}': {container_info}")
@@ -312,6 +372,31 @@ def archive_casefile(
     db.refresh(obj)
     
     return {"ok": True, "archived": obj.archived}
+
+@router.patch("/{casefile_id}/report-config")
+def update_report_config(
+    casefile_id: int,
+    config: ReportConfigUpdate,
+    db: Session = Depends(get_db),
+    user: UserCtx = Depends(user_ctx),
+):
+    """Update report configuration for a case"""
+    obj = db.query(CaseFileModel).get(casefile_id)
+    if not obj:
+        raise HTTPException(404, "CaseFile not found")
+    if not is_admin(user) and obj.owner_id != user["id"]:
+        raise HTTPException(403, "Forbidden")
+    
+    obj.report_frequency = config.report_frequency
+    obj.report_sections = config.report_sections
+    db.commit()
+    db.refresh(obj)
+    
+    return {
+        "id": obj.id,
+        "report_frequency": obj.report_frequency,
+        "report_sections": obj.report_sections
+    }
 
 @router.post("/{casefile_id}/add-channels")
 def add_channels_to_case(

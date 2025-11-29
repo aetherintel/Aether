@@ -58,6 +58,11 @@ async def _save_message_tx(
 ):
     """Transaction function for saving message"""
     cypher = """
+    OPTIONAL MATCH (existing:Channel {username: $uname, owner_id: $owner})
+    FOREACH (_ IN CASE WHEN existing IS NOT NULL THEN [1] ELSE [] END |
+        SET existing.channel_id = $cid
+    )
+    
     MERGE (ch:Channel {channel_id:$cid, owner_id:$owner})
     ON CREATE SET ch.username = $uname
     

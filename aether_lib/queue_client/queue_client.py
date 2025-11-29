@@ -57,7 +57,7 @@ class QueueClient:
     def enqueue_translation(self, translation_payload: TranslationJobPayload):
         """Translation Job"""
         job = self.queues['translation'].enqueue(
-            'workers.translation_worker.worker.translate_and_update_job',
+            'workers.translation_worker.worker.translate_and_update',
             kwargs={
                 'message_id': translation_payload.message_id,
                 'original_text': translation_payload.original_text,
