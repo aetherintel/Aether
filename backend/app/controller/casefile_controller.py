@@ -51,6 +51,15 @@ class CaseFileModel(Base):
     report_frequency = Column(String, default="daily") # daily, weekly, monthly, none
     report_sections = Column(ARRAY(String), default=["stats", "charts", "messages"])
 
+class ReportModel(Base):
+    __tablename__ = "reports"
+    id = Column(Integer, primary_key=True, index=True)
+    case_id = Column(Integer, index=True) # ForeignKey('casefiles.id') - keeping it loose for now or add FK
+    path = Column(String)
+    filename = Column(String)
+    period = Column(String) # daily, weekly, monthly
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
 # --- Schemas ------------------------------------------------------------
 class CaseFileCreate(BaseModel):
     title: str
@@ -116,6 +125,9 @@ def check_and_migrate_db():
             if 'report_sections' not in columns:
                 print("Migrating DB: Adding report_sections column")
                 conn.execute(text("ALTER TABLE casefiles ADD COLUMN report_sections VARCHAR[] DEFAULT ARRAY['stats', 'charts', 'messages']"))
+            
+            # Check if reports table exists (handled by create_all, but good to check if we need specific columns later)
+            # For now Base.metadata.create_all handles table creation if not exists.
             
             conn.commit()
     except Exception as e:

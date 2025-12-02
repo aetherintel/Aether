@@ -186,6 +186,38 @@ services:
     networks:
       - aether-network
 
+  report-worker:
+    build:
+      context: .
+      dockerfile: workers/report_worker/Dockerfile
+    command: >
+      rq worker report-jobs
+      --url redis://redis:6379
+      --worker-ttl 900
+      --job-monitoring-interval 30
+    restart: unless-stopped
+    env_file:
+      - .env.dev
+    environment:
+      DB_URL: postgresql://${DB_USER}:${DB_PASSWORD}@postgres:5432/aether
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      NEO4J_URI: ${NEO4J_URI}
+      NEO4J_USER: ${NEO4J_USER}
+      NEO4J_PASSWORD: ${NEO4J_PASSWORD}
+      PYTHONPATH: /app:/app/app
+    volumes:
+      - ./backend/app:/app/app
+      - ${MEDIA_PATH}:/shared/media:ro
+      - ./shared/reports:/shared/reports
+      - ./aether_lib:/app/aether_lib:ro
+    depends_on:
+      - redis
+      - postgres
+      - neo4j
+    networks:
+      - aether-network
+
   translation-worker:
     build:
       context: .

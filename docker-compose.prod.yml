@@ -214,6 +214,42 @@ services:
       replicas: 2
 
   # ============================================================================
+  # REPORT WORKER
+  # ============================================================================
+  report-worker:
+    image: ghcr.io/${GITHUB_REPOSITORY_OWNER:-aetherintel}/aether-report-worker:latest
+    command: >
+      rq worker report-jobs
+      --url redis://redis:6379
+      --worker-ttl 900
+      --job-monitoring-interval 30
+    restart: unless-stopped
+    environment:
+      DB_URL: postgresql://${DB_USER}:${DB_PASSWORD}@postgres:5432/aether
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      NEO4J_URI: bolt://neo4j:7687
+      NEO4J_USER: ${NEO4J_USER}
+      NEO4J_PASSWORD: ${NEO4J_PASSWORD}
+      PYTHONPATH: /app:/app/app
+    volumes:
+      - ./shared/media:/shared/media:ro
+      - ./shared/reports:/shared/reports
+    depends_on:
+      - redis
+      - postgres
+      - neo4j
+    networks:
+      - aether-network
+    deploy:
+      replicas: 1
+      resources:
+        limits:
+          memory: 2G
+        reservations:
+          memory: 512M
+
+  # ============================================================================
   # TRANSLATION WORKER
   # ============================================================================
   translation-worker:

@@ -34,6 +34,9 @@ jobs:
           - service: telegram-scraper
             context: .
             dockerfile: ./telegram_scraper/Dockerfile
+          - service: report-worker
+            context: .
+            dockerfile: ./workers/report_worker/Dockerfile
 
           # AI Worker services
           - service: translation-worker
@@ -286,7 +289,7 @@ jobs:
               --scale geolocation-worker=2 \
               --force-recreate --no-build \
               telegram-worker translation-worker audio-worker emotion-worker \
-              image-worker classification-worker geolocation-worker
+              image-worker classification-worker geolocation-worker report-worker
 
             # ═══════════════════════════════════════════════════════════════
             # PHASE 7: Cleanup

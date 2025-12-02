@@ -19,3 +19,5 @@ weasyprint
 jinja2
 matplotlib
 apscheduler
+seaborn
+networkx
