@@ -6,7 +6,6 @@ import BreadcrumbsBar from '@/components/BreadcrumbsBar/BreadcrumbsBar';
 import ChannelsTab from '@/components/ChannelsTab';
 import GraphVisualization from '@/components/GraphVisualization/GraphVisualization';
 import MessagesTab from '@/components/MessagesTab/MessagesTab';
-import DownloadsTab from '@/components/DownloadsTab/DownloadsTab';
 import TgChannelsCheckboxList from '@/components/TgChannelsCheckboxList';
 import { authFetch } from '@/utils/authFetch';
 import type {
@@ -241,16 +240,6 @@ export function CaseFileDetail() {
                     searchQuery={searchQuery}
                     user={graphUser}
                     type={graphType}
-                  />
-                </Tabs.Panel>
-
-                <Tabs.Panel value="downloads" mt="md">
-                  <DownloadsTab
-                    caseId={id!}
-                    initialConfig={{
-                      report_frequency: caseFile.report_frequency,
-                      report_sections: caseFile.report_sections,
-                    }}
                   />
                 </Tabs.Panel>
 

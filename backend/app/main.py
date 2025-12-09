@@ -9,6 +9,7 @@ from controller import telegram_auth_controller
 from controller import queue_controller
 from controller import scraper_controller
 from controller import report_controller
+from controller import stats_controller 
 from services.scheduler_service import start_scheduler
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -29,6 +30,7 @@ app.include_router(telegram_auth_controller.router)
 app.include_router(scraper_controller.router)
 app.include_router(queue_controller.router)
 app.include_router(report_controller.router)
+app.include_router(stats_controller.router)
 
 origins = [
     "http://localhost",
