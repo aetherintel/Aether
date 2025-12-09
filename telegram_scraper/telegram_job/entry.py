@@ -3,7 +3,8 @@ import os, json, sys, asyncio
 
 # GEÄNDERT: Relative Imports verwenden
 from .similar import similar_channels_flexible as similar_channels
-from .scraper import run_scraper, run_live_listener_only
+from .similar import similar_channels_flexible as similar_channels
+from .scraper import run_scraper, run_live_listener_only, reload_scraper_config
 from aether_lib.neo4j_client.channels import write_recommendations, is_scraped
 from aether_lib.neo4j_client.connection import init_driver, close_driver
 from .telegram_client import login
@@ -35,7 +36,10 @@ def run_job(**kwargs):
     os.environ['ENABLE_EMOTION_ANALYSIS'] = '1' if kwargs.get('enable_emotion_analysis', True) else '0'
     os.environ['ENABLE_LABEL_CLASSIFIER'] = '1' if kwargs.get('enable_label_classifier', True) else '0'
     os.environ['ENABLE_GEOLOCATION_EXTRACTION'] = '1' if kwargs.get('enable_geolocation_extraction', True) else '0'
-    reload_config()
+    os.environ['ENABLE_GEOLOCATION_EXTRACTION'] = '1' if kwargs.get('enable_geolocation_extraction', True) else '0'
+    
+    # Reload scraper configuration to pick up new env vars
+    reload_scraper_config()
     
     # Optional parameters
     if kwargs.get('parent_container_id'):

@@ -249,12 +249,14 @@ def compress_image(file_path: str, max_width: int = 1920, quality: int = 80) -> 
         print(f"[ERROR] Image compression failed: {e}")
         return file_path
 
-def compress_video(file_path: str, crf: int = 28) -> str:
+def compress_video(file_path: str, crf: int = 32, max_width: int = 720) -> str:
     """
     Compress video using ffmpeg (via subprocess).
+    - Scale to max_width (default 720px) while maintaining aspect ratio
     - Convert to h.264 mp4
-    - CRF 28 (good compression/quality balance)
-    - AAC audio
+    - CRF 32 (higher compression)
+    - Preset fast
+    - AAC audio 128k
     """
     import subprocess
     import os
@@ -265,18 +267,24 @@ def compress_video(file_path: str, crf: int = 28) -> str:
         
         # ffmpeg command
         # -i input
+        # -vf scale='min(720,iw)':-2  (Scale to max width, keep aspect ratio, don't upscale)
         # -vcodec libx264 (H.264 video)
-        # -crf 28 (Constant Rate Factor, higher = more compression)
+        # -crf 32 (Constant Rate Factor, higher = more compression)
+        # -preset fast (Faster encoding)
         # -acodec aac (AAC audio)
+        # -b:a 128k (Limit audio bitrate)
         # -movflags +faststart (Web optimization)
         # -y (overwrite output)
         
         cmd = [
             "ffmpeg",
             "-i", file_path,
+            "-vf", f"scale='min({max_width},iw)':-2",
             "-vcodec", "libx264",
             "-crf", str(crf),
+            "-preset", "fast",
             "-acodec", "aac",
+            "-b:a", "128k",
             "-movflags", "+faststart",
             "-y",
             temp_path

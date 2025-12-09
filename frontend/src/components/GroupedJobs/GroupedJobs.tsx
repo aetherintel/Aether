@@ -179,7 +179,7 @@ const GroupedJobsDisplay: React.FC<GroupedJobsDisplayProps> = ({
             </Text>
 
             <Text size="xs" c="dimmed">
-              ID: {container.id.substring(0, 12)}
+              ID: {container.id ? container.id.substring(0, 12) : 'N/A'}
             </Text>
 
             {container.case_id && (

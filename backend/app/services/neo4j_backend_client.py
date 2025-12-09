@@ -798,6 +798,36 @@ async def get_top_entities(
         # If I can't find Person/Org, I'll just use Location for now or generic Entity if it exists.
         
         # Let's try to find any node linked to Message that is not User or Channel.
+        pass
+
+async def get_channel_emotions(channel_id: str, owner_id: str | None):
+    """
+    Get aggregated emotion statistics for a channel using HAS_EMOTION relationship.
+    """
+    async with get_session(owner_id) as session:
+        query = """
+        MATCH (ch:Channel)
+        WHERE toLower(ch.channel_id) = toLower($channel_id)
+          AND ($ownerId IS NULL OR ch.owner_id = $ownerId)
+        MATCH (ch)-[:HAS_MESSAGE]->(m:Message)-[r:HAS_EMOTION]->(e:Emotion)
+        WHERE ($ownerId IS NULL OR m.owner_id = $ownerId)
+        RETURN e.name as emotion, count(r) as count
+        ORDER BY count DESC
+        """
+        
+        result = await session.run(
+            query,
+            {"channel_id": str(channel_id), "ownerId": owner_id}
+        )
+        
+        emotions = []
+        async for record in result:
+            emotions.append({
+                "emotion": record["emotion"],
+                "count": record["count"]
+            })
+            
+        return emotions
         # Actually, let's look at the codebase search results again or just assume standard schema 
         # if I can't verify. 
         # Wait, I can search for "Entity" or "Person" in the codebase to be sure.

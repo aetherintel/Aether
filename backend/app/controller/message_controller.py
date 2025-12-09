@@ -255,4 +255,21 @@ async def get_channel_locations(
             detail=f"Fehler beim Abrufen der Location-Daten: {str(e)}"
         )
 
-
+@router.get("/channels/{channel_id}/emotions")
+async def get_channel_emotions_endpoint(
+    channel_id: str,
+    user: UserCtx = Depends(user_ctx),
+):
+    """Get aggregated emotion statistics for a channel."""
+    owner = None if is_admin(user) else user["id"]
+    
+    try:
+        # Import here to avoid circular imports if any, or just standard practice
+        from services.neo4j_backend_client import get_channel_emotions
+        emotions = await get_channel_emotions(channel_id, owner)
+        return emotions
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Fehler beim Abrufen der Emotionen: {str(e)}"
+        )
