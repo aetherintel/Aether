@@ -11,7 +11,7 @@ pydantic
 
 # Worker infrastructure (Redis Queue)
 redis>=4.5.0
-rq>=1.15.0
+rq==1.16.2
 
 # Neo4j database
 neo4j>=5.8.0

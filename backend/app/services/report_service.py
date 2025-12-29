@@ -19,10 +19,13 @@ from services.neo4j_backend_client import (
     get_message_volume_over_time,
     get_channel_recommendation_graph,
     get_user_interaction_graph,
-    get_active_channels_in_period
+    get_user_interaction_graph,
+    get_active_channels_in_period,
+    get_aggregated_emotions
 )
 
-REPORTS_DIR = Path("/shared/reports")
+
+REPORTS_DIR = Path(os.getenv("REPORTS_DIR", "/shared/reports"))
 REPORTS_DIR.mkdir(parents=True, exist_ok=True)
 
 # Setup Jinja2 environment
@@ -144,6 +147,58 @@ def generate_network_graph_base64(graph_data: dict, title: str) -> str:
     
     return f"data:image/png;base64,{img_base64}"
 
+def generate_pie_chart_base64(data: dict, title: str) -> str:
+    """Generate clean pie chart as base64 string"""
+    if not data:
+        return ""
+        
+    labels = list(data.keys())
+    sizes = list(data.values())
+    
+    # Custom colors mapping for specific emotions if possible, else default palette
+    emotions_colors = {
+        'positive': '#2ecc71',
+        'negative': '#e74c3c',
+        'neutral': '#95a5a6',
+        'angry': '#e67e22',
+        'sad': '#3498db',
+        'Freude / Zufriedenheit': '#2ecc71',
+        'Wut / Aggression': '#e74c3c',
+        'Trauer / Mitgefühl': '#3498db',
+        'Angst / Bedrohungsempfinden': '#9b59b6',
+    }
+    
+    colors = [emotions_colors.get(l, None) for l in labels]
+    
+    fig, ax = plt.subplots(figsize=(8, 8))
+    
+    wedges, texts, autotexts = ax.pie(
+        sizes, 
+        labels=labels, 
+        autopct='%1.1f%%',
+        startangle=90,
+        pctdistance=0.85,
+        colors=colors,
+        textprops=dict(color="black")
+    )
+    
+    # Draw circle for Donut Chart style
+    centre_circle = plt.Circle((0,0),0.70,fc='white')
+    fig.gca().add_artist(centre_circle)
+    
+    ax.axis('equal')  
+    ax.set_title(title, fontsize=14, fontweight='bold', pad=20)
+    
+    plt.tight_layout()
+    
+    buffer = io.BytesIO()
+    plt.savefig(buffer, format='png', dpi=150)
+    buffer.seek(0)
+    img_base64 = base64.b64encode(buffer.read()).decode()
+    plt.close()
+    
+    return f"data:image/png;base64,{img_base64}"
+
 def calculate_graph_kpis(graph_data: dict) -> dict:
     """Calculate basic graph metrics"""
     if not graph_data or not graph_data["nodes"]:
@@ -204,6 +259,10 @@ async def get_case_statistics(owner_id: str, start_date: datetime, end_date: dat
     # 6. Graph Data
     rec_graph = await get_channel_recommendation_graph(owner_id)
     graph_kpis = calculate_graph_kpis(rec_graph)
+
+    # 7. Emotion Data
+    emotions = await get_aggregated_emotions(owner_id, start_date=start_date, end_date=end_date)
+    emotion_dist = {e['emotion']: e['count'] for e in emotions} if emotions else {}
     
     return {
         "total_messages": total_messages,
@@ -212,7 +271,8 @@ async def get_case_statistics(owner_id: str, start_date: datetime, end_date: dat
         "volume_over_time": volume_data,
         "top_locations": top_locations,
         "graph_data": rec_graph,
-        "graph_kpis": graph_kpis
+        "graph_kpis": graph_kpis,
+        "emotions": emotion_dist
     }
 
 async def get_recent_messages(owner_id: str, limit: int = 50):
@@ -231,8 +291,11 @@ async def create_report_pdf(case_id: int, owner_id: str, period: str, sections: 
         start_date = end_date - timedelta(days=1)
     elif period == "weekly":
         start_date = end_date - timedelta(weeks=1)
-    else:  # monthly
+    elif period == "monthly":
         start_date = end_date - timedelta(days=30)
+    else:  # all_time or default
+        # Set start date to a very old date to include everything
+        start_date = end_date - timedelta(days=3650) # 10 years
     
     # Fetch data
     case_data = await get_case_details(case_id)
@@ -269,10 +332,15 @@ async def create_report_pdf(case_id: int, owner_id: str, period: str, sections: 
                 ylabel="Mentions"
             )
             
-        if stats.get("graph_data") and stats["graph_data"]["nodes"]:
             chart_data["network_graph"] = generate_network_graph_base64(
                 stats["graph_data"],
                 "Channel Recommendation Network"
+            )
+            
+        if stats.get("emotions"):
+            chart_data["emotions"] = generate_pie_chart_base64(
+                stats["emotions"],
+                "Emotion Analysis"
             )
     
     # Prepare message objects for template

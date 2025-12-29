@@ -55,6 +55,13 @@
         <img src="{{ charts.top_locations }}" style="width: 100%;">
     </div>
     {% endif %}
+
+    {% if charts.emotions %}
+    <h2>Emotion Analysis</h2>
+    <div class="chart">
+        <img src="{{ charts.emotions }}" style="width: 80%;">
+    </div>
+    {% endif %}
     
     {% if charts.network_graph %}
     <h2>Network Analysis</h2>

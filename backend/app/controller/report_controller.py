@@ -3,9 +3,11 @@ from pydantic import BaseModel
 from fastapi.responses import FileResponse
 from datetime import datetime
 from pathlib import Path
+from pathlib import Path
 from sqlalchemy.orm import Session
-from controller.auth_controller import get_current_user
-from controller.casefile_controller import get_db, ReportModel
+from services.auth_ctx import user_ctx, UserCtx
+from database import get_db
+from model.casefile_model import ReportModel
 from services.report_service import create_report_pdf, REPORTS_DIR
 
 router = APIRouter(prefix="/reports", tags=["reports"])
@@ -18,20 +20,66 @@ class GenerateReportRequest(BaseModel):
 async def generate_report(
     case_id: int,
     request: GenerateReportRequest,
-    current_user: dict = Depends(get_current_user)
+    db: Session = Depends(get_db), 
+    user: UserCtx = Depends(user_ctx)
 ):
     """Generate PDF report for case"""
-    owner_id = current_user.get("owner_id")
+    owner_id = user["id"]
+    # Debug logging
+    print(f"Generate Report: User={user}, OwnerID={owner_id}, CaseID={case_id}")
     
     filename, filepath = await create_report_pdf(case_id, owner_id, request.period, request.sections)
     
+    # Save to DB
+    new_report = ReportModel(
+        case_id=case_id,
+        path=str(filepath),
+        filename=filename,
+        period=request.period
+    )
+    db.add(new_report)
+    db.commit()
+    db.refresh(new_report)
+    
     return {"filename": filename, "path": str(filepath)}
+
+@router.get("/list")
+async def list_all_reports(
+    db: Session = Depends(get_db),
+    user: UserCtx = Depends(user_ctx)
+):
+    """List all available reports for the user across all cases"""
+    # Join ReportModel and CaseFileModel to filter by owner_id
+    from model.casefile_model import CaseFileModel
+    
+    reports = db.query(ReportModel, CaseFileModel.title).join(
+        CaseFileModel, ReportModel.case_id == CaseFileModel.id
+    ).filter(
+        CaseFileModel.owner_id == user["id"]
+    ).order_by(ReportModel.created_at.desc()).all()
+    
+    result = []
+    for r, case_title in reports:
+        # Check if file exists
+        file_path = Path(r.path)
+        if file_path.exists():
+            result.append({
+                "filename": r.filename,
+                "size": file_path.stat().st_size,
+                "created": r.created_at,
+                "period": r.period,
+                "case_id": r.case_id,
+                "case_title": case_title,
+                "url": f"/api/reports/download/{r.filename}"
+            })
+            
+    return result
 
 @router.get("/list/{case_id}")
 async def list_reports(
     case_id: int,
     db: Session = Depends(get_db),
-    current_user: dict = Depends(get_current_user)
+    user: UserCtx = Depends(user_ctx)
 ):
     """List available reports for case from DB"""
     reports = db.query(ReportModel).filter(
@@ -48,6 +96,7 @@ async def list_reports(
                 "size": file_path.stat().st_size,
                 "created": r.created_at,
                 "period": r.period,
+                "case_id": r.case_id,
                 "url": f"/api/reports/download/{r.filename}"
             })
             

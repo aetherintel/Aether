@@ -1,8 +1,9 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy import func
 from sqlalchemy.orm import Session
-from controller.auth_controller import get_current_user
-from controller.casefile_controller import get_db, CaseFileModel
+from services.auth_ctx import user_ctx, UserCtx
+from database import get_db
+from model.casefile_model import CaseFileModel
 from services.neo4j_backend_client import get_channel_list
 
 router = APIRouter(prefix="/stats", tags=["stats"])
@@ -10,12 +11,13 @@ router = APIRouter(prefix="/stats", tags=["stats"])
 @router.get("/overview")
 async def get_stats_overview(
     db: Session = Depends(get_db),
-    current_user: dict = Depends(get_current_user)
+    user: UserCtx = Depends(user_ctx)
 ):
     """
     Get overview statistics for all cases of the current user
     """
-    owner_id = current_user.get("owner_id")
+    owner_id = user["id"]
+    print(f"Stats Overview: User={user}, Resolved OwnerID={owner_id}")
     
     # Total cases (not archived)
     total_cases = db.query(func.count(CaseFileModel.id)).filter(

@@ -7,7 +7,8 @@ from datetime import datetime
 # Import from backend app
 # PYTHONPATH must include /app/app
 from services.report_service import create_report_pdf
-from controller.casefile_controller import SessionLocal, ReportModel
+from database import SessionLocal
+from model.casefile_model import ReportModel
 
 # ---------------------------------------------------------------
 # Logging setup

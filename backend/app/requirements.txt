@@ -13,7 +13,7 @@ python-multipart
 sqlalchemy
 pydantic
 redis==5.0.1
-rq==1.14.0
+rq==1.16.2
 
 weasyprint
 jinja2
@@ -21,3 +21,9 @@ matplotlib
 apscheduler
 seaborn
 networkx
+
+# Testing
+pytest
+pytest-asyncio
+pytest-mock
+httpx

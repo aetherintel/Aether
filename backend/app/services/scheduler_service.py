@@ -5,7 +5,8 @@ import logging
 import os
 from redis import Redis
 from rq import Queue
-from controller.casefile_controller import SessionLocal, CaseFileModel
+from database import SessionLocal
+from model.casefile_model import CaseFileModel
 
 logger = logging.getLogger(__name__)
 
