@@ -5,7 +5,7 @@ sentencepiece==0.1.99
 accelerate
 # Other dependencies
 redis
-rq
+rq==1.16.2
 neo4j
 python-dotenv
 requests
