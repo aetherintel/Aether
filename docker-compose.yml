@@ -93,6 +93,7 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
       - tg_sessions:/app/sessions
       - ${MEDIA_PATH}:/shared/media
+      - ./shared/reports:/shared/reports
       - ./aether_lib:/app/aether_lib:ro
     depends_on:
       postgres:

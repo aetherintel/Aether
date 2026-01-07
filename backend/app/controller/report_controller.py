@@ -103,10 +103,23 @@ async def list_reports(
     return result
 
 @router.get("/download/{filename}")
-async def download_report(filename: str):
+async def download_report(filename: str, preview: bool = False):
     """Download specific report"""
+    # Try to find file in root first (legacy)
     filepath = REPORTS_DIR / filename
+    
+    if not filepath.exists():
+        # Try to parse case_id from filename: report_{case_id}_{period}_{date}.pdf
+        try:
+            parts = filename.split('_')
+            if len(parts) >= 2 and parts[0] == 'report':
+                case_id = parts[1]
+                filepath = REPORTS_DIR / f"case_{case_id}" / filename
+        except Exception:
+            pass
+            
     if not filepath.exists():
         raise HTTPException(404, "Report not found")
     
-    return FileResponse(filepath, media_type="application/pdf", filename=filename)
+    content_disposition = "inline" if preview else f'attachment; filename="{filename}"'
+    return FileResponse(filepath, media_type="application/pdf", headers={"Content-Disposition": content_disposition})

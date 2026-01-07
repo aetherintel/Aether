@@ -367,9 +367,13 @@ async def create_report_pdf(case_id: int, owner_id: str, period: str, sections: 
         generated_at=datetime.now()
     )
     
+    # Create case-specific directory
+    case_dir = REPORTS_DIR / f"case_{case_id}"
+    case_dir.mkdir(parents=True, exist_ok=True)
+    
     # Generate PDF
     filename = f"report_{case_id}_{period}_{end_date.strftime('%Y%m%d')}.pdf"
-    filepath = REPORTS_DIR / filename
+    filepath = case_dir / filename
     
     HTML(string=html_content).write_pdf(
         filepath,

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Container, Title, Text, Group, Paper, Grid, Stack, SimpleGrid, Button, Select, MultiSelect, Table, Anchor, ActionIcon, Modal } from '@mantine/core';
-import { IconFileAnalytics, IconDownload, IconChartBar, IconUsers, IconMessage, IconTrendingUp, IconSettings, IconDeviceFloppy, IconPlus } from '@tabler/icons-react';
+import { IconFileAnalytics, IconDownload, IconChartBar, IconUsers, IconMessage, IconTrendingUp, IconSettings, IconDeviceFloppy, IconPlus, IconEye } from '@tabler/icons-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { notifications } from '@mantine/notifications';
 import { useDisclosure } from '@mantine/hooks';
@@ -61,6 +61,8 @@ export function Reports() {
   const queryClient = useQueryClient();
   const [selectedCase, setSelectedCase] = useState<string | null>(null);
   const [opened, { open, close }] = useDisclosure(false);
+  const [previewOpened, { open: openPreview, close: closePreview }] = useDisclosure(false);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   
   // New Report State
   const [newReportCaseId, setNewReportCaseId] = useState<string | null>(null);
@@ -136,6 +138,13 @@ export function Reports() {
       setNewReportCaseId(selectedCase);
     }
     open();
+  };
+
+  const handlePreview = (url: string) => {
+    // Append preview=true to the url. 
+    // The url comes as /api/reports/download/filename.pdf
+    setPreviewUrl(`${url}?preview=true`);
+    openPreview();
   };
 
   const filteredReports = selectedCase 
@@ -259,15 +268,25 @@ export function Reports() {
                     <Table.Td>{new Date(report.created).toLocaleString()}</Table.Td>
                     <Table.Td>{(report.size / 1024).toFixed(2)} KB</Table.Td>
                     <Table.Td>
-                      <Anchor href={report.url} target="_blank" download>
-                        <Button 
-                          leftSection={<IconDownload size={14} />} 
+                      <Group gap="xs">
+                        <ActionIcon 
                           variant="light" 
-                          size="xs"
+                          color="blue" 
+                          onClick={() => handlePreview(report.url)}
+                          title="View Report"
                         >
-                          Download
-                        </Button>
-                      </Anchor>
+                          <IconEye size={16} />
+                        </ActionIcon>
+                        <Anchor href={report.url} target="_blank" download>
+                          <Button 
+                            leftSection={<IconDownload size={14} />} 
+                            variant="light" 
+                            size="xs"
+                          >
+                            Download
+                          </Button>
+                        </Anchor>
+                      </Group>
                     </Table.Td>
                   </Table.Tr>
                 ))}
@@ -326,6 +345,25 @@ export function Reports() {
             Generate Report
           </Button>
         </Stack>
+      </Modal>
+
+
+      <Modal 
+        opened={previewOpened} 
+        onClose={closePreview} 
+        title="Report Preview" 
+        size="xl"
+        styles={{ body: { height: '80vh' } }}
+      >
+        {previewUrl && (
+          <iframe 
+            src={previewUrl} 
+            width="100%" 
+            height="100%" 
+            style={{ border: 'none' }}
+            title="Report Preview"
+          />
+        )}
       </Modal>
     </Container>
   );
