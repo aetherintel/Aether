@@ -32,6 +32,7 @@ export type WidgetType =
   | 'geographic-map'
   | 'neo4j-network'
   | 'ai-chatbot'
+  | 'agent-query'
   | 'location-map';
 
 export interface WidgetConfig {

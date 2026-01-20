@@ -22,8 +22,15 @@ apscheduler
 seaborn
 networkx
 
+# GraphRAG
+langchain
+langchain-neo4j
+langchain-openai
+langchain-community
+
 # Testing
 pytest
 pytest-asyncio
 pytest-mock
 httpx
+mcp

@@ -18,6 +18,7 @@ import { TopInfluencersWidget } from '@/components/widgets/TopInfluencersWidget'
 import { EmotionAnalysisWidget } from '@/components/widgets/EmotionAnalysisWidget';
 import { LocationHeatmapWidget } from '@/components/widgets/LocationHeatmapWidget';
 import { LocationMapWidget } from '@/components/widgets/LocationMapWidget';
+import { AgentQueryWidget } from '@/components/widgets/AgentQueryWidget';
 
 
 class WidgetRegistry {
@@ -28,6 +29,18 @@ class WidgetRegistry {
   }
 
   private registerDefaultWidgets() {
+    // New Agent Widget
+    this.register({
+      type: 'agent-query',
+      name: 'Agent Query',
+      description: 'Ask questions to your data agent',
+      icon: IconRobot,
+      component: AgentQueryWidget,
+      defaultConfig: {},
+      defaultSize: { w: 12, h: 6, minW: 6, minH: 4 },
+      categories: ['dashboard', 'agent'],
+    });
+
     // Dashboard Widgets
     this.register({
       type: 'top-posts',

@@ -69,3 +69,7 @@ models/geocoding/*
 
 models/image/*
 !models/image/Dockerfile
+
+*.gguf
+*.bin
+*.safetensors

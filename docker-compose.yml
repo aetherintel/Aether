@@ -39,6 +39,25 @@ services:
       timeout: 5s
       retries: 10
 
+  mcp-neo4j-cypher-server:
+    image: mcp/neo4j-cypher:latest
+    ports:
+      - '9090:8000'
+    environment:
+      - NEO4J_URI=bolt://neo4j:7687
+      - NEO4J_USERNAME=${NEO4J_USER}
+      - NEO4J_PASSWORD=${NEO4J_PASSWORD}
+      - NEO4J_DATABASE=neo4j
+      - NEO4J_TRANSPORT=sse
+      - NEO4J_MCP_SERVER_HOST=0.0.0.0
+      - NEO4J_MCP_SERVER_PORT=8000
+      - NEO4J_MCP_SERVER_PATH=/api/mcp/
+      - NEO4J_NAMESPACE=local
+    depends_on:
+      - neo4j
+    networks:
+      - aether-network
+
   keycloak:
     image: quay.io/keycloak/keycloak:24.0.2
     container_name: keycloak
@@ -430,7 +449,26 @@ services:
           memory: 2G
         reservations:
           memory: 512M
-
+  llm-service:
+      build: ./workers/llm-service
+      container_name: aether-llm-service
+      ports:
+        - "8001:8001"
+      volumes:
+        - app_llm_models:/models    # Shared models directory
+      environment:
+        - MODEL_PATH=/models/llm/llama3.2-1b-q4.gguf
+        - N_THREADS=8
+      restart: unless-stopped
+      healthcheck:
+        test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+        interval: 30s
+        timeout: 10s
+        retries: 3
+      networks:
+        - aether-network
+      depends_on:
+        - llm-models
   photon:
     build:
       context: .
@@ -496,6 +534,13 @@ services:
     volumes:
       - app_geolocation_models:/models
   
+  llm-models:
+    build:
+      context: ./models
+      dockerfile: llm/Dockerfile
+    volumes:
+      - app_llm_models:/models
+
 volumes:
   pgdata:
   neo4j_data:
@@ -510,6 +555,7 @@ volumes:
   app_image_models:
   app_geolocation_models:
   app_photon_data:
+  app_llm_models:
 
 networks:
   aether-network:

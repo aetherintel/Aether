@@ -51,7 +51,15 @@ interface WidgetState {
 const createDefaultLayout = (): DashboardLayout => ({
   id: uuidv4(),
   name: 'Default Dashboard',
-  widgets: [],
+  widgets: [
+    {
+       id: uuidv4(),
+       type: 'agent-query',
+       title: 'Agent Query',
+       position: { x: 0, y: 0, w: 12, h: 6, minW: 6, minH: 4 },
+       config: {}
+    }
+  ],
   isDefault: true,
   createdAt: new Date(),
   updatedAt: new Date(),
