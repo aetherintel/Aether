@@ -37,7 +37,10 @@ export const GraphRAGWidget: React.FC<GraphRAGWidgetProps> = ({ data }) => {
           width={width}
           height={height}
           graphData={data}
-          nodeLabel={(node: any) => node.name || node.text || node.id}
+          nodeLabel={(node: any) => {
+            const props = node.properties || {};
+            return props.original_text || props.text || props.title || props.name || node.name || node.id;
+          }}
           nodeAutoColorBy="label"
           linkDirectionalParticles={2}
           linkDirectionalParticleSpeed={0.005}

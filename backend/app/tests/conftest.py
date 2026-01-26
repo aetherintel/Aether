@@ -49,6 +49,41 @@ def mock_get(url, *args, **kwargs):
 
 requests.get = mock_get
 
+
+# Mock langchain_community to avoid dependency issues during tests
+import sys
+mock_langchain = MagicMock()
+sys.modules["langchain_community"] = mock_langchain
+sys.modules["langchain_community.graphs"] = mock_langchain
+sys.modules["langchain_community.chat_models"] = mock_langchain
+sys.modules["langchain_openai"] = mock_langchain
+sys.modules["langchain_neo4j"] = mock_langchain
+sys.modules["neo4j"] = mock_langchain
+sys.modules["neo4j.time"] = mock_langchain
+sys.modules["mcp"] = mock_langchain
+sys.modules["mcp.client"] = mock_langchain
+sys.modules["mcp.client.sse"] = mock_langchain
+sys.modules["telethon"] = mock_langchain
+sys.modules["telethon.sync"] = mock_langchain
+sys.modules["telethon.sessions"] = mock_langchain
+sys.modules["telethon.errors"] = mock_langchain
+sys.modules["weasyprint"] = mock_langchain
+sys.modules["matplotlib"] = mock_langchain
+sys.modules["matplotlib.pyplot"] = mock_langchain
+sys.modules["seaborn"] = mock_langchain
+sys.modules["apscheduler"] = mock_langchain
+sys.modules["apscheduler.schedulers.asyncio"] = mock_langchain
+sys.modules["apscheduler.triggers"] = mock_langchain
+sys.modules["apscheduler.triggers.cron"] = mock_langchain
+sys.modules["redis"] = mock_langchain
+sys.modules["rq"] = mock_langchain
+sys.modules["rq.job"] = mock_langchain
+sys.modules["rq.registry"] = mock_langchain
+sys.modules["matplotlib.dates"] = mock_langchain
+sys.modules["networkx"] = mock_langchain
+sys.modules["jinja2"] = mock_langchain
+
+
 from main import app
 from controller.casefile_controller import get_db
 from services.auth_ctx import user_ctx

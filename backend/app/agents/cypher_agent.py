@@ -24,7 +24,12 @@ class CypherAgent:
             response = await self.client.post(
                 f"{self.llm_service_url}/generate-cypher",
                 json={
-                    "question": question,
+                    "question": f"""{question}
+Instructions:
+1. Fuzzy Match: Use toLower(n.prop) CONTAINS toLower('val') for strings.
+2. Sparse Data: Use OPTIONAL MATCH for non-critical relationships to avoid empty results.
+3. Visualization: RETURN full paths (e.g. MATCH p=... RETURN p) or explicit relationships (RETURN n, r, m).
+4. Schema: STRICTLY use only provided Node Labels and Relationship Types.""",
                     "db_schema": schema, 
                     "temperature": 0.0,
                     "max_tokens": 1024,

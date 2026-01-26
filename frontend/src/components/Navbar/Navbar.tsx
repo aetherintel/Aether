@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { IconFiles, IconHome2, IconLogout, IconSettings,IconFileAnalytics } from '@tabler/icons-react';
+import { IconFiles, IconHome2, IconLogout, IconSettings, IconFileAnalytics, IconRobot } from '@tabler/icons-react';
 import { useNavigate } from 'react-router-dom';
 import { Box, Center, Stack, Text, Tooltip, UnstyledButton } from '@mantine/core';
 import { useAuthStore } from '../../store/client/authStore';
@@ -30,6 +30,7 @@ const mockdata = [
   { icon: IconHome2, label: 'Dashboard', href: '/' },
   { icon: IconFiles, label: 'Cases', href: '/cases' },
   { icon: IconFileAnalytics, label: 'Reports', href: '/reports' },
+  { icon: IconRobot, label: 'Agent', href: '/agent' },
   { icon: IconSettings, label: 'Settings', href: '/settings' },
 ];
 

@@ -4,7 +4,7 @@ import { useLocation, useParams } from 'react-router-dom';
 import { Badge, Card, Grid, Group, Loader, Stack, Tabs, Text, Title } from '@mantine/core';
 import BreadcrumbsBar from '@/components/BreadcrumbsBar/BreadcrumbsBar';
 import ChannelsTab from '@/components/ChannelsTab';
-import GraphVisualization from '@/components/GraphVisualization/GraphVisualization';
+import { AgentQueryInterface } from '@/components/Dashboard/AgentQueryInterface';
 import MessagesTab from '@/components/MessagesTab/MessagesTab';
 import TgChannelsCheckboxList from '@/components/TgChannelsCheckboxList';
 import { authFetch } from '@/utils/authFetch';
@@ -235,12 +235,7 @@ export function CaseFileDetail() {
                 </Tabs.Panel>
 
                 <Tabs.Panel value="visuals" mt="md">
-                  <GraphVisualization
-                    selectedChannelIds={selectedTgChannelIds}
-                    searchQuery={searchQuery}
-                    user={graphUser}
-                    type={graphType}
-                  />
+                  <AgentQueryInterface embedded />
                 </Tabs.Panel>
 
                 <Tabs.Panel value="details" mt="md">
