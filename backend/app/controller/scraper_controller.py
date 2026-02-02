@@ -42,6 +42,7 @@ def scrape(
         enable_emotion_analysis=request.enable_emotion_analysis,
         enable_label_classifier=request.enable_label_classifier,
         enable_geolocation_extraction=request.enable_geolocation_extraction,
+        ocr_languages=request.ocr_languages
     )
     
     # Enqueue

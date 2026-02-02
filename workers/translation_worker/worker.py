@@ -245,12 +245,7 @@ def translate_and_update(
             # Step 3: Trigger emotion analysis
             logger.info("🎭 Step 3: Triggering emotion analysis...")
             try:
-                emotion_job_id = queue_client.QueueClient.enqueue_emotion(
-                message_id=message_id,
-                text=translated_text,
-                owner_id=owner_id,
-                case_id=case_id
-            )
+                emotion_job_id = queue_client.QueueClient.EmotionJobPayload(message_id=message_id, text=translated_text, owner_id=owner_id, case_id=case_id)
                 if emotion_job_id:
                     logger.info(f"✅ Step 3: Emotion analysis queued: {emotion_job_id}")
                 else:
@@ -258,12 +253,7 @@ def translate_and_update(
             except Exception as e:
                 logger.error(f"❌ Step 3: Failed to trigger emotion analysis: {e}")
             try:
-                classification_job_id = queue_client.QueueClient.enqueue_classification(
-                message_id=message_id,
-                text=translated_text,
-                owner_id=owner_id,
-                case_id=case_id
-            )
+                classification_job_id = queue_client.QueueClient.ClassificationJobPayload(message_id=message_id, text=translated_text, owner_id=owner_id, case_id=case_id)
                 if classification_job_id:
                     logger.info(f"✅ Step 4: Classification queued: {classification_job_id}")
                 else:

@@ -40,7 +40,7 @@ def run_job(**kwargs):
     os.environ['ENABLE_LABEL_CLASSIFIER'] = '1' if kwargs.get('enable_label_classifier', True) else '0'
     os.environ['ENABLE_GEOLOCATION_EXTRACTION'] = '1' if kwargs.get('enable_geolocation_extraction', True) else '0'
     os.environ['ENABLE_LIVE_MONITORING'] = '1' if kwargs.get('enable_live_monitoring', False) else '0'
-    
+    os.environ['OCR_LANGUAGES'] = ','.join(kwargs.get('ocr_languages', ['latin']))
     print("[RQ] Reloading scraper config...", flush=True)
     reload_scraper_config()
     print("[RQ] Config reloaded.", flush=True)

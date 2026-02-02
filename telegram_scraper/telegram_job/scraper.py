@@ -24,7 +24,8 @@ def reload_scraper_config():
         'ENABLE_LABEL_CLASSIFIER': os.getenv('ENABLE_LABEL_CLASSIFIER', '1') == '1',
         'ENABLE_GEOLOCATION_EXTRACTION': os.getenv('ENABLE_GEOLOCATION_EXTRACTION', '1') == '1',
         'ENABLE_LIVE_MONITORING': os.getenv('ENABLE_LIVE_MONITORING', '0') == '1',
-        'RATE_LIMIT_DELAY': RATE_LIMIT_DELAY
+        'RATE_LIMIT_DELAY': RATE_LIMIT_DELAY,
+        'OCR_LANGUAGES': os.getenv('OCR_LANGUAGES', 'latin').split(',')
     }
     print(f"[CONFIG] Reloaded scraper config: {config}", flush=True)
 

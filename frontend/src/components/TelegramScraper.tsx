@@ -20,6 +20,7 @@ import {
   Loader,
   Paper,
   Select,
+  MultiSelect,
   Stack,
   Switch,
   Text,
@@ -127,6 +128,7 @@ const TelegramScraper: React.FC<TelegramScraperProps> = ({ case_id }) => {
   const [enableEmotionAnalysis, setEnableEmotionAnalysis] = useState<boolean>(false);
   const [enableLabelClassifier, setEnableLabelClassifier] = useState<boolean>(false);
   const [enableGeolocationExtraction, setEnableGeolocationExtraction] = useState<boolean>(false);
+  const [ocrLanguages, setOcrLanguages] = useState<string[]>(['latin']);
 
   useEffect(() => {
     fetchSessions();
@@ -309,6 +311,7 @@ const TelegramScraper: React.FC<TelegramScraperProps> = ({ case_id }) => {
             enable_emotion_analysis: enableEmotionAnalysis,
             enable_label_classifier: enableLabelClassifier,
             enable_geolocation_extraction: enableGeolocationExtraction,
+            ocr_languages: ocrLanguages,
           };
           break;
         case 'live':
@@ -446,6 +449,8 @@ const TelegramScraper: React.FC<TelegramScraperProps> = ({ case_id }) => {
               onChange={(e) => setRecursive(e.currentTarget.checked)}
             />
           )}
+          
+
 
           <Divider label="Worker Options" labelPosition="center" />
 
@@ -472,6 +477,22 @@ const TelegramScraper: React.FC<TelegramScraperProps> = ({ case_id }) => {
               description="Extract text from images using OCR"
               checked={enableImageAnalysis}
               onChange={(e) => setEnableImageAnalysis(e.currentTarget.checked)}
+            />
+
+            <MultiSelect
+              placeholder="OCR Languages"
+              data={[
+                { value: 'latin', label: 'Latin (En, De, Tr)' },
+                { value: 'cyrillic', label: 'Cyrillic (Ru)' },
+                { value: 'arabic', label: 'Arabic' },
+              ]}
+              value={ocrLanguages}
+              onChange={setOcrLanguages}
+              disabled={!enableImageAnalysis}
+              clearable
+              searchable
+              ml="lg"
+              mt="xs"
             />
 
             <Checkbox

@@ -94,7 +94,7 @@ async def process_message(msg, username, found_channels, all_seen_channels, foun
                         full_id = f"{msg.chat_id}-{msg.id}"
                         if media_type == "photo" and os.path.exists(media_path) and config.get('ENABLE_IMAGE_ANALYSIS'):
                             image_analysis_status = 'pending'
-                            queue_client.enqueue_image_analysis(ImageJobPayload(message_id=full_id, image_path=media_path, owner_id=owner_id, case_id=case_id, extract_text=True, detect_objects=False, translate_extracted_text=True))
+                            queue_client.enqueue_image_analysis(ImageJobPayload(message_id=full_id, image_path=media_path, owner_id=owner_id, case_id=case_id, extract_text=True, detect_objects=False, translate_extracted_text=True, ocr_languages=config.get('OCR_LANGUAGES', ['latin'])))
                         elif media_type in ["audio", "video"] and os.path.exists(media_path) and config.get('ENABLE_AUDIO_TRANSCRIPTION'):
                             audio_transcription_status = 'pending'
                             queue_client.enqueue_audio_transcription(AudioJobPayload(message_id=full_id, audio_path=media_path, owner_id=owner_id, case_id=case_id, translate_transcription=True))

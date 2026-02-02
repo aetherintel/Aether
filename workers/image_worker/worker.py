@@ -1,15 +1,14 @@
-# workers/image_worker/worker.py - Florence-2 Version
+# workers/image_worker/worker.py - EasyOCR Multi-Pass Version
 """
-Advanced Image Analysis Worker with Microsoft Florence-2-large
-Extracts text (OCR) AND detailed captions from images.
+Fast Image Analysis Worker with EasyOCR
+Extracts text (OCR) from images supporting multiple languages using a multi-pass strategy.
 """
 import os
 import logging
-import requests
+import easyocr
 import torch
-from PIL import Image
+import gc
 from pathlib import Path
-from transformers import AutoProcessor, AutoModelForCausalLM, AutoConfig
 from aether_lib.neo4j_client.messages import update_message_image_analysis
 from aether_lib.queue_client.queue_client import queue_client
 from aether_lib.neo4j_client.connection import run_in_neo4j_loop
@@ -24,147 +23,129 @@ logger = logging.getLogger(__name__)
 # CONFIGURATION
 # ============================================================================
 
-# Local model paths (mounted from host)
-MODEL_BASE_DIR = Path(os.getenv("MODEL_BASE_DIR", "/app/models/image"))
-FLORENCE_MODEL_PATH = MODEL_BASE_DIR / "florence-2-large"
-DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
+# Using CPU or CUDA
+DEVICE = True if torch.cuda.is_available() else False
+logger.info(f"📱 Device for OCR: {'GPU' if DEVICE else 'CPU'}")
 
-# Global Model instance
-FLORENCE_MODEL = None
-FLORENCE_PROCESSOR = None
+# Model Storage Directory (Volume Mount)
+# EasyOCR looks here for .pth files and detector models
+MODEL_STORAGE_DIR = "/app/models/image"
 
-# Translation Configuration
-SUPPORTED_TRANSLATION_LANGUAGES = ['ru', 'ar', 'tr', 'en']
+# Language Groups (EasyOCR does not support mixing incompatible scripts)
+# We initialize multiple readers and run them sequentially if needed.
+OCR_READER_GROUPS = {
+    "latin": ['en', 'de', 'tr'],  # Latin script: English, German, Turkish
+    "cyrillic": ['ru', 'en'],    # Cyrillic: Russian (includes English for mix)
+    "arabic": ['ar', 'en']       # Arabic: (includes English for mix)
+}
 
-def load_models():
-    """Load Florence-2 model from local directory"""
-    global FLORENCE_MODEL, FLORENCE_PROCESSOR
-    
-    logger.info("=" * 80)
-    logger.info("📦 LOADING FLORENCE-2-LARGE")
-    logger.info("=" * 80)
-    
-    try:
-        if not FLORENCE_MODEL_PATH.exists():
-            raise FileNotFoundError(f"Model not found at {FLORENCE_MODEL_PATH}")
-            
-        logger.info(f"📁 Loading from: {FLORENCE_MODEL_PATH}")
-        logger.info(f"📱 Device: {DEVICE}")
-        
-        # Load Processor
-        FLORENCE_PROCESSOR = AutoProcessor.from_pretrained(
-            FLORENCE_MODEL_PATH, 
-            local_files_only=True
-        )
-        
-        # Use float16 for GPU, float32 for CPU
-        dtype = torch.float16 if DEVICE == "cuda" else torch.float32
-        
-        FLORENCE_MODEL = AutoModelForCausalLM.from_pretrained(
-            FLORENCE_MODEL_PATH,
-            local_files_only=True,
-            torch_dtype=dtype
-        ).to(DEVICE)
-        
-        logger.info("✅ Florence-2 loaded successfully!")
-        
-    except Exception as e:
-        logger.error(f"❌ Failed to load Florence-2: {e}")
-        logger.exception("Full traceback:")
-        FLORENCE_MODEL = None
-        FLORENCE_PROCESSOR = None
-    
-    logger.info("=" * 80)
+# Global dictionary to hold initialized readers
 
 
-class FlorenceService:
-    """Service for Florence-2 VLM inference"""
+
+class EasyOCRService:
+    """Service for EasyOCR inference using Single-Active-Reader strategy for memory efficiency"""
     
     def __init__(self):
-        if FLORENCE_MODEL is None:
-            logger.info("🔄 Florence model not loaded, loading now...")
-            load_models()
+        # Only hold ONE active reader to save RAM
+        self.active_reader = None
+        self.active_group = None
             
-    def run_inference(self, image: Image.Image, task_prompt: str, text_input: str = None) -> str:
-        """Run a specific task on the image"""
-        if FLORENCE_MODEL is None:
-            return ""
-            
-        try:
-            if text_input is None:
-                prompt = task_prompt
-            else:
-                prompt = task_prompt + text_input
-                
-            inputs = FLORENCE_PROCESSOR(text=prompt, images=image, return_tensors="pt", padding=True).to(DEVICE, FLORENCE_MODEL.dtype)
-            
-            generated_ids = FLORENCE_MODEL.generate(
-                input_ids=inputs["input_ids"],
-                pixel_values=inputs["pixel_values"],
-                max_new_tokens=1024,
-                early_stopping=False,
-                do_sample=False,
-                num_beams=3,
-            )
-            
-            generated_text = FLORENCE_PROCESSOR.batch_decode(generated_ids, skip_special_tokens=False)[0]
-            parsed_answer = FLORENCE_PROCESSOR.post_process_generation(
-                generated_text, 
-                task=task_prompt, 
-                image_size=(image.width, image.height)
-            )
-            
-            return parsed_answer
-            
-        except Exception as e:
-            logger.error(f"❌ Inference error ({task_prompt}): {e}")
-            return ""
-
-    def analyze_image(self, image_path: str) -> dict:
-        """Run comprehensive analysis (OCR + Caption)"""
+    def get_reader(self, group_name: str):
+        """Lazy load reader, unloading previous one if necessary"""
         import gc
         
-        if FLORENCE_MODEL is None:
-            return {}
+        if self.active_reader and self.active_group == group_name:
+            return self.active_reader
             
+        # Unload previous
+        if self.active_reader:
+            logger.info(f"   ♻️ Unloading '{self.active_group}' reader to free RAM...")
+            del self.active_reader
+            self.active_reader = None
+            gc.collect()
+            if DEVICE:
+                torch.cuda.empty_cache()
+        
+        # Load new
         try:
-            image = Image.open(image_path)
-            if image.mode != "RGB":
-                image = image.convert("RGB")
+            langs = OCR_READER_GROUPS.get(group_name)
+            if not langs:
+                logger.error(f"   ❌ Unknown group: {group_name}")
+                return None
                 
-            results = {}
+            logger.info(f"   ⏳ Loading Group '{group_name.upper()}': {langs}...")
+            reader = easyocr.Reader(
+                lang_list=langs,
+                gpu=DEVICE,
+                model_storage_directory=MODEL_STORAGE_DIR,
+                download_enabled=True,
+                verbose=False
+            )
+            self.active_reader = reader
+            self.active_group = group_name
+            return reader
             
-            # 1. Detailed Caption
-            logger.info("   Generating DETAILED_CAPTION...")
-            caption_result = self.run_inference(image, "<MORE_DETAILED_CAPTION>")
-            if caption_result and caption_result.get("<MORE_DETAILED_CAPTION>"):
-                results['caption'] = caption_result["<MORE_DETAILED_CAPTION>"]
-                logger.info(f"   📝 Caption: {results['caption'][:100]}...")
+        except Exception as e:
+            logger.error(f"   ❌ Failed to load '{group_name}': {e}")
+            return None
+
+    def analyze_image(self, image_path: str, modes: list = None) -> dict:
+        """Run OCR analysis using requested modes (default: latin)"""
+        import gc
+        
+        # Default to LATIN only for efficiency (prevents running 3 passes on every image)
+        if not modes:
+            modes = ['latin']
+            
+        full_text_results = []
+        
+        try:
+            logger.info(f"   Running OCR on {image_path} (Modes: {modes})...")
+            
+            seen_texts = set()
+            
+            for group_name in modes:
+                reader = self.get_reader(group_name)
+                if not reader:
+                    continue
+                    
+                try:
+                    # detail=0 returns simple list of strings
+                    # paragraph=True merges lines
+                    text_list = reader.readtext(image_path, detail=0, paragraph=True)
+                    
+                    if text_list:
+                        joined_text = "\n".join(text_list).strip()
+                        if joined_text and joined_text not in seen_texts:
+                            logger.info(f"      [{group_name}] Found: {len(joined_text)} chars")
+                            # Add header only if we run multiple modes to distinguish
+                            if len(modes) > 1:
+                                full_text_results.append(f"--- {group_name.upper()} ---")
+                            full_text_results.append(joined_text)
+                            seen_texts.add(joined_text)
+                except Exception as ex:
+                    logger.warning(f"      [{group_name}] Error: {ex}")
+            
+            extracted_text = "\n\n".join(full_text_results)
+            
+            results = {}
+            if extracted_text.strip():
+                results['ocr'] = extracted_text
+            else:
+                logger.info("   🔤 OCR Found: No text")
                 
-            # 2. OCR
-            logger.info("   Running OCR...")
-            ocr_result = self.run_inference(image, "<OCR>")
-            if ocr_result and ocr_result.get("<OCR>"):
-                ocr_text = ocr_result["<OCR>"]
-                # Florence OCR output might be string or structured
-                if isinstance(ocr_text, str):
-                    results['ocr'] = ocr_text
-                else:
-                    results['ocr'] = str(ocr_text)
-                logger.info(f"   🔤 OCR: {len(results['ocr'])} chars")
-                
-            image.close()
             return results
             
         except Exception as e:
             logger.error(f"❌ Analysis error: {e}")
             return {}
         finally:
-            gc.collect()
-            if DEVICE == "cuda":
-                torch.cuda.empty_cache()
+            # Optional: Aggressively cleanup if RAM is critical
+            # gc.collect()
+            pass
 
-florence_service = FlorenceService()
+ocr_service = EasyOCRService()
 
 
 # ============================================================================
@@ -178,7 +159,9 @@ def detect_language(text: str) -> str:
     
     try:
         from langdetect import detect
-        lang = detect(text)
+        # If we have headers like "--- LATIN ---", strip them for detection
+        clean_text = text.replace("--- LATIN ---", "").replace("--- CYRILLIC ---", "").replace("--- ARABIC ---", "")
+        lang = detect(clean_text)
         return lang
     except Exception:
         logger.warning(f"[LANG] Could not detect language, assuming German")
@@ -199,21 +182,20 @@ def needs_translation(text: str) -> tuple[bool, str]:
     logger.info(f"[LANG] Unsupported language {detected_lang}, storing original")
     return False, detected_lang
 
-# ============================================================================
-# WORKER JOB FUNCTION
-# ============================================================================
+
 def analyze_and_update(
     message_id: str,
     image_path: str,
     extract_text: bool = True,
-    detect_objects: bool = False,
+    detect_objects: bool = False, 
     translate_extracted_text: bool = True,
     owner_id: str = None,
     case_id: int = None,
-    job_id: str = None
+    job_id: str = None,
+    modes: list = None
 ):
     """
-    Main Image Analysis worker function
+    Main Image Analysis worker function using EasyOCR Multi-Pass
     """
     import gc
     
@@ -226,29 +208,21 @@ def analyze_and_update(
         extracted_text = ""
         detected_lang = None
         
-        # Step 1: Analyze with Florence-2
+        # Step 1: Analyze with EasyOCR
         if extract_text:
-            logger.info("🔍 Step 1: Analyzing image with Florence-2...")
-            analysis_results = florence_service.analyze_image(image_path)
+            logger.info("🔍 Step 1: Analyzing image with EasyOCR Multi-Pass...")
+            analysis_results = ocr_service.analyze_image(image_path, modes=modes)
             
-            caption = analysis_results.get('caption', '')
-            ocr = analysis_results.get('ocr', '')
+            ocr_text = analysis_results.get('ocr', '')
             
-            parts = []
-            if caption:
-                parts.append(f"[IMAGE DESCRIPTION]\n{caption}")
-            if ocr:
-                parts.append(f"[TEXT IN IMAGE]\n{ocr}")
+            if ocr_text:
+                extracted_text = f"[TEXT IN IMAGE]\n{ocr_text}"
                 
-            extracted_text = "\n\n".join(parts)
-            
-            if extracted_text:
-                 # Detect language (prioritize OCR text for language detection)
-                lang_source = ocr if len(ocr) > 20 else (caption if caption else "")
-                detected_lang = detect_language(lang_source)
+                # Detect language 
+                detected_lang = detect_language(ocr_text)
                 logger.info(f"   Detected language: {detected_lang}")
             else:
-                 logger.info("ℹ️ Step 1: No text/caption generated")
+                 logger.info("ℹ️ Step 1: No text found")
                  detected_lang = 'unknown'
 
         
@@ -265,7 +239,6 @@ def analyze_and_update(
             logger.warning("⚠️ Step 2: Neo4j update returned False")
         
         # Step 3: Queue translation if needed
-        # Only translate if we have substantial text and it's not German
         if extracted_text and translate_extracted_text:
             needs_trans, _ = needs_translation(extracted_text)
             
