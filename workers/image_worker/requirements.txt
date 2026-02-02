@@ -1,8 +1,14 @@
+transformers==4.46.0
+torch==2.1.2
+torchvision==0.16.2
+timm
+einops
+pillow
 easyocr==1.7.2
 
 opencv-python-headless==4.10.0.84
-opencv-python-headless==4.10.0.84
 # Pillow, numpy, scipy, scikit-image are in shared libs
+numpy<2
 langdetect==1.0.9
 requests==2.32.3
 rq==1.16.2

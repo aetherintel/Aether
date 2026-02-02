@@ -70,14 +70,18 @@ populate_volume() {
     alpine sh -c "rm -rf /dest/* && cp -r /src/* /dest/ && echo '    ✅ Copied $(du -sh /dest | cut -f1)'"
 }
 
-# Populate all model volumes
-populate_volume app_translation_models translation/m2m100_418M
-populate_volume app_audio_models audio/whisper
-populate_volume app_emotion_models emotion/german-emotions
-populate_volume app_image_models image/easyocr
-populate_volume app_classifier_models classifier/mDeBERTa-v3-base-xnli-multilingual-nli-2mil7
-populate_volume app_geolocation_models geolocation/geonames
+# Populate all model volumes - NOW DYNAMIC
+# We map the entire category folder (e.g., models/translation/) to the volume
+# This ensures any new models added to that folder are automatically deployed
+
+populate_volume app_translation_models translation
+populate_volume app_audio_models audio
+populate_volume app_emotion_models emotion
+populate_volume app_image_models image
+populate_volume app_classifier_models classifier
+populate_volume app_geolocation_models geolocation
 populate_volume app_photon_data geocoding/photon
+
 
 echo ""
 echo "✅ All volumes populated!"

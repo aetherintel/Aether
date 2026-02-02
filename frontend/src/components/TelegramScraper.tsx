@@ -209,10 +209,10 @@ const TelegramScraper: React.FC<TelegramScraperProps> = ({ case_id }) => {
       let method = 'POST';
 
       if (action === 'remove') {
-        endpoint = `${apiUrl}/queue/job/${jobId}`;
+        endpoint = `${apiUrl}/queue/jobs/${jobId}`;
         method = 'DELETE';
       } else if (action === 'requeue') {
-        endpoint = `${apiUrl}/queue/job/${jobId}/requeue`;
+        endpoint = `${apiUrl}/queue/jobs/${jobId}/requeue`;
         method = 'POST';
       }
 

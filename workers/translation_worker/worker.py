@@ -6,7 +6,7 @@ from aether_lib.queue_client import queue_client
 from redis import Redis
 from rq import Queue
 import torch
-from transformers import M2M100ForConditionalGeneration, M2M100Tokenizer
+
 
 # ---------------------------------------------------------------
 # Logging setup
@@ -27,34 +27,35 @@ redis_conn = Redis(host=REDIS_HOST, port=REDIS_PORT)
 translation_queue = Queue('translation-jobs', connection=redis_conn)
 
 # ---------------------------------------------------------------
-# M2M-100 Model - Load ONCE at startup
+# NLLB-200 Model - Load ONCE at startup
 # ---------------------------------------------------------------
-logger.info("🚀 Loading M2M-100 translation model at worker startup...")
+logger.info("🚀 Loading NLLB-200 translation model at worker startup...")
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 logger.info(f"📱 Using device: {DEVICE}")
 
-# Language code mapping for M2M-100
+# Language code mapping for NLLB-200 (BCP-47)
+# See: https://github.com/facebookresearch/flores/blob/main/flores200/README.md#languages-in-flores-200
 LANG_CODES = {
-    "en": "en",
-    "de": "de",
-    "ru": "ru",
-    "ar": "ar",
-    "tr": "tr",
-    "trk": "tr"  # Alias
+    "en": "eng_Latn",
+    "de": "deu_Latn",
+    "ru": "rus_Cyrl",
+    "ar": "arb_Arab",
+    "tr": "tur_Latn",
+    "trk": "tur_Latn"  # Alias
 }
 
 # Global model and tokenizer
 TRANSLATION_MODEL = None
 TRANSLATION_TOKENIZER = None
 
-def load_m2m_model():
-    """Load M2M-100 from local path"""
+def load_nllb_model():
+    """Load NLLB-200 from local path"""
     global TRANSLATION_MODEL, TRANSLATION_TOKENIZER
     
     if TRANSLATION_MODEL is None:
-        logger.info("📦 Loading M2M-100-418M model...")
+        logger.info("📦 Loading NLLB-200-Distilled-600M model...")
         
-        model_path = "/app/models/translation/m2m100_418M"
+        model_path = "/app/models/nllb-200-distilled-600M"
         
         # Check if files exist
         import os
@@ -66,22 +67,35 @@ def load_m2m_model():
         
         logger.info(f"📁 Loading from: {model_path}")
         
-        # Load from local files
-        TRANSLATION_TOKENIZER = M2M100Tokenizer.from_pretrained(
-            model_path,
-            local_files_only=True  # Don't try to download
-        )
+        from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
         
-        TRANSLATION_MODEL = M2M100ForConditionalGeneration.from_pretrained(
+        # Load from local files
+        # NLLB fast tokenizer can have issues with some versions of transformers/tokenizers
+        # Force slow tokenizer (SentencePiece) to avoid "data did not match any variant" error
+        TRANSLATION_TOKENIZER = AutoTokenizer.from_pretrained(
             model_path,
             local_files_only=True,
-            torch_dtype=torch.float32,
-            low_cpu_mem_usage=True
+            use_fast=False,
+            trust_remote_code=True
         )
+        
+        # Determine dtype for speed (fp16 on GPU)
+        torch_dtype = torch.float16 if DEVICE == "cuda" else torch.float32
+        
+        TRANSLATION_MODEL = AutoModelForSeq2SeqLM.from_pretrained(
+            model_path,
+            local_files_only=True,
+            torch_dtype=torch_dtype,
+            low_cpu_mem_usage=True,
+            trust_remote_code=True
+        )
+        
+        # Dynamic quantization removed to prevent OOM (Signal 9) crashes
+        # The 600M model should run fine on CPU without it
         
         TRANSLATION_MODEL = TRANSLATION_MODEL.to(DEVICE)
         
-        logger.info("✅ M2M-100 model loaded!")
+        logger.info(f"✅ NLLB-200 model loaded! (dtype={torch_dtype})")
         
         # Log file sizes for verification
         import os
@@ -93,7 +107,7 @@ def load_m2m_model():
         
         logger.info(f"📊 Total model size: {total_size / (1024**2):.1f} MB")
 # Load at import time
-load_m2m_model()
+load_nllb_model()
 
 
 # ---------------------------------------------------------------
@@ -102,7 +116,7 @@ load_m2m_model()
 class TranslationService:
     def translate(self, text: str, source_lang: str, target_lang: str = "de") -> str:
         """
-        Translate text using M2M-100 model
+        Translate text using NLLB-200 model
         
         Args:
             text: Text to translate
@@ -119,15 +133,15 @@ class TranslationService:
             logger.info(f"🔄 Text already in {target_lang}, skipping")
             return text
         
-        # Get M2M language codes
+        # Get NLLB language codes
         src_code = LANG_CODES.get(source_lang)
-        tgt_code = LANG_CODES.get(target_lang, "de")
+        tgt_code = LANG_CODES.get(target_lang, "deu_Latn")
         
         if not src_code:
             logger.warning(f"⚠️ Unsupported language: {source_lang}, returning original")
             return text
         
-        logger.info(f"🔤 Translating {source_lang} → {target_lang}")
+        logger.info(f"🔤 Translating {source_lang} ({src_code}) → {target_lang} ({tgt_code})")
         
         # Truncate for performance
         if len(text) > 1000:
@@ -135,9 +149,6 @@ class TranslationService:
             text = text[:1000]
         
         try:
-            # Set source language
-            TRANSLATION_TOKENIZER.src_lang = src_code
-            
             # Tokenize
             inputs = TRANSLATION_TOKENIZER(
                 text,
@@ -150,10 +161,10 @@ class TranslationService:
             with torch.no_grad():
                 generated_tokens = TRANSLATION_MODEL.generate(
                     **inputs,
-                    forced_bos_token_id=TRANSLATION_TOKENIZER.get_lang_id(tgt_code),
+                    forced_bos_token_id=TRANSLATION_TOKENIZER.convert_tokens_to_ids(tgt_code),
                     max_length=200,
                     num_beams=1,  # Greedy - fastest
-                    early_stopping=True
+                    early_stopping=False  # Must be False for num_beams=1
                 )
             
             # Decode

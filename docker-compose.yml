@@ -113,6 +113,7 @@ services:
       - tg_sessions:/app/sessions
       - ${MEDIA_PATH}:/shared/media
       - ./shared/reports:/shared/reports
+      - ./backend/app:/app
       - ./aether_lib:/app/aether_lib:ro
     depends_on:
       postgres:
@@ -168,9 +169,6 @@ services:
     image: telegram-job:latest
     command: >
       rq worker telegram-jobs
-      --url redis://redis:6379
-      --worker-ttl 0
-      --job-monitoring-interval 60
     restart: unless-stopped
     environment:
       TG_API_ID: ${TG_API_ID}
@@ -232,9 +230,12 @@ services:
       - ./shared/reports:/shared/reports
       - ./aether_lib:/app/aether_lib:ro
     depends_on:
-      - redis
-      - postgres
-      - neo4j
+      redis:
+        condition: service_started
+      postgres:
+        condition: service_started
+      neo4j:
+        condition: service_healthy
     networks:
       - aether-network
 
@@ -261,19 +262,23 @@ services:
       - ./aether_lib:/app/aether_lib:ro
       - app_translation_models:/app/models
     depends_on:
-      - redis
-      - neo4j
-      - postgres
-      - translation-models
+      redis:
+        condition: service_started
+      neo4j:
+        condition: service_healthy
+      postgres:
+        condition: service_started
+      translation-models:
+        condition: service_started
     networks:
       - aether-network
     deploy:
       replicas: 1
       resources:
         limits:
-          memory: 4G
+          memory: 6G
         reservations:
-          memory: 2G
+          memory: 3G
 
   image-worker:
     build:
@@ -297,9 +302,12 @@ services:
       - ./aether_lib:/app/aether_lib:ro
       - app_image_models:/app/models/image
     depends_on:
-      - redis
-      - neo4j
-      - image-models
+      redis:
+        condition: service_started
+      neo4j:
+        condition: service_healthy
+      image-models:
+        condition: service_started
     networks:
       - aether-network
     deploy:
@@ -330,9 +338,12 @@ services:
       - app_audio_models:/app/models/audio
       - ${MEDIA_PATH}:/shared/media:ro
     depends_on:
-      - redis
-      - neo4j
-      - audio-models
+      redis:
+        condition: service_started
+      neo4j:
+        condition: service_healthy
+      audio-models:
+        condition: service_started
     networks:
       - aether-network
     deploy:
@@ -362,9 +373,12 @@ services:
       - ./aether_lib:/app/aether_lib:ro
       - app_emotion_models:/app/models
     depends_on:
-      - redis
-      - neo4j
-      - emotion-models
+      redis:
+        condition: service_started
+      neo4j:
+        condition: service_healthy
+      emotion-models:
+        condition: service_started
     networks:
       - aether-network
     deploy:
@@ -395,9 +409,12 @@ services:
       - app_classifier_models:/app/models/classifier
       - ${MEDIA_PATH}:/shared/media:ro
     depends_on:
-      - redis
-      - neo4j
-      - classifier-models
+      redis:
+        condition: service_started
+      neo4j:
+        condition: service_healthy
+      classifier-models:
+        condition: service_started
     networks:
       - aether-network
     deploy:
@@ -435,11 +452,16 @@ services:
       - app_geolocation_models:/app/models/geolocation
       - app_photon_data:/app/photon_data
     depends_on:
-      - redis
-      - neo4j
-      - postgres
-      - photon
-      - geolocation-models
+      redis:
+        condition: service_started
+      neo4j:
+        condition: service_healthy
+      postgres:
+        condition: service_started
+      photon:
+        condition: service_started
+      geolocation-models:
+        condition: service_started
     networks:
       - aether-network
     deploy:
@@ -456,9 +478,10 @@ services:
         - "8001:8001"
       volumes:
         - app_llm_models:/models    # Shared models directory
+        - ./workers/llm-service:/app
       environment:
-        - MODEL_PATH=/models/llm/llama3.2-1b-q4.gguf
-        - N_THREADS=8
+        - MODEL_PATH=/models/llm/qwen2.5-coder-0.5b-instruct.gguf
+        - N_THREADS=4
       restart: unless-stopped
       healthcheck:
         test: ["CMD", "curl", "-f", "http://localhost:8001/health"]

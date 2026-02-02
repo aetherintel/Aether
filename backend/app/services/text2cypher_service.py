@@ -24,21 +24,42 @@ class Text2CypherService:
         """
         Orchestrates the Text2Cypher flow with separated sessions to avoid timeouts.
         1. Get Schema (Session 1)
-        2. Generate Cypher (No Session, Long running)
-        3. Execute Cypher (Session 2)
+        2. Generate Query Plan (No Session, Long running)
+        3. Build & Execute Cypher (Session 2)
         """
         try:
             # 1. Get Schema
-            schema_text = await self.get_schema()
+            schema_text, schema_dict = await self.get_schema()
             
-            # 2. Generate Cypher
+            # 2. Generate Plan (JSON)
             cypher_result = await self.cypher_agent.generate_cypher(
                 question=question,
                 schema=schema_text,
                 use_thinking=False 
             )
-            cypher_query = cypher_result.get("cypher")
+            
+            # The "cypher" field now contains the JSON plan string
+            plan_str = cypher_result.get("cypher")
+            try:
+                plan = json.loads(plan_str)
+                cypher_query = self._build_cypher_from_plan(plan, schema_dict)
+            except json.JSONDecodeError:
+                # Fallback if model failed to produce JSON 
+                logger.error(f"Failed to parse JSON plan: {plan_str[:100]}...")
+                cypher_query = None # Do NOT use raw plan_str as cypher if it looks like JSON
+
             if not cypher_query:
+                 # If we couldn't build a query, check if the raw output happened to be a query (unlikely with JSON mode)
+                 # But if the plan_str started with {, it definitely wasn't a query.
+                 if plan_str and plan_str.strip().startswith("{"):
+                     msg = "LLM failed to generate valid JSON plan (likely repetition loop)."
+                     logger.error(msg)
+                     return {
+                        "summary": msg,
+                        "visualization": {"type": "table", "data": []},
+                        "cypher": "",
+                        "error": msg
+                     }
                  cypher_query = cypher_result.get("raw_output", "")
             
             # 3. Execute Query
@@ -66,8 +87,12 @@ class Text2CypherService:
             if data and isinstance(data, list) and len(data) > 0:
                 first_row = data[0]
                 # If keys contain 'count', 'sum', 'avg', or doesn't look like graph components
-                if any(k.lower() in ['count', 'sum', 'avg', 'total'] for k in first_row.keys()):
+                if any(kw in k.lower() for k in first_row.keys() for kw in ['count', 'sum', 'avg', 'total']):
                     is_tabular = True
+            
+            # Fallback: If we failed to extract any nodes for the graph, but we have data, show as table
+            if not is_tabular and not graph_data["nodes"] and data:
+                is_tabular = True
             
             if is_tabular:
                 viz_type = "table"
@@ -85,9 +110,6 @@ class Text2CypherService:
 
             return {
                 "summary": f"**Generated Cypher:**\n`{cypher_query}`", 
-                # Removed appended JSON from summary since we have Table now
-                # Or keep it? User said "text box as a ugly json :D". Table is better.
-                # I'll keep summary concise now.
                 "visualization": {
                     "type": viz_type,
                     "data": viz_data
@@ -108,9 +130,166 @@ class Text2CypherService:
                 "error": str(e)
             }
 
+    def _build_cypher_from_plan(self, plan: Dict, schema: Dict[str, Any] = None) -> str:
+        """
+        Deterministically builds valid Cypher from the JSON plan.
+        """
+        match_clauses = []
+        where_clauses = []
+        
+        # Build set of valid relationship types if schema provided
+        valid_rel_types = set()
+        if schema:
+            for label, details in schema.items():
+                if isinstance(details, dict) and details.get("type") == "node":
+                     for rel_name in details.get("relationships", {}).keys():
+                         valid_rel_types.add(rel_name)
+        
+        # 1. Nodes
+        # Map ids to labels for reference
+        node_map = {n['id']: n['label'] for n in plan.get('nodes', [])}
+        
+        # 2. Relationships (Primary MATCH)
+        rels = plan.get('relationships', [])
+        used_nodes = set()
+        
+        for r in rels:
+            src = r['source']
+            tgt = r['target']
+            r_type = r['type']
+            
+            # SCHEMA VALIDATION & AUTO-CORRECTION
+            if schema and r_type not in valid_rel_types:
+                # Common hallucinations mapping
+                corrections = {
+                    "HAS_LOCATION": "MENTIONS_LOCATION",
+                    "HAS_USER": "SENT_BY",
+                    "HAS_CHANNEL": "POSTED_IN"
+                }
+                if r_type in corrections:
+                    logger.warning(f"Auto-correcting relationship '{r_type}' to '{corrections[r_type]}'")
+                    r_type = corrections[r_type]
+                else:
+                    logger.warning(f"Relationship '{r_type}' not found in schema. Proceeding cautiously.")
+
+            src_label = node_map.get(src, '')
+            tgt_label = node_map.get(tgt, '')
+            
+            # Pattern: (src:Label)-[:TYPE]->(tgt:Label)
+            # Handle missing labels gracefully
+            src_part = f"({src}:{src_label})" if src_label else f"({src})"
+            tgt_part = f"({tgt}:{tgt_label})" if tgt_label else f"({tgt})"
+            
+            # Heuristic: 0.5B model often refers to the relationship as 'r' in filters
+            # If there's only one relationship, alias it as 'r'.
+            rel_alias = "r" if len(rels) == 1 else ""
+            
+            pattern = f"{src_part}-[{rel_alias}:{r_type}]->{tgt_part}"
+            match_clauses.append(pattern)
+            used_nodes.add(src)
+            used_nodes.add(tgt)
+
+        # 3. Orphan Nodes (if any node is not in a relationship)
+        for nid, nlabel in node_map.items():
+            if nid not in used_nodes:
+                 match_clauses.append(f"({nid}:{nlabel})")
+
+        # Combine MATCH
+        full_match = f"MATCH {', '.join(match_clauses)}" if match_clauses else ""
+        
+        # 4. Filters
+        valid_ops = {
+            "=", "<>", ">", "<", ">=", "<=", "CONTAINS", "STARTS WITH", "ENDS WITH", "IN", "IS NOT NULL", "IS NULL"
+        }
+        
+        for f in plan.get('filters', []):
+            prop = f['variable']
+            op = f['operator']
+            val = f['value']
+            
+            # SANITIZATION: Skip evident placeholders from weak models
+            if "n.prop" in prop or "val" == str(val) or "/" in op:
+                 logger.warning(f"Skipping invalid filter placeholder: {prop} {op} {val}")
+                 continue
+                 
+            if op.upper() not in valid_ops:
+                 logger.warning(f"Skipping invalid operator: {op}")
+                 continue
+
+            # Handle quotes for strings
+            if isinstance(val, str) and not val.startswith("'") and not val.startswith('"'):
+                val = f"'{val}'"
+            
+            # Unary operators (ignore value)
+            if op.upper() in ["IS NULL", "IS NOT NULL"]:
+                where_clauses.append(f"{prop} {op}")
+            else:
+                where_clauses.append(f"{prop} {op} {val}")
+            
+        full_where = f"WHERE {' AND '.join(where_clauses)}" if where_clauses else ""
+        
+        # 5. Return
+        returns = plan.get('return_fields', [])
+        full_return = f"RETURN {', '.join(returns)}" if returns else "RETURN count(*)"
+        
+        # 6. Order/Limit
+        order_by = f"ORDER BY {plan['order_by']}" if plan.get('order_by') else ""
+        limit = f"LIMIT {plan['limit']}" if plan.get('limit') is not None else ""
+        
+        # --- AUTO-RECOVERY FOR UNDEFINED VARIABLES ---
+        # 0.5B model sometimes forgets to list nodes but uses variables (e.g. m, c)
+        # We scan the generated clauses for variables not in used_nodes/node_map
+        known_aliases = {
+            "m": "Message",
+            "c": "Channel", 
+            "u": "User",
+            "e": "Emotion",
+            "l": "Location",
+            "cl": "Classification"
+        }
+        
+        # Check return fields and filters for missing aliases
+        potential_vars = set()
+        
+        for ret in returns:
+             # simple extraction heuristic: "count(m)", "m.prop" -> "m"
+             # Split by non-alphanumeric
+             import re
+             parts = re.split(r'[^a-zA-Z0-9_]', ret)
+             for p in parts:
+                 if p in known_aliases: potential_vars.add(p)
+                 
+        for f in plan.get('filters', []):
+             var_part = f['variable'].split('.')[0]
+             if var_part in known_aliases: potential_vars.add(var_part)
+
+        # Retrieve currently defined nodes
+        defined_vars = set(node_map.keys())
+        
+        logger.info(f"Builder Debug - Potential Vars: {potential_vars}, Defined Vars: {defined_vars}, Matches: {match_clauses}")
+
+        # Inject missing nodes
+        recovered_matches = []
+        for var in potential_vars:
+            if var not in defined_vars and var not in used_nodes:
+                label = known_aliases[var]
+                logger.warning(f"Recovering undefined variable '{var}' as '{label}'")
+                recovered_matches.append(f"({var}:{label})")
+                
+        if recovered_matches:
+            if not match_clauses:
+                 full_match = f"MATCH {', '.join(recovered_matches)}"
+            else:
+                 full_match += f", {', '.join(recovered_matches)}"
+            logger.info(f"Builder Recovered Match: {full_match}")
+        
+        # Assemble
+        parts = [full_match, full_where, full_return, order_by, limit]
+        return " ".join([p for p in parts if p])
+
     async def get_schema(self) -> str:
         """
-        Retrieves the database schema from the MCP server.
+        Retrieves the database schema from the MCP server and simplifies it for the LLM.
         """
         async with sse_client(self.mcp_url, headers={"Host": "localhost"}) as streams:
             async with ClientSession(streams[0], streams[1]) as session:
@@ -123,7 +302,48 @@ class Text2CypherService:
                     raise Exception("Could not find a schema tool in MCP server.")
                 
                 schema_result = await session.call_tool(schema_tool.name)
-                return schema_result.content[0].text
+                raw_schema = schema_result.content[0].text
+                
+                try:
+                    schema_json = json.loads(raw_schema)
+                    
+                    # Simplify Schema
+                    lines = ["### Graph Schema"]
+                    
+                    if "nodes" in schema_json: # Check if it's already in a specific format, but standard Neo4j schema is usually keys=Labels
+                        pass
+                    
+                    # Heuristic for standard Neo4j MCP Schema (Key=Label)
+                    # { "User": {"properties": {...}, "relationships": {...}}, ... }
+                    
+                    lines.append("Nodes:")
+                    for label, details in schema_json.items():
+                        if not isinstance(details, dict): continue
+                        if details.get("type") == "relationship": continue # Skip independent rel defs for now
+                        
+                        props = list(details.get("properties", {}).keys())
+                        lines.append(f"- {label} ({', '.join(props)})")
+                        
+                    lines.append("\nRelationships:")
+                    for label, details in schema_json.items():
+                         if not isinstance(details, dict): continue
+                         # Node definition often has 'relationships' key
+                         if details.get("type") == "node":
+                             src_label = label
+                             for rel_name, rel_meta in details.get("relationships", {}).items():
+                                 direction = rel_meta.get("direction")
+                                 target_labels = rel_meta.get("labels", [])
+                                 for tgt_label in target_labels:
+                                     if direction == "out":
+                                         lines.append(f"- (:{src_label})-[:{rel_name}]->(:{tgt_label})")
+                    
+                    simplified = "\n".join(lines)
+                    logger.info(f"Simplified Schema: {simplified}")
+                    return simplified, schema_json
+
+                except Exception as e:
+                    logger.error(f"Failed to simplify schema: {e}")
+                    return raw_schema, {} # Fallback
 
     async def _execute_query(self, cypher_query: str) -> List[Dict]:
         """

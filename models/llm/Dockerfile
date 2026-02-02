@@ -3,10 +3,10 @@ RUN pip install huggingface_hub
 WORKDIR /app
 # llm_download.py is in the build context root (./models)
 COPY llm_download.py .
-# Download Llama-3.2-1B
-RUN python llm_download.py download --model llama3.2-1b-q4
+# Download Qwen 2.5 Coder 0.5B
+RUN python llm_download.py download --model qwen2.5-coder-0.5b-instruct
 
 FROM alpine:latest
 # Copy the downloaded model to the volume location
-COPY --from=downloader /app/llm/llama3.2-1b-q4.gguf /models/llm/llama3.2-1b-q4.gguf
+COPY --from=downloader /app/llm/qwen2.5-coder-0.5b-instruct.gguf /models/llm/qwen2.5-coder-0.5b-instruct.gguf
 CMD ["tail", "-f", "/dev/null"]

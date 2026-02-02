@@ -50,68 +50,63 @@ class CypherResponse(BaseModel):
     tokens_generated: int
     generation_time: float
 
-SYSTEM_PROMPT = """You are a Neo4j Cypher Expert.
-Convert the user's question into a Cypher query based on the provided Schema.
+SYSTEM_PROMPT = """You are a Graph Query Planner.
+Your task is to map the user's question to a structured JSON plan for a Cypher query.
+DO NOT write Cypher code. Output ONLY valid JSON matching the schema below.
 
-Schema Information:
-1. Nodes & Properties:
-   - Message {mid, original_text, date}
-   - Channel {title, channel_id}
-   - Emotion {name}
-   - User {username}
+### CRITICAL RULES
+1. **NO HALLUCINATIONS**: Use ONLY Nodes and Relationships from the provided schema.
+2. **Properties vs Nodes**: If a user asks for "Language", "Country", or "Date", these are usually **PROPERTIES** of a Message/Channel, NOT nodes. 
+   - CORRECT: `{"nodes": [{"id": "m", "label": "Message"}], "return_fields": ["m.original_language", "count(m)"]}`
+   - WRONG: `{"nodes": [{"id": "l", "label": "Language"}]}` (Language node does not exist)
+3. **DEFINE ALL VARIABLES**: If you use 'm' in return_fields, you MUST define it in "nodes".
+   - WRONG: `{"nodes": [], "return_fields": ["count(m)"]}`
+   - CORRECT: `{"nodes": [{"id": "m", "label": "Message"}], "return_fields": ["count(m)"]}`
+4. **NO PLACEHOLDERS**: Never use `/`, `n.prop`, or `val`. Use ACTUAL properties from schema.
+   - WRONG: `{"variable": "n.prop", "operator": "CONTAINS/=", "value": "val"}`
+   - CORRECT: `{"variable": "m.original_text", "operator": "CONTAINS", "value": "berlin"}`
 
-2. Relationships (Direction is CRITICAL):
-   - (Channel)-[:HAS_MESSAGE]->(Message)
-   - (Message)-[:HAS_EMOTION {confidence: float}]->(Emotion)
-   - (User)-[:SENT]->(Message)
+### JSON Output Schema
+{
+  "nodes": [{"id": "var_name", "label": "NodeLabel"}],
+  "relationships": [{"source": "var_a", "target": "var_b", "type": "REL_TYPE"}],
+  "filters": [{"variable": "var.prop", "operator": "CONTAINS/=/</>", "value": "value"}],
+  "return_fields": ["var.prop", "count(var)"],
+  "order_by": "count(var) DESC", 
+  "limit": null
+}
 
-Format:
-1. You may think before answering. Wrap thoughts in <think> tags.
-2. Value consistency: If you guess property values, use `CONTAINS`.
-3. FINAL OUTPUT must be a markdown code block:
-```cypher
-MATCH ...
-```
+### Examples
+1. "How many messages?"
+{
+  "nodes": [{"id": "m", "label": "Message"}],
+  "relationships": [],
+  "filters": [],
+  "return_fields": ["count(m)"],
+  "order_by": null,
+  "limit": null
+}
 
-Examples:
-1. Question: "How many users?"
-   Response:
-   ```cypher
-   MATCH (n:User) RETURN count(n)
-   ```
+2. "Most common emotions?" (Emotion IS a Node)
+{
+  "nodes": [{"id": "m", "label": "Message"}, {"id": "e", "label": "Emotion"}],
+  "relationships": [{"source": "m", "target": "e", "type": "HAS_EMOTION"}],
+  "filters": [],
+  "return_fields": ["e.name", "count(m)"],
+  "order_by": "count(m) DESC",
+  "limit": 5
+}
 
-2. Question: "Messages in General?"
-   Response:
-   <think>User wants messages in channel with title General. Path: Channel -> Message</think>
-   ```cypher
-   MATCH (c:Channel)-[:HAS_MESSAGE]->(m:Message) WHERE c.title CONTAINS 'General' RETURN m LIMIT 10
-   ```
-
-3. Question: "What is the most common emotion?"
-   Response:
-   <think>Count messages per emotion. Path: Message -> Emotion. Confidence is on relationship.</think>
-   ```cypher
-   MATCH (m:Message)-[r:HAS_EMOTION]->(e:Emotion) RETURN e.name, count(m) AS freq, avg(r.confidence) as avg_conf ORDER BY freq DESC LIMIT 5
-   ```
+3. "Most common language?" (Language is a PROPERTY)
+{
+  "nodes": [{"id": "m", "label": "Message"}],
+  "relationships": [],
+  "filters": [],
+  "return_fields": ["m.original_language", "count(m)"],
+  "order_by": "count(m) DESC",
+  "limit": 5
+}
 """
-
-def clean_cypher(output: str) -> str:
-    # 1. Regex extract markdown code block with cypher language
-    match = re.search(r'```cypher\s*(.*?)\s*```', output, re.DOTALL)
-    if match:
-        return match.group(1).strip()
-    
-    # 2. Extract generic markdown code block
-    match = re.search(r'```\s*(.*?)\s*```', output, re.DOTALL)
-    if match:
-        return match.group(1).strip()
-        
-    # 3. Fallback: Remove <think> and return trimmed
-    output = re.sub(r'<think>.*?(?:</think>|$)', '', output, flags=re.DOTALL)
-    if output.lower().startswith("cypher:"):
-        output = output[7:]
-    
-    return output.strip()
 
 @app.post("/generate-cypher", response_model=CypherResponse)
 async def generate_cypher(request: CypherRequest):
@@ -123,10 +118,7 @@ async def generate_cypher(request: CypherRequest):
 
 Question: {request.question}
 
-Response:"""
-
-    if request.use_thinking:
-        user_content = "/think " + user_content
+Response (JSON):"""
 
     start = time.time()
     
@@ -138,20 +130,20 @@ Response:"""
             ],
             temperature=request.temperature,
             max_tokens=request.max_tokens,
+            response_format={"type": "json_object"}, # Enforce JSON output
             stop=["<|im_end|>"],
+            repeat_penalty=1.2 # Prevent repetition loops for small models
         )
         
         generation_time = time.time() - start
         
         raw_output = response["choices"][0]["message"]["content"]
-        cypher = clean_cypher(raw_output)
         tokens = response["usage"]["completion_tokens"]
 
-        logger.info(f"Generated Cypher in {generation_time:.2f}s: {cypher[:100]}")
-        logger.info(f"Raw Output: {raw_output[:100]}...") 
+        logger.info(f"Generated Plan in {generation_time:.2f}s: {raw_output[:100]}")
         
         return CypherResponse(
-            cypher=cypher,
+            cypher=raw_output, # Return JSON plan as "cypher" for now, agent will parse it
             raw_output=raw_output,
             tokens_generated=tokens,
             generation_time=generation_time

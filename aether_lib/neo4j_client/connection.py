@@ -30,7 +30,7 @@ def get_owner_id() -> str:
     return _owner_id.get()
 
 _driver = None
-_CONSTRAINTS_DONE = asyncio.Event()
+_CONSTRAINTS_DONE = None # Initialized lazily
 
 # ---------------------------------------------------------------------------
 # Driver lifecycle
@@ -40,7 +40,11 @@ async def init_driver():
     Initialize the global Neo4j async driver.
     This should be awaited once on startup.
     """
-    global _driver
+    global _driver, _CONSTRAINTS_DONE
+    
+    # Initialize implementation of Event lazily 
+    if _CONSTRAINTS_DONE is None:
+        _CONSTRAINTS_DONE = asyncio.Event()
     if _driver is not None:
         return _driver
 
@@ -50,9 +54,11 @@ async def init_driver():
         )
         await _driver.verify_connectivity()
         logger.info(f"✅ Connected to Neo4j at {NEO4J_URI}")
+        print(f"[NEO4J] ✅ Connected to Neo4j at {NEO4J_URI}", flush=True)
         return _driver
     except Exception as e:
         logger.error(f"❌ Could not connect to Neo4j: {e}")
+        print(f"[NEO4J] ❌ Could not connect to Neo4j: {e}", flush=True)
         raise
 
 def get_driver():

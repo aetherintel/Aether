@@ -1,4 +1,4 @@
 # models/translation/Dockerfile
 FROM alpine:latest
-COPY translation/m2m100_418M /models/translation/m2m100_418M
+COPY translation/nllb-200-distilled-600M /models/nllb-200-distilled-600M
 CMD ["tail", "-f", "/dev/null"]

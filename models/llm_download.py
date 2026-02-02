@@ -42,6 +42,12 @@ MODEL_REGISTRY = {
         "filename": "Llama-3.2-1B-Instruct-Q4_K_M.gguf",
         "output_name": "llama3.2-1b-q4.gguf",
         "size_gb": 0.8
+    },
+    "qwen2.5-coder-0.5b-instruct": {
+        "repo_id": "Qwen/Qwen2.5-Coder-0.5B-Instruct-GGUF",
+        "filename": "qwen2.5-coder-0.5b-instruct-q4_k_m.gguf",
+        "output_name": "qwen2.5-coder-0.5b-instruct.gguf",
+        "size_gb": 0.4
     }
 }
 
