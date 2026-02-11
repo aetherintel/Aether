@@ -429,45 +429,6 @@ services:
               capabilities: [gpu]
 
   # ============================================================================
-  # CLASSIFICATION WORKER
-  # ============================================================================
-  classification-worker:
-    image: ghcr.io/${GITHUB_REPOSITORY_OWNER:-aetherintel}/aether-classification-worker:latest
-    command: >
-      rq worker classification-jobs
-      --url redis://redis:6379/5
-      --worker-ttl 900
-      --job-monitoring-interval 30
-    restart: unless-stopped
-    environment:
-      NEO4J_URI: ${NEO4J_URI}
-      NEO4J_USER: ${NEO4J_USER}
-      NEO4J_PASSWORD: ${NEO4J_PASSWORD}
-      MODELS_PATH: /app/models
-      USE_QUANTIZATION: "true"
-    volumes:
-      - app_classifier_models:/app/models
-      - ./shared/media:/shared/media:ro
-    depends_on:
-      - redis
-      - neo4j
-      - postgres
-      - backend
-      - classifier-models
-    networks:
-      - aether-network
-    deploy:
-      resources:
-        limits:
-          memory: 3G
-        reservations:
-          memory: 1G
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu]
-
-  # ============================================================================
   # GEOLOCATION WORKER
   # ============================================================================
   geolocation-worker:
@@ -640,7 +601,6 @@ volumes:
   app_translation_models:
   app_audio_models:
   app_emotion_models:
-  app_classifier_models:
   app_image_models:
     name: app_image_models
   app_geolocation_models:
