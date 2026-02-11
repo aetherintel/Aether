@@ -99,8 +99,8 @@ services:
     image: ghcr.io/${GITHUB_REPOSITORY_OWNER:-aetherintel}/aether-frontend:latest
     container_name: frontend
     ports:
-      - "80:80"
-      - "443:443"
+      - "${VAST_HTTP_PORT:-8080}:80"
+      - "${VAST_HTTPS_PORT:-8443}:443"
     environment:
       PROD_DOMAIN: ${PROD_DOMAIN}
     volumes:
