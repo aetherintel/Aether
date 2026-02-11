@@ -7,3 +7,8 @@ WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'keycloak')
 SELECT 'CREATE DATABASE aether'
 WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'aether')
 \gexec
+
+-- Create telegramdb if it doesn't exist
+SELECT 'CREATE DATABASE telegramdb'
+WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'telegramdb')
+\gexec

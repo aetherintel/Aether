@@ -207,6 +207,15 @@ jobs:
             # ═══════════════════════════════════════════════════════════════
             echo "🗄️ Ensuring infrastructure is running..."
             $COMPOSE_CMD -f docker-compose.prod.yml up -d --no-recreate postgres neo4j redis
+            
+            echo "⏳ Waiting for Postgres..."
+            sleep 10
+            
+            echo "🗄️ checking/creating databases..."
+            # Create DBs if not exist (Idempotent)
+            docker exec -i postgres psql -U $DB_USER -d postgres -c "SELECT 'CREATE DATABASE keycloak' WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'keycloak')\gexec" || true
+            docker exec -i postgres psql -U $DB_USER -d postgres -c "SELECT 'CREATE DATABASE telegramdb' WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'telegramdb')\gexec" || true
+            docker exec -i postgres psql -U $DB_USER -d postgres -c "SELECT 'CREATE DATABASE aether' WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'aether')\gexec" || true
 
             # ═══════════════════════════════════════════════════════════════
             # PHASE 3: Keycloak (smart rebuild)
