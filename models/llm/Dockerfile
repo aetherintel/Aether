@@ -14,7 +14,7 @@ FROM alpine:latest
 WORKDIR /models/llm
 
 # Copy from builder
-COPY --from=builder /models/llm/qwen2.5-7b-instruct-q4_k_m.gguf .
+COPY --from=builder /build/llm/qwen2.5-7b-instruct-q4_k_m.gguf .
 
 # Create a volume to share this directory
 VOLUME /models/llm
