@@ -99,7 +99,9 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          no-cache: true
+          no-cache: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
           build-args: ${{ matrix.build-args }}
 
   # ============================================================
@@ -190,10 +192,15 @@ jobs:
             grep "KEYCLOAK_BASE_URL:" docker-compose.prod.yml | head -1
 
             # ═══════════════════════════════════════════════════════════════
-            # PHASE 1: Pull Latest Images
+            # PHASE 1: Pull Latest Images (APP SERVICES ONLY)
             # ═══════════════════════════════════════════════════════════════
-            echo "📦 Pulling latest images..."
-            $COMPOSE_CMD -f docker-compose.prod.yml pull
+            echo "📦 Pulling latest images (Skipping models)..."
+            $COMPOSE_CMD -f docker-compose.prod.yml pull \
+              backend frontend \
+              telegram-worker report-worker \
+              translation-worker image-worker audio-worker \
+              emotion-worker classification-worker geolocation-worker \
+              llm-service photon mcp-neo4j-cypher-server
 
             # ═══════════════════════════════════════════════════════════════
             # PHASE 2: Infrastructure (keep running)
