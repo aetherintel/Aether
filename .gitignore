@@ -51,24 +51,33 @@ shared/
 # Ignore model files but keep Dockerfiles
 models/translation/*
 !models/translation/Dockerfile
+!models/translation/*.py
 
 models/emotion/*
 !models/emotion/Dockerfile
+!models/emotion/*.py
 
 models/classifier/*
 !models/classifier/Dockerfile
+!models/classifier/*.py
 
 models/audio/*
 !models/audio/Dockerfile
+!models/audio/*.py
 
 models/geolocation/*
 !models/geolocation/Dockerfile
+!models/geolocation/*.sh
 
 models/geocoding/*
 !models/geocoding/Dockerfile
+models/photon/*
+!models/photon/Dockerfile
+!models/photon/*.sh
 
 models/image/*
 !models/image/Dockerfile
+!models/image/*.py
 
 *.gguf
 *.bin
