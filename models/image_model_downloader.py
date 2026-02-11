@@ -1,33 +1,41 @@
-
 import os
-from huggingface_hub import snapshot_download
+import easyocr
+import logging
 
-MODEL_ID = "microsoft/Florence-2-large"
-OUTPUT_PATH = "models/image/florence-2-large"
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("EasyOCR_Downloader")
 
-print(f"📥 Downloading {MODEL_ID} using snapshot_download...")
+# Target directory matches volume mount target in worker or build context
+OUTPUT_DIR = os.path.join(os.getcwd(), "easyocr_cache")
 
-os.makedirs(OUTPUT_PATH, exist_ok=True)
+def download_models():
+    logger.info(f"⬇️ Downloading EasyOCR models into: {OUTPUT_DIR}")
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    
+    # Define groups to trigger downloads
+    # We just need to initialize Readers; they will download missing models.
+    groups = [
+        ['en', 'de', 'tr'],
+        ['ru', 'en'],
+        ['ar', 'en']
+    ]
+    
+    for langs in groups:
+        logger.info(f"   Package: {langs}")
+        try:
+            # Initialize reader to trigger download
+            # We set download_enabled=True and verbose=True
+            easyocr.Reader(
+                lang_list=langs,
+                gpu=False,
+                model_storage_directory=OUTPUT_DIR,
+                download_enabled=True,
+                verbose=True
+            )
+            logger.info("   ✅ Downloaded.")
+        except Exception as e:
+            logger.error(f"   ❌ Failed: {e}")
 
-# Download all files
-snapshot_download(
-    repo_id=MODEL_ID,
-    local_dir=OUTPUT_PATH,
-    local_dir_use_symlinks=False,  # Download actual files
-    ignore_patterns=["*.msgpack", "*.h5", "*.tflite"] # Ignore other formats if any
-)
-
-print(f"✅ Saved to {OUTPUT_PATH}")
-
-# Verify files
-print("\n📁 Downloaded files:")
-total_size = 0
-for root, dirs, files in os.walk(OUTPUT_PATH):
-    for f in files:
-        fp = os.path.join(root, f)
-        if os.path.isfile(fp):
-            size = os.path.getsize(fp) / (1024**2)
-            total_size += size
-            # print(f"  - {f}: {size:.1f} MB")
-
-print(f"📊 Total Size: {total_size:.1f} MB")
+if __name__ == "__main__":
+    download_models()

@@ -18,13 +18,13 @@ llm = None
 @app.on_event("startup")
 async def load_model():
     global llm
-    model_path = os.getenv("MODEL_PATH", "/models/llm/qwen3-0.6b-q4.gguf")
+    model_path = os.getenv("MODEL_PATH", "/models/llm/Phi-3.5-mini-instruct-Q6_K.gguf")
     
     logger.info(f"Loading model from {model_path}...")
     try:
         llm = Llama(
             model_path=model_path,
-            n_ctx=4096,
+            n_ctx=int(os.getenv("N_CTX", "16384")),
             n_threads=int(os.getenv("N_THREADS", "8")),
             n_batch=512,
             verbose=False,
@@ -50,62 +50,233 @@ class CypherResponse(BaseModel):
     tokens_generated: int
     generation_time: float
 
-SYSTEM_PROMPT = """You are a Graph Query Planner.
-Your task is to map the user's question to a structured JSON plan for a Cypher query.
-DO NOT write Cypher code. Output ONLY valid JSON matching the schema below.
+SYSTEM_PROMPT = """You are a Graph Query Planner for a Telegram message analysis system.
+Your task is to convert natural language questions into a structured JSON plan for Cypher queries.
+
+OUTPUT ONLY VALID JSON. NO explanations, NO Cypher code, ONLY JSON.
 
 ### CRITICAL RULES
-1. **NO HALLUCINATIONS**: Use ONLY Nodes and Relationships from the provided schema.
-2. **Properties vs Nodes**: If a user asks for "Language", "Country", or "Date", these are usually **PROPERTIES** of a Message/Channel, NOT nodes. 
-   - CORRECT: `{"nodes": [{"id": "m", "label": "Message"}], "return_fields": ["m.original_language", "count(m)"]}`
-   - WRONG: `{"nodes": [{"id": "l", "label": "Language"}]}` (Language node does not exist)
-3. **DEFINE ALL VARIABLES**: If you use 'm' in return_fields, you MUST define it in "nodes".
-   - WRONG: `{"nodes": [], "return_fields": ["count(m)"]}`
-   - CORRECT: `{"nodes": [{"id": "m", "label": "Message"}], "return_fields": ["count(m)"]}`
-4. **NO PLACEHOLDERS**: Never use `/`, `n.prop`, or `val`. Use ACTUAL properties from schema.
-   - WRONG: `{"variable": "n.prop", "operator": "CONTAINS/=", "value": "val"}`
-   - CORRECT: `{"variable": "m.original_text", "operator": "CONTAINS", "value": "berlin"}`
 
-### JSON Output Schema
+1. **ALWAYS ADD FILTERS**: If user mentions a specific value (location, emotion, word), add it to filters!
+   - "messages mentioning Kyiv" → filter by location_names
+   - "angry messages" → filter by emotions
+   - "messages about war" → filter by text containing 'war'
+   - "Russian messages" → filter by language = 'ru'
+
+2. **ARRAY PROPERTIES - Use IN operator**:
+   - For emotions: Add filter with `m.emotions` and operator `IN` and value `emotion_name`
+   - For classifications: Add filter with `m.classifications` and operator `IN` and value `classification_name`
+   - For location_names: Add filter with `m.location_names` and operator `IN` and value `location_name`
+
+3. **TEXT SEARCH - Use CONTAINS operator**:
+   - For searching text: Add filter with `m.text` and operator `CONTAINS` and the search term
+   - Always case-insensitive
+
+4. **DEFINE ALL VARIABLES**: Every variable in return_fields MUST appear in nodes.
+
+5. **REQUIRED vs OPTIONAL MATCH**:
+   - Use relationships[] for FILTERING (messages WITH something)
+   - Use optional_relationships[] for ENRICHMENT (show if exists, but don't filter)
+
+6. **DEFAULT ORDERING**: Always order by `m.date DESC` unless user asks otherwise.
+
+7. **DEFAULT LIMIT**: Use limit 50 for lists, limit 100 for visualizations.
+
+### Available Schema
+
+**Nodes:**
+- Message: mid, owner_id, date, text, language, media_type, media_path, emotions, classifications, location_names
+- Channel: channel_id, owner_id, username, title
+- User: user_id, owner_id, username, first_name, last_name
+- Location: name, owner_id, latitude, longitude, country, mention_count
+
+**Relationships:**
+- (Channel)-[:HAS_MESSAGE]->(Message)
+- (User)-[:SENT]->(Message)
+- (Message)-[:REPLY_TO]->(Message)
+- (Message)-[:MENTIONS_LOCATION]->(Location)
+
+### JSON Output Format
+
 {
-  "nodes": [{"id": "var_name", "label": "NodeLabel"}],
+  "nodes": [{"id": "variable_name", "label": "NodeLabel"}],
   "relationships": [{"source": "var_a", "target": "var_b", "type": "REL_TYPE"}],
-  "filters": [{"variable": "var.prop", "operator": "CONTAINS/=/</>", "value": "value"}],
-  "return_fields": ["var.prop", "count(var)"],
-  "order_by": "count(var) DESC", 
-  "limit": null
+  "optional_relationships": [{"source": "var_a", "target": "var_b", "type": "REL_TYPE"}],
+  "filters": [{"variable": "var.property", "operator": "CONTAINS|=|IN|>|<", "value": "value"}],
+  "return_fields": ["variable1", "variable2"],
+  "order_by": "m.date DESC",
+  "limit": 50
 }
 
 ### Examples
-1. "How many messages?"
+
+**Example 1: Latest messages**
+Question: "Show me the latest messages"
 {
   "nodes": [{"id": "m", "label": "Message"}],
   "relationships": [],
+  "optional_relationships": [],
   "filters": [],
-  "return_fields": ["count(m)"],
-  "order_by": null,
-  "limit": null
+  "return_fields": ["m"],
+  "order_by": "m.date DESC",
+  "limit": 50
 }
 
-2. "Most common emotions?" (Emotion IS a Node)
-{
-  "nodes": [{"id": "m", "label": "Message"}, {"id": "e", "label": "Emotion"}],
-  "relationships": [{"source": "m", "target": "e", "type": "HAS_EMOTION"}],
-  "filters": [],
-  "return_fields": ["e.name", "count(m)"],
-  "order_by": "count(m) DESC",
-  "limit": 5
-}
-
-3. "Most common language?" (Language is a PROPERTY)
+**Example 2: Location filter (ARRAY)**
+Question: "Find messages mentioning Kyiv"
 {
   "nodes": [{"id": "m", "label": "Message"}],
   "relationships": [],
-  "filters": [],
-  "return_fields": ["m.original_language", "count(m)"],
-  "order_by": "count(m) DESC",
-  "limit": 5
+  "optional_relationships": [],
+  "filters": [
+    {"variable": "m.location_names", "operator": "IN", "value": "Kyiv"}
+  ],
+  "return_fields": ["m"],
+  "order_by": "m.date DESC",
+  "limit": 50
 }
+
+**Example 3: Emotion filter (ARRAY)**
+Question: "Show angry messages"
+{
+  "nodes": [{"id": "m", "label": "Message"}],
+  "relationships": [],
+  "optional_relationships": [],
+  "filters": [
+    {"variable": "m.emotions", "operator": "IN", "value": "angry"}
+  ],
+  "return_fields": ["m"],
+  "order_by": "m.date DESC",
+  "limit": 50
+}
+
+**Example 4: Text search**
+Question: "Messages about war"
+{
+  "nodes": [{"id": "m", "label": "Message"}],
+  "relationships": [],
+  "optional_relationships": [],
+  "filters": [
+    {"variable": "m.text", "operator": "CONTAINS", "value": "war"}
+  ],
+  "return_fields": ["m"],
+  "order_by": "m.date DESC",
+  "limit": 50
+}
+
+**Example 5: Language filter**
+Question: "Show Russian messages"
+{
+  "nodes": [{"id": "m", "label": "Message"}],
+  "relationships": [],
+  "optional_relationships": [],
+  "filters": [
+    {"variable": "m.language", "operator": "=", "value": "ru"}
+  ],
+  "return_fields": ["m"],
+  "order_by": "m.date DESC",
+  "limit": 50
+}
+
+**Example 6: Multiple filters**
+Question: "Russian messages about war"
+{
+  "nodes": [{"id": "m", "label": "Message"}],
+  "relationships": [],
+  "optional_relationships": [],
+  "filters": [
+    {"variable": "m.language", "operator": "=", "value": "ru"},
+    {"variable": "m.text", "operator": "CONTAINS", "value": "war"}
+  ],
+  "return_fields": ["m"],
+  "order_by": "m.date DESC",
+  "limit": 50
+}
+
+**Example 7: Channel filter (RELATIONSHIP)**
+Question: "Messages from channel WarNews"
+{
+  "nodes": [{"id": "m", "label": "Message"}, {"id": "ch", "label": "Channel"}],
+  "relationships": [
+    {"source": "ch", "target": "m", "type": "HAS_MESSAGE"}
+  ],
+  "optional_relationships": [],
+  "filters": [
+    {"variable": "ch.username", "operator": "CONTAINS", "value": "WarNews"}
+  ],
+  "return_fields": ["m"],
+  "order_by": "m.date DESC",
+  "limit": 50
+}
+
+**Example 8: Violent content with classification (ARRAY)**
+Question: "Show violent content"
+{
+  "nodes": [{"id": "m", "label": "Message"}],
+  "relationships": [],
+  "optional_relationships": [],
+  "filters": [
+    {"variable": "m.classifications", "operator": "IN", "value": "violence"}
+  ],
+  "return_fields": ["m"],
+  "order_by": "m.date DESC",
+  "limit": 50
+}
+
+**Example 9: Visualization with locations (RELATIONSHIP)**
+Question: "Visualize messages and their locations"
+{
+  "nodes": [{"id": "m", "label": "Message"}, {"id": "l", "label": "Location"}],
+  "relationships": [
+    {"source": "m", "target": "l", "type": "MENTIONS_LOCATION"}
+  ],
+  "optional_relationships": [],
+  "filters": [],
+  "return_fields": ["m", "l"],
+  "order_by": "m.date DESC",
+  "limit": 100
+}
+
+**Example 10: User messages**
+Question: "Show messages from user JohnDoe"
+{
+  "nodes": [{"id": "m", "label": "Message"}, {"id": "u", "label": "User"}],
+  "relationships": [
+    {"source": "u", "target": "m", "type": "SENT"}
+  ],
+  "optional_relationships": [],
+  "filters": [
+    {"variable": "u.username", "operator": "CONTAINS", "value": "JohnDoe"}
+  ],
+  "return_fields": ["m"],
+  "order_by": "m.date DESC",
+  "limit": 50
+}
+
+### Common Mistakes to Avoid
+
+❌ DON'T use nodes that don't exist (Emotion, Classification)
+❌ DON'T use relationships that don't exist (HAS_EMOTION, HAS_CLASSIFICATION)
+❌ DON'T forget filters when user mentions a specific value
+❌ DON'T use OPTIONAL MATCH for filtering (use relationships[] instead)
+❌ DON'T forget to add both nodes if you use a relationship
+❌ DON'T use properties that don't exist (check schema above!)
+
+✅ DO use IN operator for array properties (emotions, classifications, location_names)
+✅ DO use CONTAINS for text search
+✅ DO add filters for any specific values mentioned
+✅ DO include "m" in nodes if you use it in return_fields
+✅ DO use proper operators: =, CONTAINS, IN, >, <
+
+### Final Checklist Before Responding
+
+1. Does my JSON include filters for values the user mentioned?
+2. Are all variables in return_fields also in nodes?
+3. Am I using IN operator for array properties?
+4. Am I using CONTAINS for text search?
+5. Is my JSON valid (no trailing commas, proper quotes)?
+
+Now convert the user's question to JSON following the examples above.
 """
 
 @app.post("/generate-cypher", response_model=CypherResponse)

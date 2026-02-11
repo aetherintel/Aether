@@ -11,7 +11,8 @@ from controller import scraper_controller
 from controller import report_controller
 from controller import stats_controller 
 from controller import dashboard_controller
-from controller import text2cypher_controller
+from controller import dashboard_controller
+from controller import agent_controller
 from services.scheduler_service import start_scheduler
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -34,20 +35,20 @@ app.include_router(queue_controller.router)
 app.include_router(report_controller.router)
 app.include_router(stats_controller.router)
 app.include_router(dashboard_controller.router)
-app.include_router(text2cypher_controller.router)
+app.include_router(agent_controller.router)
 
 origins = [
     "http://localhost",
     "http://localhost:5173",
     "https://æther.tech",
-    "https://xn--ther-uoa.tech"
+    "https://xn--ther-uoa.tech",
     "http://localhost:8080",
-    "http://localhost:9001",   # job launcher
-    "http://keycloak:8080",   # keycloak
-    "http://65.108.38.53 ⁠",
-    "http://65.108.38.53 ⁠:8080",
-    "http://65.108.38.53 ⁠:9001",
-    "http://65.108.38.53 ⁠:5173",
+    "http://localhost:9001",
+    "http://keycloak:8080",
+    "http://65.108.38.53",
+    "http://65.108.38.53:8080",
+    "http://65.108.38.53:9001",
+    "http://65.108.38.53:5173",
     "https://aethery.cloud",
     "https://aethery.cloud:8080",
     "https://aethery.cloud:9001",
@@ -56,7 +57,6 @@ origins = [
     "http://aethery.cloud:8080",
     "http://aethery.cloud:9001",
     "http://aethery.cloud:5173"
-
 ]
 
 app.add_middleware(

@@ -31,6 +31,12 @@ MODEL_REGISTRY = {
         "output_name": "phi3.5-mini-q4.gguf",
         "size_gb": 2.2
     },
+    "phi3.5-mini-q6": {
+        "repo_id": "bartowski/Phi-3.5-mini-instruct-GGUF",
+        "filename": "Phi-3.5-mini-instruct-Q6_K.gguf",
+        "output_name": "Phi-3.5-mini-instruct-Q6_K.gguf",
+        "size_gb": 3.0
+    },
     "llama3.2-1b-q4": {
         "repo_id": "bartowski/Llama-3.2-1B-Instruct-GGUF",
         "filename": "Llama-3.2-1B-Instruct-Q4_K_M.gguf",
@@ -48,6 +54,12 @@ MODEL_REGISTRY = {
         "filename": "qwen2.5-coder-0.5b-instruct-q4_k_m.gguf",
         "output_name": "qwen2.5-coder-0.5b-instruct.gguf",
         "size_gb": 0.4
+    },
+    "qwen2.5-7b-instruct-q4": {
+        "repo_id": "paultimothymooney/Qwen2.5-7B-Instruct-Q4_K_M-GGUF",
+        "filename": "qwen2.5-7b-instruct-q4_k_m.gguf",
+        "output_name": "qwen2.5-7b-instruct-q4_k_m.gguf",
+        "size_gb": 4.4
     }
 }
 

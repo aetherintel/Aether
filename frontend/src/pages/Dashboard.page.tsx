@@ -4,7 +4,6 @@ import { Container, Title, Text, Group, Button } from '@mantine/core';
 import { IconLayoutDashboard, IconHelp } from '@tabler/icons-react';
 import BreadcrumbsBar from '@/components/BreadcrumbsBar/BreadcrumbsBar';
 import { WidgetGrid } from '@/components/WidgetGrid/WidgetGrid';
-import { AgentQueryInterface } from '@/components/Dashboard/AgentQueryInterface';
 import { useWidgetStore } from '@/store/client/widgetStore';
 import classes from './Dashboard.module.css';
 

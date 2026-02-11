@@ -1,12 +1,22 @@
-FROM python:3.11-slim as downloader
-RUN pip install huggingface_hub
-WORKDIR /app
-# llm_download.py is in the build context root (./models)
+# Distroless model container
+FROM python:3.11-slim as builder
+
+WORKDIR /build
+
+RUN pip install --no-cache-dir huggingface_hub
+
 COPY llm_download.py .
-# Download Qwen 2.5 Coder 0.5B
-RUN python llm_download.py download --model qwen2.5-coder-0.5b-instruct
+
+# Download specific model
+RUN python llm_download.py download --model qwen2.5-7b-instruct-q4
 
 FROM alpine:latest
-# Copy the downloaded model to the volume location
-COPY --from=downloader /app/llm/qwen2.5-coder-0.5b-instruct.gguf /models/llm/qwen2.5-coder-0.5b-instruct.gguf
+WORKDIR /models/llm
+
+# Copy from builder
+COPY --from=builder /models/llm/qwen2.5-7b-instruct-q4_k_m.gguf .
+
+# Create a volume to share this directory
+VOLUME /models/llm
+
 CMD ["tail", "-f", "/dev/null"]

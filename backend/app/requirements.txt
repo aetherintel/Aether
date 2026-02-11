@@ -23,10 +23,7 @@ seaborn
 networkx
 
 # GraphRAG
-langchain
-langchain-neo4j
-langchain-openai
-langchain-community
+
 
 # Testing
 pytest
