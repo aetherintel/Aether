@@ -22,7 +22,7 @@ services:
       - start
       - --import-realm
     ports:
-      - "127.0.0.1:8080:8080"
+      - "127.0.0.1:8082:8080"
     restart: always
     environment:
       KC_DB: postgres
