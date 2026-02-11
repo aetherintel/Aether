@@ -66,29 +66,6 @@ jobs:
             build-args: |
               USE_CUDA=true
 
-          # Model Data Containers
-          - service: llm-models
-            context: ./models
-            dockerfile: models/llm/Dockerfile
-          - service: translation-models
-            context: ./models
-            dockerfile: models/translation/Dockerfile
-          - service: audio-models
-            context: ./models
-            dockerfile: models/audio/Dockerfile
-          - service: emotion-models
-            context: ./models
-            dockerfile: models/emotion/Dockerfile
-          - service: classification-models
-            context: ./models
-            dockerfile: models/classifier/Dockerfile
-          - service: image-models
-            context: ./models
-            dockerfile: models/image/Dockerfile
-          - service: geolocation-models
-            context: ./models
-            dockerfile: models/geolocation/Dockerfile
-
     steps:
       - name: 🧾 Checkout repository
         uses: actions/checkout@v4
@@ -153,7 +130,7 @@ jobs:
           port: ${{ secrets.PROD_PORT }}
           username: ${{ secrets.PROD_USER }}
           key: ${{ secrets.PROD_SSH_KEY }}
-          command_timeout: 15m
+          command_timeout: 60m
           # .github/workflows/deploy.yml - deploy job script section
           script: |
             cd ~/app
