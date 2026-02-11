@@ -88,9 +88,6 @@ jobs:
           - service: geolocation-models
             context: ./models
             dockerfile: models/geolocation/Dockerfile
-          - service: photon-data
-            context: ./models
-            dockerfile: models/photon/Dockerfile
 
     steps:
       - name: 🧾 Checkout repository
