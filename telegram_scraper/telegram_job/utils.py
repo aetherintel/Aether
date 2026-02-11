@@ -165,7 +165,27 @@ async def download_media_to_path(username: str, msg, client_ref, target_path: st
         if downloaded_path and os.path.exists(str(downloaded_path)):
             file_size = os.path.getsize(str(downloaded_path))
             print(f"[DOWNLOAD] ✅ File verified: {downloaded_path} ({file_size} bytes)")
-            return str(downloaded_path)
+            
+            # COMPRESSION LOGIC
+            try:
+                final_path = str(downloaded_path)
+                
+                # Image Compression
+                if final_path.lower().endswith(('.jpg', '.jpeg', '.png', '.webp')):
+                    print(f"[COMPRESS] Compressing image: {final_path}")
+                    final_path = compress_image(final_path)
+                    
+                # Video Compression
+                elif final_path.lower().endswith(('.mp4', '.mov', '.avi', '.mkv')):
+                    print(f"[COMPRESS] Compressing video: {final_path}")
+                    final_path = compress_video(final_path)
+                    
+                return final_path
+                
+            except Exception as e:
+                print(f"[WARN] Compression failed, using original file: {e}")
+                return str(downloaded_path)
+                
         else:
             print(f"[DOWNLOAD] ❌ File not found after download: {downloaded_path}")
             return None
@@ -175,6 +195,130 @@ async def download_media_to_path(username: str, msg, client_ref, target_path: st
         import traceback
         traceback.print_exc()
         return None
+
+# ============================================================================
+# COMPRESSION HELPERS
+# ============================================================================
+
+def compress_image(file_path: str, max_width: int = 1920, quality: int = 80) -> str:
+    """
+    Compress image using Pillow.
+    - Resize if width > max_width
+    - Convert to RGB (remove alpha) and save as JPEG if PNG/WEBP
+    - Optimize quality
+    """
+    try:
+        from PIL import Image
+        import os
+        
+        img = Image.open(file_path)
+        original_size = os.path.getsize(file_path)
+        
+        # Resize if too large
+        if img.width > max_width:
+            ratio = max_width / img.width
+            new_height = int(img.height * ratio)
+            img = img.resize((max_width, new_height), Image.Resampling.LANCZOS)
+            print(f"[COMPRESS] Resized image to {max_width}x{new_height}")
+            
+        # Convert to RGB if necessary (e.g. PNG with transparency)
+        if img.mode in ('RGBA', 'P'):
+            img = img.convert('RGB')
+            
+        # Save as JPEG (replace original or create new if format changed)
+        # We'll overwrite the original file to keep the path consistent if possible
+        # But if it was a PNG, we might want to change extension to .jpg
+        
+        path_obj = Path(file_path)
+        if path_obj.suffix.lower() != '.jpg':
+            new_path = path_obj.with_suffix('.jpg')
+            img.save(new_path, "JPEG", quality=quality, optimize=True)
+            # Remove original if different
+            os.remove(file_path)
+            file_path = str(new_path)
+        else:
+            img.save(file_path, "JPEG", quality=quality, optimize=True)
+            
+        new_size = os.path.getsize(file_path)
+        savings = original_size - new_size
+        print(f"[COMPRESS] Image compressed: {original_size} -> {new_size} bytes (Saved {savings/1024:.2f} KB)")
+        
+        return file_path
+        
+    except Exception as e:
+        print(f"[ERROR] Image compression failed: {e}")
+        return file_path
+
+def compress_video(file_path: str, crf: int = 32, max_width: int = 720) -> str:
+    """
+    Compress video using ffmpeg (via subprocess).
+    - Scale to max_width (default 720px) while maintaining aspect ratio
+    - Convert to h.264 mp4
+    - CRF 32 (higher compression)
+    - Preset fast
+    - AAC audio 128k
+    """
+    import subprocess
+    import os
+    import shutil
+    
+    try:
+        temp_path = f"{file_path}.temp.mp4"
+        
+        # ffmpeg command
+        # -i input
+        # -vf scale='min(720,iw)':-2  (Scale to max width, keep aspect ratio, don't upscale)
+        # -vcodec libx264 (H.264 video)
+        # -crf 32 (Constant Rate Factor, higher = more compression)
+        # -preset fast (Faster encoding)
+        # -acodec aac (AAC audio)
+        # -b:a 128k (Limit audio bitrate)
+        # -movflags +faststart (Web optimization)
+        # -y (overwrite output)
+        
+        cmd = [
+            "ffmpeg",
+            "-i", file_path,
+            "-vf", f"scale='min({max_width},iw)':-2",
+            "-vcodec", "libx264",
+            "-crf", str(crf),
+            "-preset", "fast",
+            "-acodec", "aac",
+            "-b:a", "128k",
+            "-movflags", "+faststart",
+            "-y",
+            temp_path
+        ]
+        
+        print(f"[COMPRESS] Running ffmpeg: {' '.join(cmd)}")
+        
+        # Run ffmpeg
+        result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        
+        if result.returncode != 0:
+            print(f"[ERROR] ffmpeg failed: {result.stderr.decode()}")
+            if os.path.exists(temp_path):
+                os.remove(temp_path)
+            return file_path
+            
+        # Check if compression actually helped
+        original_size = os.path.getsize(file_path)
+        new_size = os.path.getsize(temp_path)
+        
+        if new_size < original_size:
+            # Replace original with compressed
+            shutil.move(temp_path, file_path)
+            savings = original_size - new_size
+            print(f"[COMPRESS] Video compressed: {original_size} -> {new_size} bytes (Saved {savings/(1024*1024):.2f} MB)")
+        else:
+            print(f"[COMPRESS] Compressed video was larger ({new_size} > {original_size}), keeping original")
+            os.remove(temp_path)
+            
+        return file_path
+        
+    except Exception as e:
+        print(f"[ERROR] Video compression failed: {e}")
+        return file_path
 def get_media_type(media) -> str:
     """Determine media type for file naming - FIXED VERSION"""
     try:

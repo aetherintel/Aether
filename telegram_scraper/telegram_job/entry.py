@@ -1,11 +1,14 @@
 
-import os, json, sys, asyncio
+import os, json, sys, asyncio, uuid
+from redis import Redis
+from rq import Queue
 
 # GEÄNDERT: Relative Imports verwenden
 from .similar import similar_channels_flexible as similar_channels
-from .scraper import run_scraper, run_live_listener_only
+from .similar import similar_channels_flexible as similar_channels
+from .scraper import run_scraper, run_live_listener_only, reload_scraper_config, init_scraper_state
 from aether_lib.neo4j_client.channels import write_recommendations, is_scraped
-from aether_lib.neo4j_client.connection import init_driver, close_driver
+from aether_lib.neo4j_client.connection import init_driver, close_driver, set_owner_id
 from .telegram_client import login
 
 # ========================================
@@ -15,7 +18,8 @@ def run_job(**kwargs):
     """
     Entry point für RQ Worker.
     """
-    print(f"[RQ] Starting job with kwargs: {kwargs}")
+    print(f"[RQ] Starting job with kwargs: {kwargs}", flush=True)
+    print(f"[RQ] Job PID: {os.getpid()}", flush=True)
 
     owner_id = kwargs.get('owner_id', 'unknown')
     case_id = kwargs.get('case_id')
@@ -35,7 +39,11 @@ def run_job(**kwargs):
     os.environ['ENABLE_EMOTION_ANALYSIS'] = '1' if kwargs.get('enable_emotion_analysis', True) else '0'
     os.environ['ENABLE_LABEL_CLASSIFIER'] = '1' if kwargs.get('enable_label_classifier', True) else '0'
     os.environ['ENABLE_GEOLOCATION_EXTRACTION'] = '1' if kwargs.get('enable_geolocation_extraction', True) else '0'
-    reload_config()
+    os.environ['ENABLE_LIVE_MONITORING'] = '1' if kwargs.get('enable_live_monitoring', False) else '0'
+    os.environ['OCR_LANGUAGES'] = ','.join(kwargs.get('ocr_languages', ['latin']))
+    print("[RQ] Reloading scraper config...", flush=True)
+    reload_scraper_config()
+    print("[RQ] Config reloaded.", flush=True)
     
     # Optional parameters
     if kwargs.get('parent_container_id'):
@@ -47,8 +55,9 @@ def run_job(**kwargs):
     
     # Führe main() aus (ENV vars sind jetzt gesetzt)
     try:
+        print("[RQ] Starting asyncio.run(main)...", flush=True)
         result = asyncio.run(main(owner_id=owner_id, case_id=case_id))
-        print(f"[RQ] Job completed successfully")
+        print(f"[RQ] Job completed successfully", flush=True)
         return {
             "status": "completed", 
             "mode": kwargs.get('mode'),
@@ -59,6 +68,32 @@ def run_job(**kwargs):
         import traceback
         traceback.print_exc()
         raise
+    finally:
+        # Self-Rescheduling Logic for Live Monitoring
+        if os.environ.get('ENABLE_LIVE_MONITORING') == '1':
+            try:
+                print("[RQ] Live monitoring enabled. Rescheduling job...", flush=True)
+                
+                # Connect to Redis (using same host/port as standard env)
+                redis_host = os.getenv("REDIS_HOST", "redis")
+                redis_port = int(os.getenv("REDIS_PORT", "6379"))
+                r = Redis(host=redis_host, port=redis_port, db=0) # db=0 for telegram
+                q = Queue('telegram-jobs', connection=r)
+                
+                # Generate new job ID
+                new_job_id = f"{kwargs.get('mode', 'scrape')}_{uuid.uuid4().hex[:6]}"
+                
+                q.enqueue(
+                    'telegram_job.entry.run_job',
+                    kwargs=kwargs,
+                    job_id=new_job_id,
+                    job_timeout='6h',
+                    result_ttl=86400,
+                    failure_ttl=86400
+                )
+                print(f"[RQ] ✅ Rescheduled job as {new_job_id}", flush=True)
+            except Exception as e:
+                print(f"[RQ] ❌ Failed to reschedule job: {e}", flush=True)
 
 # ========================================
 # Globale Variablen - NUR für direkten Aufruf
@@ -122,27 +157,35 @@ async def main(owner_id=None, case_id=None):
         raise ValueError("SESSION_STRING environment variable is required but not set.")
 
     # ✅ Set owner_id in context
-    from aether_lib.neo4j_client.connection import set_owner_id
     set_owner_id(owner_id)
-    print(f"[INIT] Owner ID set to: {owner_id}")
+    print(f"[INIT] Owner ID set to: {owner_id}", flush=True)
 
     # ✅ Initialize Neo4j driver once at startup
+    print("[INIT] Initializing Neo4j driver...", flush=True)
     await init_driver()
-    print("[INIT] Neo4j driver initialized")
+    print("[INIT] Neo4j driver initialized", flush=True)
+    
+    # Initialize scraper state (Queue/Semaphore) in current loop
+    print("[INIT] Initializing scraper state...", flush=True)
+    init_scraper_state()
+    print("[INIT] Scraper state initialized", flush=True)
 
     try:
+        print(f"[INIT] Logging in with session string length: {len(SESSION_STRING) if SESSION_STRING else 0}", flush=True)
         await login(session_string=SESSION_STRING)
-        print(f"[DEBUG] Logged in with {MODE}")
+        print(f"[DEBUG] Logged in with {MODE}", flush=True)
         if not CHANNELS:
-            print("[]")
+            print("[DEBUG] No channels to process", flush=True)
             return
 
         if MODE == "similar":
+            print(f"[MODE] Starting SIMILAR mode for {CHANNELS[0]}", flush=True)
             root = CHANNELS[0]
             if await is_scraped(root):
+                print(f"[SKIP] {root} already scraped", flush=True)
                 return
             recs = await similar_channels(root)
-            print(json.dumps(recs, ensure_ascii=False))
+            print(json.dumps(recs, ensure_ascii=False), flush=True)
             if NEO4J_WRITE:
                 await write_recommendations(root, recs)
             usernames = [c["username"] for c in recs if c.get("username")]
@@ -150,20 +193,25 @@ async def main(owner_id=None, case_id=None):
                 await run_scraper(usernames, SESSION_NAME, recursive=RECURSIVE, skip_history=SKIP_HISTORY, case_id=case_id, owner_id=owner_id)
 
         elif MODE == "scrape":
+            print(f"[MODE] Starting SCRAPE mode for {len(CHANNELS)} channels", flush=True)
             for ch in CHANNELS:
                 if await is_scraped(ch):
+                    print(f"[SKIP] {ch} already scraped", flush=True)
                     continue
                 await run_scraper([ch], SESSION_NAME, recursive=RECURSIVE, skip_history=SKIP_HISTORY, case_id=case_id, owner_id=owner_id)
 
         elif MODE == "full":
+            print(f"[MODE] Starting FULL mode for {len(CHANNELS)} channels", flush=True)
             for root in CHANNELS:
+                print(f"[FULL] Processing root: {root}", flush=True)
                 await run_scraper([root], SESSION_NAME, recursive=RECURSIVE, skip_history=SKIP_HISTORY, case_id=case_id, owner_id=owner_id)
                 recs = await similar_channels(root)
                 if NEO4J_WRITE:
                     await write_recommendations(root, recs)
                 usernames = [c["username"] for c in recs if c.get("username")]
                 if usernames:
-                    await run_scraper(usernames, SESSION_NAME, recursive=False, skip_history=SKIP_HISTORY, owner_id=owner_id)
+                    print(f"[FULL] Found {len(usernames)} similar channels to scrape", flush=True)
+                    await run_scraper(usernames, SESSION_NAME, recursive=False, skip_history=SKIP_HISTORY, owner_id=owner_id) 
 
         elif MODE == "live":
             print("[LIVE] Listening for new messages only...")

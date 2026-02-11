@@ -22,6 +22,19 @@ import {
   IconMoodAngry,
   IconMoodNeutral,
   IconMoodCry,
+  IconActivity,
+  IconAlertTriangle,
+  IconUsers,
+  IconTrophy,
+  IconFlame,
+  IconSpeakerphone,
+  IconPlayerPause,
+  IconEyeOff,
+  IconRocket,
+  IconSun,
+  IconInfoCircle,
+  IconArrowsShuffle,
+  IconHeartBroken,
 } from '@tabler/icons-react';
 import { WidgetComponentProps } from '@/types/widgets.types';
 import { authFetch } from '@/utils/authFetch';
@@ -42,6 +55,27 @@ const emotionConfig: Record<string, { icon: React.ComponentType<any>; color: str
   neutral: { icon: IconMoodNeutral, color: 'gray' },
   angry: { icon: IconMoodAngry, color: 'orange' },
   sad: { icon: IconMoodCry, color: 'blue' },
+  // German mappings
+  'Wut / Aggression': { icon: IconMoodAngry, color: 'red' },
+  'Hass / Feindbild': { icon: IconMoodAngry, color: 'dark' },
+  'Empörung / Entrüstung': { icon: IconAlertCircle, color: 'orange' },
+  'Angst / Bedrohungsempfinden': { icon: IconMoodCry, color: 'violet' },
+  'Panik / Hysterie': { icon: IconAlertTriangle, color: 'red' },
+  'Verzweiflung / Hoffnungslosigkeit': { icon: IconMoodSad, color: 'gray' },
+  'Trauer / Mitgefühl': { icon: IconHeartBroken, color: 'blue' },
+  'Solidarität / Zusammenhalt': { icon: IconUsers, color: 'teal' },
+  'Stolz / Selbstermächtigung': { icon: IconTrophy, color: 'cyan' },
+  'Freude / Zufriedenheit': { icon: IconMoodHappy, color: 'green' },
+  'Ironie / Sarkasmus': { icon: IconMoodSmile, color: 'grape' },
+  'Aggressive Motivation / Aufpeitschend': { icon: IconFlame, color: 'orange' },
+  'Feindliche Mobilisierung': { icon: IconSpeakerphone, color: 'red' },
+  'Resignation / Rückzug': { icon: IconPlayerPause, color: 'gray' },
+  'Misstrauen / Paranoia': { icon: IconEyeOff, color: 'yellow' },
+  'Euphorie / Begeisterung': { icon: IconRocket, color: 'lime' },
+  'Zynismus / Verachtung': { icon: IconMoodNeutral, color: 'gray' },
+  'Mobilisierende Hoffnung': { icon: IconSun, color: 'cyan' },
+  'Neutral / Informationsorientiert': { icon: IconInfoCircle, color: 'blue' },
+  'Ambivalent / Gemischt': { icon: IconArrowsShuffle, color: 'grape' },
 };
 
 const fetchEmotions = async (config: any): Promise<EmotionData[]> => {
@@ -54,25 +88,29 @@ const fetchEmotions = async (config: any): Promise<EmotionData[]> => {
   try {
     const results = await Promise.all(
       channelIds.map(async (channelId: string) => {
-        const url = new URL(`${base}/messages/channels/${channelId}/messages`);
-        url.searchParams.set('limit', '500');
-        
+        const url = new URL(`${base}/messages/channels/${channelId}/emotions`);
         const res = await authFetch(url.toString());
-        const messages = await res.json();
-
-        return messages;
+        if (!res.ok) {
+            console.warn(`Failed to fetch emotions for channel ${channelId}`);
+            return [];
+        }
+        return await res.json();
       })
     );
 
-    const allMessages = results.flat();
+    const allEmotions = results.flat();
     const emotionCounts = new Map<string, number>();
 
-    allMessages.forEach((msg: any) => {
-      const emotion = msg.sentiment_label || msg.emotion || 'neutral';
-      emotionCounts.set(emotion, (emotionCounts.get(emotion) || 0) + 1);
+    allEmotions.forEach((item: any) => {
+      const emotion = item.emotion || 'neutral';
+      const count = item.count || 0;
+      emotionCounts.set(emotion, (emotionCounts.get(emotion) || 0) + count);
     });
 
-    const total = allMessages.length;
+    const total = Array.from(emotionCounts.values()).reduce((a, b) => a + b, 0);
+    
+    if (total === 0) return [];
+
     const emotions: EmotionData[] = Array.from(emotionCounts.entries())
       .map(([emotion, count]) => ({
         emotion,

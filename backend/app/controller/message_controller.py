@@ -53,6 +53,8 @@ async def get_media_by_message_id(
 
         return FileResponse(path = file_path)
 
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Fehler beim Abrufen der Medien: {str(e)}")
     
@@ -129,6 +131,8 @@ async def get_unified_timeline(
             query=q,
         )
         return messages
+    except HTTPException:
+        raise
     except Exception as e:
         print(f"[ERROR] Timeline error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Fehler beim Abrufen der Timeline: {str(e)}")
@@ -144,6 +148,8 @@ async def get_channel_details(
         if not channel:
             raise HTTPException(status_code=404, detail=f"Channel {channel_id} nicht gefunden")
         return channel
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Fehler beim Abrufen der Channel-Details: {str(e)}")
 
@@ -165,6 +171,8 @@ async def get_channel_messages(
             query=q,
         )
         return messages
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Fehler beim Abrufen der Nachrichten: {str(e)}")
 
@@ -179,6 +187,8 @@ async def get_channels_for_user(
         for channel in channels:
             channel["last_message_date"] = channel.pop("last_active", None)
         return channels
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Fehler beim Abrufen der Kanäle für Benutzer {user_id}: {str(e)}")
 
@@ -200,6 +210,8 @@ async def get_messages_for_user(
             query=q,
         )
         return messages
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Fehler beim Abrufen der Nachrichten für Benutzer {user_id}: {str(e)}")
 @router.get("/users/{user_id}/channels", response_model=List[ChannelListItem])
@@ -255,4 +267,21 @@ async def get_channel_locations(
             detail=f"Fehler beim Abrufen der Location-Daten: {str(e)}"
         )
 
-
+@router.get("/channels/{channel_id}/emotions")
+async def get_channel_emotions_endpoint(
+    channel_id: str,
+    user: UserCtx = Depends(user_ctx),
+):
+    """Get aggregated emotion statistics for a channel."""
+    owner = None if is_admin(user) else user["id"]
+    
+    try:
+        # Import here to avoid circular imports if any, or just standard practice
+        from services.neo4j_backend_client import get_channel_emotions
+        emotions = await get_channel_emotions(channel_id, owner)
+        return emotions
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Fehler beim Abrufen der Emotionen: {str(e)}"
+        )

@@ -1,15 +1,18 @@
-# workers/image_worker/worker.py - EasyOCR Version
+# workers/image_worker/worker.py - EasyOCR Multi-Pass Version
 """
-Ultra-Fast OCR Worker with EasyOCR
-Extracts text from ANY graphic (posters, infographics, memes, screenshots)
-MUCH more stable than PaddleOCR - no segfaults!
+Fast Image Analysis Worker with EasyOCR
+Extracts text (OCR) from images supporting multiple languages using a multi-pass strategy.
 """
 import os
 import logging
-import requests
+import easyocr
+import torch
+import gc
 from pathlib import Path
 from aether_lib.neo4j_client.messages import update_message_image_analysis
 from aether_lib.queue_client.queue_client import queue_client
+from aether_lib.neo4j_client.connection import run_in_neo4j_loop
+
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s [%(levelname)s] %(name)s: %(message)s'
@@ -20,302 +23,129 @@ logger = logging.getLogger(__name__)
 # CONFIGURATION
 # ============================================================================
 
-# Local model paths (mounted from host)
-MODEL_BASE_DIR = Path(os.getenv("MODEL_BASE_DIR", "/app/models/image"))
+# Using CPU or CUDA
+DEVICE = True if torch.cuda.is_available() else False
+logger.info(f"📱 Device for OCR: {'GPU' if DEVICE else 'CPU'}")
 
-# Global OCR instance
-OCR_ENGINE = None
+# Model Storage Directory (Volume Mount)
+# EasyOCR looks here for .pth files and detector models
+MODEL_STORAGE_DIR = "/app/models/image"
 
+# Language Groups (EasyOCR does not support mixing incompatible scripts)
+# We initialize multiple readers and run them sequentially if needed.
+OCR_READER_GROUPS = {
+    "latin": ['en', 'de', 'tr'],  # Latin script: English, German, Turkish
+    "cyrillic": ['ru', 'en'],    # Cyrillic: Russian (includes English for mix)
+    "arabic": ['ar', 'en']       # Arabic: (includes English for mix)
+}
 
-# Translation Configuration
-SUPPORTED_TRANSLATION_LANGUAGES = ['ru', 'ar', 'tr', 'en']
-
-def load_models():
-    """Load EasyOCR model from local directory (air-gapped)"""
-    global OCR_ENGINE
-    
-    logger.info("=" * 80)
-    logger.info("📦 LOADING EASYOCR (AIR-GAPPED MODE)")
-    logger.info("=" * 80)
-    
-    try:
-        import easyocr
-        
-        # EasyOCR looks for models in model_storage_directory
-        model_storage = MODEL_BASE_DIR / "easyocr"
-        model_storage.mkdir(parents=True, exist_ok=True)
-        
-        logger.info(f"📁 Model storage: {model_storage}")
-        logger.info(f"   Exists: {model_storage.exists()}")
-        
-        # Check what files are in the directory
-        if model_storage.exists():
-            files = list(model_storage.rglob("*"))
-            logger.info(f"   Files found: {len(files)}")
-            for f in files[:10]:  # Show first 10
-                if f.is_file():
-                    logger.info(f"     - {f.relative_to(model_storage)}")
-        
-        # Initialize EasyOCR with English
-        logger.info("⏳ Initializing EasyOCR Reader...")
-        
-        OCR_ENGINE = easyocr.Reader(
-            ['en', 'de', 'fr', 'it', 'es'],  # Languages
-            model_storage_directory=str(model_storage),
-            download_enabled=True,  # Allow download as fallback if models missing
-            gpu=False,  # Force CPU for stability
-            verbose=True  # Show what's happening
-        )
-        
-        logger.info("✅ EasyOCR loaded successfully!")
-        logger.info("   Language: English, German, Russian, Arabic, Turkish")
-        logger.info("   Works with: Posters, infographics, screenshots, memes")
-        logger.info("   Speed: ~2-3s per image")
-        logger.info("   Stability: Excellent (no segfaults)")
-        
-    except Exception as e:
-        logger.error(f"❌ Failed to load EasyOCR: {e}")
-        logger.exception("Full traceback:")
-        logger.error("   OCR will be disabled")
-        OCR_ENGINE = None
-    
-    logger.info("=" * 80)
+# Global dictionary to hold initialized readers
 
 
-class FastOCRService:
-    """Ultra-fast OCR service with EasyOCR"""
+
+class EasyOCRService:
+    """Service for EasyOCR inference using Single-Active-Reader strategy for memory efficiency"""
     
     def __init__(self):
-        # Load models immediately on initialization
-        if OCR_ENGINE is None:
-            logger.info("🔄 OCR engine not loaded, loading now...")
-            load_models()
-        
-        if OCR_ENGINE is None:
-            logger.error("❌ CRITICAL: OCR engine failed to load!")
-        else:
-            logger.info("✅ OCR engine ready")
-    
-    def preprocess_image(self, img):
-        """Optimized preprocessing with minimal memory copies"""
-        from PIL import ImageEnhance
-        import numpy as np
-        
-        # Convert to RGB in-place if needed
-        if img.mode != 'RGB':
-            img = img.convert('RGB')
-        
-        # Quick brightness check without creating full numpy array
-        # Sample only a small portion of the image
-        sample = img.crop((
-            img.width // 4, 
-            img.height // 4,
-            img.width * 3 // 4,
-            img.height * 3 // 4
-        ))
-        img_array = np.array(sample)
-        std_brightness = np.std(img_array)
-        
-        # Free sample memory immediately
-        del sample, img_array
-        
-        # Only enhance if really needed
-        if std_brightness < 50:
-            enhancer = ImageEnhance.Contrast(img)
-            img = enhancer.enhance(1.5)  # Reduced from 2.0
-        
-        if std_brightness < 40:
-            enhancer = ImageEnhance.Sharpness(img)
-            img = enhancer.enhance(1.3)  # Reduced from 1.5
-        
-        return img
-    def adaptive_threshold(self, img):
-        """Apply adaptive thresholding for documents"""
-        import cv2
-        import numpy as np
-        from PIL import Image
-        
-        # Convert PIL to OpenCV
-        img_cv = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
-        gray = cv2.cvtColor(img_cv, cv2.COLOR_BGR2GRAY)
-        
-        # Adaptive thresholding
-        binary = cv2.adaptiveThreshold(
-            gray, 255, 
-            cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
-            cv2.THRESH_BINARY,
-            11, 2
-        )
-        
-        # Convert back to PIL
-        return Image.fromarray(binary)
-    def extract_text(self, image_path: str) -> str:
-        """Extract text from image with optimized settings for complex infographics"""
+        # Only hold ONE active reader to save RAM
+        self.active_reader = None
+        self.active_group = None
+            
+    def get_reader(self, group_name: str):
+        """Lazy load reader, unloading previous one if necessary"""
         import gc
-        from PIL import Image
-        import tempfile
         
-        if OCR_ENGINE is None:
-            logger.warning("⚠️ OCR engine not loaded, skipping text extraction")
-            return ""
+        if self.active_reader and self.active_group == group_name:
+            return self.active_reader
+            
+        # Unload previous
+        if self.active_reader:
+            logger.info(f"   ♻️ Unloading '{self.active_group}' reader to free RAM...")
+            del self.active_reader
+            self.active_reader = None
+            gc.collect()
+            if DEVICE:
+                torch.cuda.empty_cache()
         
-        img = None
-        temp_path = None
+        # Load new
+        try:
+            langs = OCR_READER_GROUPS.get(group_name)
+            if not langs:
+                logger.error(f"   ❌ Unknown group: {group_name}")
+                return None
+                
+            logger.info(f"   ⏳ Loading Group '{group_name.upper()}': {langs}...")
+            reader = easyocr.Reader(
+                lang_list=langs,
+                gpu=DEVICE,
+                model_storage_directory=MODEL_STORAGE_DIR,
+                download_enabled=True,
+                verbose=False
+            )
+            self.active_reader = reader
+            self.active_group = group_name
+            return reader
+            
+        except Exception as e:
+            logger.error(f"   ❌ Failed to load '{group_name}': {e}")
+            return None
+
+    def analyze_image(self, image_path: str, modes: list = None) -> dict:
+        """Run OCR analysis using requested modes (default: latin)"""
+        import gc
+        
+        # Default to LATIN only for efficiency (prevents running 3 passes on every image)
+        if not modes:
+            modes = ['latin']
+            
+        full_text_results = []
         
         try:
-            logger.info(f"🔍 Extracting text: {image_path}")
+            logger.info(f"   Running OCR on {image_path} (Modes: {modes})...")
             
-            # Load image
-            img = Image.open(image_path)
-            width, height = img.size
-            logger.info(f"   Image size: {width}x{height}")
+            seen_texts = set()
             
-            # BALANCE: 2560px is good for infographics (between 1920 and 3840)
-            max_dimension = 2560  # Better for complex text layouts
-            
-            if width > max_dimension or height > max_dimension:
-                scale = max_dimension / max(width, height)
-                new_width = int(width * scale)
-                new_height = int(height * scale)
-                img = img.resize((new_width, new_height), Image.LANCZOS)
-                logger.info(f"   Resized to: {new_width}x{new_height}")
-            
-            # Preprocess image
-            logger.info("   Preprocessing image...")
-            img = self.preprocess_image(img)
-            
-            # Save to temp file with higher quality for infographics
-            with tempfile.NamedTemporaryFile(suffix='.jpg', delete=False) as tmp:
-                img.save(tmp.name, 'JPEG', quality=90)  # Higher quality for complex images
-                temp_path = tmp.name
-            
-            # Close image to free memory before OCR
-            img.close()
-            img = None
-            gc.collect()
-            
-            # Run OCR with AGGRESSIVE settings for maximum text capture
-            logger.info("   Running EasyOCR (aggressive mode for infographics)...")
-            result = OCR_ENGINE.readtext(
-                temp_path,
-                detail=1,               # Return detailed results with confidence
-                paragraph=False,        # Line-by-line for complex layouts
-                
-                # AGGRESSIVE THRESHOLDS - capture more text from complex images
-                contrast_ths=0.05,      # LOWERED from 0.1 - more sensitive
-                adjust_contrast=0.6,    # Moderate adjustment
-                text_threshold=0.3,     # LOWERED from 0.4 - catch smaller text
-                low_text=0.2,           # LOWERED from 0.3 - catch faint text
-                link_threshold=0.2,     # LOWERED from 0.3 - better word linking
-                
-                # LARGER CANVAS - better for complex layouts
-                canvas_size=3200,       # INCREASED from 2560
-                mag_ratio=1.8,          # INCREASED from 1.5 - more detail
-                
-                # RELAXED GROUPING - better for scattered text in infographics
-                width_ths=0.3,          # LOWERED from 0.5 - accept varied widths
-                height_ths=0.3,         # LOWERED from 0.5 - accept varied heights
-                
-                # ADDITIONAL SETTINGS for better detection
-                slope_ths=0.3,          # Allow slightly slanted text
-                ycenter_ths=0.5,        # Better vertical alignment tolerance
-                add_margin=0.15         # Add margin around detected text
-            )
-            
-            # Extract text with VERY LOW confidence thresholds for infographics
-            if result and len(result) > 0:
-                text_lines = []
-                low_confidence_lines = []
-                filtered_out = []
-                
-                logger.info(f"   Found {len(result)} text detections")
-                
-                for i, detection in enumerate(result):
-                    try:
-                        if isinstance(detection, str):
-                            text = detection.strip()
-                            confidence = 1.0
-                        elif isinstance(detection, (list, tuple)):
-                            if len(detection) >= 3:
-                                text = str(detection[1]).strip()
-                                confidence = float(detection[2])
-                            elif len(detection) == 2:
-                                text = str(detection[1]).strip()
-                                confidence = 0.7
-                            else:
-                                continue
-                        else:
-                            continue
-                        
-                        if not text or len(text.strip()) == 0:
-                            continue
-                        
-                        # MUCH LOWER thresholds for complex infographics
-                        if confidence > 0.15:  # LOWERED from 0.3
-                            text_lines.append(text)
-                        elif confidence > 0.05:  # LOWERED from 0.1
-                            low_confidence_lines.append(text)
-                        else:
-                            # Track what we're filtering
-                            filtered_out.append((confidence, text[:30]))
-                            
-                    except (IndexError, ValueError, TypeError) as e:
-                        logger.warning(f"⚠️ Error processing detection {i}: {e}")
-                        continue
-                
-                # Log statistics
-                if filtered_out:
-                    logger.info(f"   ⚠️ Filtered out {len(filtered_out)} very low confidence (<0.05) detections")
-                
-                # Combine all lines
-                all_lines = text_lines + low_confidence_lines
-                
-                if all_lines:
-                    # Sort by vertical position if bounding boxes are available
-                    # This helps maintain reading order for complex layouts
-                    extracted_text = "\n".join(all_lines)
+            for group_name in modes:
+                reader = self.get_reader(group_name)
+                if not reader:
+                    continue
                     
-                    logger.info(f"✅ Extracted {len(text_lines)} high-conf + {len(low_confidence_lines)} low-conf lines")
-                    logger.info(f"   Total: {len(extracted_text)} characters")
-                    logger.info(f"   Kept: {len(all_lines)}/{len(result)} detections ({100*len(all_lines)/len(result):.1f}%)")
+                try:
+                    # detail=0 returns simple list of strings
+                    # paragraph=True merges lines
+                    text_list = reader.readtext(image_path, detail=0, paragraph=True)
                     
-                    if extracted_text:
-                        preview_len = min(200, len(extracted_text))
-                        logger.info(f"   Preview: {extracted_text[:preview_len]}...")
-                    
-                    return extracted_text.strip()
-                else:
-                    logger.warning("⚠️ All detections were below confidence threshold")
-                    logger.info(f"   Consider lowering thresholds - found {len(result)} detections but kept 0")
-                    return ""
+                    if text_list:
+                        joined_text = "\n".join(text_list).strip()
+                        if joined_text and joined_text not in seen_texts:
+                            logger.info(f"      [{group_name}] Found: {len(joined_text)} chars")
+                            # Add header only if we run multiple modes to distinguish
+                            if len(modes) > 1:
+                                full_text_results.append(f"--- {group_name.upper()} ---")
+                            full_text_results.append(joined_text)
+                            seen_texts.add(joined_text)
+                except Exception as ex:
+                    logger.warning(f"      [{group_name}] Error: {ex}")
+            
+            extracted_text = "\n\n".join(full_text_results)
+            
+            results = {}
+            if extracted_text.strip():
+                results['ocr'] = extracted_text
             else:
-                logger.info("ℹ️ No text detected in image")
-                return ""
+                logger.info("   🔤 OCR Found: No text")
                 
+            return results
+            
         except Exception as e:
-            logger.error(f"❌ OCR error: {e}")
-            logger.exception("Full traceback:")
-            return ""
-            
+            logger.error(f"❌ Analysis error: {e}")
+            return {}
         finally:
-            # SAFE: Cleanup temp files and memory
-            if temp_path and os.path.exists(temp_path):
-                try:
-                    os.unlink(temp_path)
-                except Exception as e:
-                    logger.warning(f"⚠️ Could not delete temp file: {e}")
-            
-            # SAFE: Close image if still open
-            if img is not None:
-                try:
-                    img.close()
-                except Exception:
-                    pass
-            
-            # Force garbage collection
-            gc.collect()
+            # Optional: Aggressively cleanup if RAM is critical
+            # gc.collect()
+            pass
 
-ocr_service = FastOCRService()
+ocr_service = EasyOCRService()
 
 
 # ============================================================================
@@ -329,7 +159,9 @@ def detect_language(text: str) -> str:
     
     try:
         from langdetect import detect
-        lang = detect(text)
+        # If we have headers like "--- LATIN ---", strip them for detection
+        clean_text = text.replace("--- LATIN ---", "").replace("--- CYRILLIC ---", "").replace("--- ARABIC ---", "")
+        lang = detect(clean_text)
         return lang
     except Exception:
         logger.warning(f"[LANG] Could not detect language, assuming German")
@@ -350,34 +182,20 @@ def needs_translation(text: str) -> tuple[bool, str]:
     logger.info(f"[LANG] Unsupported language {detected_lang}, storing original")
     return False, detected_lang
 
-# ============================================================================
-# WORKER JOB FUNCTION
-# ============================================================================
+
 def analyze_and_update(
     message_id: str,
     image_path: str,
     extract_text: bool = True,
-    detect_objects: bool = False,
+    detect_objects: bool = False, 
     translate_extracted_text: bool = True,
     owner_id: str = None,
     case_id: int = None,
-    job_id: str = None
+    job_id: str = None,
+    modes: list = None
 ):
     """
-    Main OCR worker function with memory management and proper Neo4j updates
-    
-    Args:
-        message_id: Full message ID (channel_id-message_id)
-        image_path: Path to image file
-        extract_text: Whether to perform OCR
-        detect_objects: Whether to detect objects (not implemented)
-        translate_extracted_text: Whether to queue translation
-        owner_id: Owner ID for multi-tenancy
-        case_id: Case ID for filtering
-        job_id: Parent job ID for chaining
-    
-    Returns:
-        bool: True if successful, False otherwise
+    Main Image Analysis worker function using EasyOCR Multi-Pass
     """
     import gc
     
@@ -387,25 +205,26 @@ def analyze_and_update(
             logger.error(f"❌ Image not found: {image_path}")
             return False
         
-        extracted_text = None
+        extracted_text = ""
         detected_lang = None
         
-        # Step 1: Extract text with OCR
+        # Step 1: Analyze with EasyOCR
         if extract_text:
-            logger.info("📝 Step 1: Extracting text with EasyOCR...")
-            extracted_text = ocr_service.extract_text(image_path)
+            logger.info("🔍 Step 1: Analyzing image with EasyOCR Multi-Pass...")
+            analysis_results = ocr_service.analyze_image(image_path, modes=modes)
             
-            if extracted_text:
+            ocr_text = analysis_results.get('ocr', '')
+            
+            if ocr_text:
+                extracted_text = f"[TEXT IN IMAGE]\n{ocr_text}"
                 
-                # Detect language of extracted text
-                detected_lang = detect_language(extracted_text)
+                # Detect language 
+                detected_lang = detect_language(ocr_text)
                 logger.info(f"   Detected language: {detected_lang}")
             else:
-                logger.info("ℹ️ Step 1: No text found in image")
-                detected_lang = 'unknown'
-        
-        from aether_lib.neo4j_client.connection import run_in_neo4j_loop
-        from aether_lib.neo4j_client.messages import update_message_image_analysis
+                 logger.info("ℹ️ Step 1: No text found")
+                 detected_lang = 'unknown'
+
         
         result = run_in_neo4j_loop(
             update_message_image_analysis,
@@ -450,5 +269,4 @@ def analyze_and_update(
         return False
         
     finally:
-        # CRITICAL: Force garbage collection after each job
         gc.collect()

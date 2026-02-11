@@ -59,3 +59,22 @@ async def write_recommendations(root, recs):
                 rec_username=r.get("username"),
                 rec_title=r.get("title"),
             )
+
+
+@_with_constraints
+async def get_latest_message_id(username: str) -> int | None:
+    """Get the highest message ID (mid) for a channel"""
+    async with get_driver().session() as session:
+        owner = get_owner_id()
+        rec = await (
+            await session.run(
+                """
+                MATCH (c:Channel {username:$username, owner_id:$owner})
+                      -[:HAS_MESSAGE]->(m:Message)
+                RETURN max(m.mid) as last_id
+                """,
+                username=username,
+                owner=owner,
+            )
+        ).single()
+        return rec["last_id"] if rec and rec["last_id"] is not None else None

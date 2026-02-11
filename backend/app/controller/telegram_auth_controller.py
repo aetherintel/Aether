@@ -16,7 +16,8 @@ router = APIRouter(prefix="/telegram-auth", tags=["telegram-auth"])
 
 API_ID = int(os.getenv("TG_API_ID"))
 API_HASH = os.getenv("TG_API_HASH")
-SESSION_DIR = Path("/app/sessions")
+# Default to /app/sessions if not set, but tests override this to /tmp/sessions
+SESSION_DIR = Path(os.getenv("SESSION_DIR", "/app/sessions"))
 SESSION_DIR.mkdir(parents=True, exist_ok=True)
 
 # Temporäre Sessions für Setup-Prozess

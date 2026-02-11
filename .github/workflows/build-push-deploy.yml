@@ -34,6 +34,9 @@ jobs:
           - service: telegram-scraper
             context: .
             dockerfile: ./telegram_scraper/Dockerfile
+          - service: report-worker
+            context: .
+            dockerfile: ./workers/report_worker/Dockerfile
 
           # AI Worker services
           - service: translation-worker
@@ -57,6 +60,37 @@ jobs:
           - service: photon
             context: .
             dockerfile: ./docker/photon/Dockerfile
+          - service: llm-service
+            context: ./workers/llm-service
+            dockerfile: ./workers/llm-service/Dockerfile
+            build-args: |
+              USE_CUDA=true
+
+          # Model Data Containers
+          - service: llm-models
+            context: ./models
+            dockerfile: llm/Dockerfile
+          - service: translation-models
+            context: ./models
+            dockerfile: translation/Dockerfile
+          - service: audio-models
+            context: ./models
+            dockerfile: audio/Dockerfile
+          - service: emotion-models
+            context: ./models
+            dockerfile: emotion/Dockerfile
+          - service: classification-models
+            context: ./models
+            dockerfile: classifier/Dockerfile
+          - service: image-models
+            context: ./models
+            dockerfile: image/Dockerfile
+          - service: geolocation-models
+            context: ./models
+            dockerfile: geolocation/Dockerfile
+          - service: photon-data
+            context: ./models
+            dockerfile: photon/Dockerfile
 
     steps:
       - name: 🧾 Checkout repository
@@ -286,7 +320,7 @@ jobs:
               --scale geolocation-worker=2 \
               --force-recreate --no-build \
               telegram-worker translation-worker audio-worker emotion-worker \
-              image-worker classification-worker geolocation-worker
+              image-worker classification-worker geolocation-worker report-worker llm-service
 
             # ═══════════════════════════════════════════════════════════════
             # PHASE 7: Cleanup

@@ -121,6 +121,8 @@ class ScrapeRequest(BaseModel):
     enable_emotion_analysis: bool = Field(default=False)
     enable_label_classifier: bool = Field(default=False)
     enable_geolocation_extraction: bool = Field(default=False)
+    ocr_languages: List[str] = Field(default=["latin"], description="OCR Languages (latin, cyrillic, arabic)")
+
 # ============================================================================
 # TELEGRAM SCRAPER
 # ============================================================================
@@ -140,6 +142,7 @@ class TelegramScrapePayload(BaseJobPayload):
     enable_emotion_analysis: bool = Field(default=False, description="Enable emotion detection")
     enable_label_classifier: bool = Field(default=False, description="Enable text classification")
     enable_geolocation_extraction: bool = Field(default=False, description="Enable location extraction")
+    ocr_languages: List[str] = Field(default=["latin"], description="OCR Languages (latin, cyrillic, arabic)")
 
     class Config:
         populate_by_name = True  # Allow both field names and aliases
@@ -177,6 +180,7 @@ class ImageJobPayload(BaseJobPayload):
     extract_text: bool = Field(default=True, description="Perform OCR to extract text")
     detect_objects: bool = Field(default=True, description="Detect objects in image")
     translate_extracted_text: bool = Field(default=False, description="Auto-translate extracted text")
+    ocr_languages: List[str] = Field(default=["latin"], description="List of OCR language groups to use")
 
 
 # ============================================================================

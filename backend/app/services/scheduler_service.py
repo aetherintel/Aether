@@ -2,10 +2,19 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 from datetime import datetime
 import logging
-from controller.report_controller import create_report_pdf
-from controller.casefile_controller import SessionLocal, CaseFileModel
+import os
+from redis import Redis
+from rq import Queue
+from database import SessionLocal
+from model.casefile_model import CaseFileModel
 
 logger = logging.getLogger(__name__)
+
+# Setup Redis Queue
+REDIS_HOST = os.getenv("REDIS_HOST", "redis")
+REDIS_PORT = int(os.getenv("REDIS_PORT", "6379"))
+redis_conn = Redis(host=REDIS_HOST, port=REDIS_PORT)
+report_queue = Queue('report-jobs', connection=redis_conn)
 
 scheduler = AsyncIOScheduler()
 
@@ -27,18 +36,18 @@ async def generate_reports_for_frequency(frequency: str):
         
         for case in cases:
             try:
-                logger.info(f"Generating report for case {case.id} ({case.title})")
-                # Pass report_sections to generation function
-                # Note: create_report_pdf needs to be updated to accept sections
-                # For now, we pass it, but we need to update report_controller next.
-                await create_report_pdf(
+                logger.info(f"Enqueuing report job for case {case.id} ({case.title})")
+                
+                # Enqueue job to worker
+                report_queue.enqueue(
+                    'workers.report_worker.worker.run_generate_report_job',
                     case_id=case.id, 
                     owner_id=case.owner_id, 
                     period=frequency,
                     sections=case.report_sections or ["stats", "charts", "messages"]
                 )
             except Exception as e:
-                logger.error(f"Failed to generate report for case {case.id}: {e}")
+                logger.error(f"Failed to enqueue report for case {case.id}: {e}")
                 
     except Exception as e:
         logger.error(f"Error in report generation job: {e}")

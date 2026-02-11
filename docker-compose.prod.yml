@@ -214,6 +214,42 @@ services:
       replicas: 2
 
   # ============================================================================
+  # REPORT WORKER
+  # ============================================================================
+  report-worker:
+    image: ghcr.io/${GITHUB_REPOSITORY_OWNER:-aetherintel}/aether-report-worker:latest
+    command: >
+      rq worker report-jobs
+      --url redis://redis:6379
+      --worker-ttl 900
+      --job-monitoring-interval 30
+    restart: unless-stopped
+    environment:
+      DB_URL: postgresql://${DB_USER}:${DB_PASSWORD}@postgres:5432/aether
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      NEO4J_URI: bolt://neo4j:7687
+      NEO4J_USER: ${NEO4J_USER}
+      NEO4J_PASSWORD: ${NEO4J_PASSWORD}
+      PYTHONPATH: /app:/app/app
+    volumes:
+      - ./shared/media:/shared/media:ro
+      - ./shared/reports:/shared/reports
+    depends_on:
+      - redis
+      - postgres
+      - neo4j
+    networks:
+      - aether-network
+    deploy:
+      replicas: 1
+      resources:
+        limits:
+          memory: 2G
+        reservations:
+          memory: 512M
+
+  # ============================================================================
   # TRANSLATION WORKER
   # ============================================================================
   translation-worker:
@@ -234,12 +270,13 @@ services:
       NEO4J_PASSWORD: ${NEO4J_PASSWORD}
       DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@postgres:5432/${POSTGRES_DB}
     volumes:
-      - translation_models:/app/models
+      - app_translation_models:/app/models
     depends_on:
       - redis
       - postgres
       - neo4j
       - backend
+      - translation-models
     networks:
       - aether-network
     deploy:
@@ -251,6 +288,10 @@ services:
         reservations:
           cpus: '1'
           memory: 2G
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
 
   # ============================================================================
   # IMAGE ANALYSIS WORKER
@@ -273,11 +314,12 @@ services:
       NEO4J_PASSWORD: ${NEO4J_PASSWORD}
     volumes:
       - ./shared/media:/shared/media:ro
-      - image_models:/app/models
+      - app_image_models:/app/models
     depends_on:
       - redis
       - neo4j
       - backend
+      - image-models
     networks:
       - aether-network
     deploy:
@@ -286,6 +328,10 @@ services:
           memory: 4G
         reservations:
           memory: 1G
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
 
   # ============================================================================
   # AUDIO TRANSCRIPTION WORKER (Whisper)
@@ -306,12 +352,13 @@ services:
       MODELS_PATH: /app/models
       USE_QUANTIZATION: "true"
     volumes:
-      - audio_models:/app/models
+      - app_audio_models:/app/models
       - ./shared/media:/shared/media:ro
     depends_on:
       - redis
       - neo4j
       - backend
+      - audio-models
     networks:
       - aether-network
     deploy:
@@ -320,6 +367,10 @@ services:
           memory: 6G
         reservations:
           memory: 1G
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
 
   # ============================================================================
   # EMOTION ANALYSIS WORKER
@@ -333,19 +384,18 @@ services:
       --job-monitoring-interval 30
     restart: unless-stopped
     environment:
-
-      
       NEO4J_URI: ${NEO4J_URI}
       NEO4J_USER: ${NEO4J_USER}
       NEO4J_PASSWORD: ${NEO4J_PASSWORD}
       MODELS_PATH: /app/models
       USE_QUANTIZATION: "true"
     volumes:
-      - emotion_models:/app/models
+      - app_emotion_models:/app/models
     depends_on:
       - redis
       - neo4j
       - backend
+      - emotion-models
     networks:
       - aether-network
     deploy:
@@ -355,6 +405,10 @@ services:
           memory: 4G
         reservations:
           memory: 1G
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
 
   # ============================================================================
   # CLASSIFICATION WORKER
@@ -368,21 +422,20 @@ services:
       --job-monitoring-interval 30
     restart: unless-stopped
     environment:
-
-      
       NEO4J_URI: ${NEO4J_URI}
       NEO4J_USER: ${NEO4J_USER}
       NEO4J_PASSWORD: ${NEO4J_PASSWORD}
       MODELS_PATH: /app/models
       USE_QUANTIZATION: "true"
     volumes:
-      - classifier_models:/app/models
+      - app_classifier_models:/app/models
       - ./shared/media:/shared/media:ro
     depends_on:
       - redis
       - neo4j
       - postgres
       - backend
+      - classifier-models
     networks:
       - aether-network
     deploy:
@@ -391,6 +444,10 @@ services:
           memory: 3G
         reservations:
           memory: 1G
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
 
   # ============================================================================
   # GEOLOCATION WORKER
@@ -414,16 +471,15 @@ services:
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-
-      
       PHOTON_URL: http://photon:2322
     volumes:
-      - geolocation_models:/app/models
+      - app_geolocation_models:/app/models
     depends_on:
       - redis
       - neo4j
       - photon
       - backend
+      - geolocation-models
     networks:
       - aether-network
     deploy:
@@ -435,6 +491,38 @@ services:
           memory: 512M
 
   # ============================================================================
+  # LLM SERVICE
+  # ============================================================================
+  llm-service:
+    image: ghcr.io/${GITHUB_REPOSITORY_OWNER:-aetherintel}/aether-llm-service:latest
+    container_name: aether-llm-service
+    ports:
+      - "8001:8001"
+    volumes:
+      - app_llm_models:/models/llm    # Shared models volume
+    environment:
+      - MODEL_PATH=/models/llm/qwen2.5-7b-instruct-q4_k_m.gguf
+      - N_THREADS=6
+      - N_CTX=8192
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - aether-network
+    depends_on:
+      - llm-models
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+  # ============================================================================
   # PHOTON GEOCODING SERVICE
   # ============================================================================
   photon:
@@ -444,7 +532,7 @@ services:
     ports:
       - "127.0.0.1:2322:2322"
     volumes:
-      - photon_data:/photon/photon_data
+      - app_photon_data:/photon/photon_data
     environment:
       - JAVA_OPTS=-Xmx2g
     networks:
@@ -455,6 +543,77 @@ services:
       timeout: 10s
       retries: 5
       start_period: 60s
+    depends_on:
+       - photon-data
+
+  # ============================================================================
+  # MODEL CONTAINERS
+  # ============================================================================
+  
+  translation-models:
+    build:
+      context: ./models
+      dockerfile: translation/Dockerfile
+    image: ghcr.io/${GITHUB_REPOSITORY_OWNER:-aetherintel}/aether-translation-models:latest
+    volumes:
+      - app_translation_models:/models
+
+  audio-models:
+    build:
+      context: ./models
+      dockerfile: audio/Dockerfile
+    image: ghcr.io/${GITHUB_REPOSITORY_OWNER:-aetherintel}/aether-audio-models:latest
+    volumes:
+      - app_audio_models:/models
+
+  emotion-models:
+    build:
+      context: ./models
+      dockerfile: emotion/Dockerfile
+    image: ghcr.io/${GITHUB_REPOSITORY_OWNER:-aetherintel}/aether-emotion-models:latest
+    volumes:
+      - app_emotion_models:/models
+
+  classifier-models:
+    build:
+      context: ./models
+      dockerfile: classifier/Dockerfile
+    image: ghcr.io/${GITHUB_REPOSITORY_OWNER:-aetherintel}/aether-classifier-models:latest
+    volumes:
+      - app_classifier_models:/models
+
+  image-models:
+    build:
+      context: ./models
+      dockerfile: image/Dockerfile
+    image: ghcr.io/${GITHUB_REPOSITORY_OWNER:-aetherintel}/aether-image-models:latest
+    volumes:
+      - app_image_models:/models
+
+  geolocation-models:
+    build:
+      context: ./models
+      dockerfile: geolocation/Dockerfile
+    image: ghcr.io/${GITHUB_REPOSITORY_OWNER:-aetherintel}/aether-geolocation-models:latest
+    volumes:
+      - app_geolocation_models:/models
+
+  photon-data:
+    build:
+      context: ./models
+      dockerfile: photon/Dockerfile
+    image: ghcr.io/${GITHUB_REPOSITORY_OWNER:-aetherintel}/aether-photon-data:latest
+    volumes:
+      - app_photon_data:/photon/photon_data
+
+  llm-models:
+    build:
+      context: ./models
+      dockerfile: llm/Dockerfile
+    image: ghcr.io/${GITHUB_REPOSITORY_OWNER:-aetherintel}/aether-llm-models:latest
+    volumes:
+      - app_llm_models:/models/llm
+
 networks:
   aether-network:
     driver: bridge
@@ -466,25 +625,12 @@ volumes:
   keycloak_data:
   tg_sessions:
   redis_data:
-  ai_models:
-  translation_models:
-    external: true
-    name: app_translation_models  # ← Expliziter Name
-  audio_models:
-    external: true
-    name: app_audio_models
-  emotion_models:
-    external: true
-    name: app_emotion_models
-  classifier_models:
-    external: true
-    name: app_classifier_models
-  image_models:
-    external: true
+  app_translation_models:
+  app_audio_models:
+  app_emotion_models:
+  app_classifier_models:
+  app_image_models:
     name: app_image_models
-  geolocation_models:
-    external: true
-    name: app_geolocation_models
-  photon_data:
-    external: true
-    name: app_photon_data
+  app_geolocation_models:
+  app_llm_models:
+  app_photon_data:

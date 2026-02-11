@@ -1,0 +1,14 @@
+.container {
+  padding-top: 0;
+  padding-bottom: var(--mantine-spacing-xl);
+}
+
+.statCard {
+  background-color: light-dark(var(--mantine-color-white), var(--mantine-color-dark-6));
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.statCard:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--mantine-shadow-md);
+}

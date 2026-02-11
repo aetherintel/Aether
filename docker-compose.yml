@@ -39,6 +39,25 @@ services:
       timeout: 5s
       retries: 10
 
+  mcp-neo4j-cypher-server:
+    image: mcp/neo4j-cypher:latest
+    ports:
+      - '9090:8000'
+    environment:
+      - NEO4J_URI=bolt://neo4j:7687
+      - NEO4J_USERNAME=${NEO4J_USER}
+      - NEO4J_PASSWORD=${NEO4J_PASSWORD}
+      - NEO4J_DATABASE=neo4j
+      - NEO4J_TRANSPORT=sse
+      - NEO4J_MCP_SERVER_HOST=0.0.0.0
+      - NEO4J_MCP_SERVER_PORT=8000
+      - NEO4J_MCP_SERVER_PATH=/api/mcp/
+      - NEO4J_NAMESPACE=local
+    depends_on:
+      - neo4j
+    networks:
+      - aether-network
+
   keycloak:
     image: quay.io/keycloak/keycloak:24.0.2
     container_name: keycloak
@@ -93,6 +112,8 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
       - tg_sessions:/app/sessions
       - ${MEDIA_PATH}:/shared/media
+      - ./shared/reports:/shared/reports
+      - ./backend/app:/app
       - ./aether_lib:/app/aether_lib:ro
     depends_on:
       postgres:
@@ -148,9 +169,6 @@ services:
     image: telegram-job:latest
     command: >
       rq worker telegram-jobs
-      --url redis://redis:6379
-      --worker-ttl 0
-      --job-monitoring-interval 60
     restart: unless-stopped
     environment:
       TG_API_ID: ${TG_API_ID}
@@ -186,6 +204,41 @@ services:
     networks:
       - aether-network
 
+  report-worker:
+    build:
+      context: .
+      dockerfile: workers/report_worker/Dockerfile
+    command: >
+      rq worker report-jobs
+      --url redis://redis:6379
+      --worker-ttl 900
+      --job-monitoring-interval 30
+    restart: unless-stopped
+    env_file:
+      - .env.dev
+    environment:
+      DB_URL: postgresql://${DB_USER}:${DB_PASSWORD}@postgres:5432/aether
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      NEO4J_URI: ${NEO4J_URI}
+      NEO4J_USER: ${NEO4J_USER}
+      NEO4J_PASSWORD: ${NEO4J_PASSWORD}
+      PYTHONPATH: /app:/app/app
+    volumes:
+      - ./backend/app:/app/app
+      - ${MEDIA_PATH}:/shared/media:ro
+      - ./shared/reports:/shared/reports
+      - ./aether_lib:/app/aether_lib:ro
+    depends_on:
+      redis:
+        condition: service_started
+      postgres:
+        condition: service_started
+      neo4j:
+        condition: service_healthy
+    networks:
+      - aether-network
+
   translation-worker:
     build:
       context: .
@@ -209,19 +262,23 @@ services:
       - ./aether_lib:/app/aether_lib:ro
       - app_translation_models:/app/models
     depends_on:
-      - redis
-      - neo4j
-      - postgres
-      - translation-models
+      redis:
+        condition: service_started
+      neo4j:
+        condition: service_healthy
+      postgres:
+        condition: service_started
+      translation-models:
+        condition: service_started
     networks:
       - aether-network
     deploy:
       replicas: 1
       resources:
         limits:
-          memory: 4G
+          memory: 6G
         reservations:
-          memory: 2G
+          memory: 3G
 
   image-worker:
     build:
@@ -245,9 +302,12 @@ services:
       - ./aether_lib:/app/aether_lib:ro
       - app_image_models:/app/models/image
     depends_on:
-      - redis
-      - neo4j
-      - image-models
+      redis:
+        condition: service_started
+      neo4j:
+        condition: service_healthy
+      image-models:
+        condition: service_started
     networks:
       - aether-network
     deploy:
@@ -278,9 +338,12 @@ services:
       - app_audio_models:/app/models/audio
       - ${MEDIA_PATH}:/shared/media:ro
     depends_on:
-      - redis
-      - neo4j
-      - audio-models
+      redis:
+        condition: service_started
+      neo4j:
+        condition: service_healthy
+      audio-models:
+        condition: service_started
     networks:
       - aether-network
     deploy:
@@ -310,9 +373,12 @@ services:
       - ./aether_lib:/app/aether_lib:ro
       - app_emotion_models:/app/models
     depends_on:
-      - redis
-      - neo4j
-      - emotion-models
+      redis:
+        condition: service_started
+      neo4j:
+        condition: service_healthy
+      emotion-models:
+        condition: service_started
     networks:
       - aether-network
     deploy:
@@ -343,9 +409,12 @@ services:
       - app_classifier_models:/app/models/classifier
       - ${MEDIA_PATH}:/shared/media:ro
     depends_on:
-      - redis
-      - neo4j
-      - classifier-models
+      redis:
+        condition: service_started
+      neo4j:
+        condition: service_healthy
+      classifier-models:
+        condition: service_started
     networks:
       - aether-network
     deploy:
@@ -383,11 +452,16 @@ services:
       - app_geolocation_models:/app/models/geolocation
       - app_photon_data:/app/photon_data
     depends_on:
-      - redis
-      - neo4j
-      - postgres
-      - photon
-      - geolocation-models
+      redis:
+        condition: service_started
+      neo4j:
+        condition: service_healthy
+      postgres:
+        condition: service_started
+      photon:
+        condition: service_started
+      geolocation-models:
+        condition: service_started
     networks:
       - aether-network
     deploy:
@@ -397,6 +471,26 @@ services:
           memory: 2G
         reservations:
           memory: 512M
+  llm-service:
+      build: ./workers/llm-service
+      container_name: aether-llm-service
+      ports:
+        - "8001:8001"
+      volumes:
+        - ./models/llm:/models/llm    # Bind mount local models directory
+        - ./workers/llm-service:/app
+      environment:
+        - MODEL_PATH=/models/llm/qwen2.5-7b-instruct-q4_k_m.gguf
+        - N_THREADS=8
+        - N_CTX=8192
+      restart: unless-stopped
+      healthcheck:
+        test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+        interval: 30s
+        timeout: 10s
+        retries: 3
+      networks:
+        - aether-network
 
   photon:
     build:
@@ -463,6 +557,13 @@ services:
     volumes:
       - app_geolocation_models:/models
   
+  llm-models:
+    build:
+      context: ./models
+      dockerfile: llm/Dockerfile
+    volumes:
+      - app_llm_models:/models
+
 volumes:
   pgdata:
   neo4j_data:
@@ -477,6 +578,7 @@ volumes:
   app_image_models:
   app_geolocation_models:
   app_photon_data:
+  app_llm_models:
 
 networks:
   aether-network:

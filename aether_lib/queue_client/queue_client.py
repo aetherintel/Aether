@@ -50,6 +50,13 @@ class QueueClient:
                 'limit_messages': payload.limit_messages,
                 'owner_id': payload.owner_id,
                 'case_id': payload.case_id,
+                'enable_translation': payload.enable_translation,
+                'enable_image_analysis': payload.enable_image_analysis,
+                'enable_audio_transcription': payload.enable_audio_transcription,
+                'enable_emotion_analysis': payload.enable_emotion_analysis,
+                'enable_label_classifier': payload.enable_label_classifier,
+                'enable_geolocation_extraction': payload.enable_geolocation_extraction,
+                'ocr_languages': payload.ocr_languages
             },
             meta={'owner_id': payload.owner_id, 'case_id': payload.case_id}
         )
@@ -112,6 +119,7 @@ class QueueClient:
                 'translate_extracted_text': image_analysis_payload.translate_extracted_text,
                 'owner_id': image_analysis_payload.owner_id,
                 'case_id': image_analysis_payload.case_id,
+                'modes': image_analysis_payload.ocr_languages
             },
             meta={'owner_id': image_analysis_payload.owner_id, 'case_id': image_analysis_payload.case_id}
         )

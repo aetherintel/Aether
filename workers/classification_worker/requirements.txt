@@ -6,7 +6,7 @@ accelerate
 pydantic
 # Worker infrastructure
 redis
-rq
+rq==1.16.2
 neo4j
 
 # Utilities

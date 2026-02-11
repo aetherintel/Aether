@@ -19,6 +19,10 @@ def get_client():
 async def login(session_string=None):
     global _client
     
+    if _client is not None and _client.is_connected():
+        print("[LOGIN] Client already connected. Reusing existing client.", flush=True)
+        return
+
     if not session_string:
         session_string = os.getenv("SESSION_STRING")
     

@@ -1,11 +1,11 @@
 # Core ML libraries - must be compatible versions
-transformers==4.37.2
-tokenizers==0.15.2
+transformers==4.40.0
+# tokenizers will be installed as a dependency of transformers
 sentencepiece==0.1.99
 accelerate
 # Other dependencies
 redis
-rq
+rq==1.16.2
 neo4j
 python-dotenv
 requests

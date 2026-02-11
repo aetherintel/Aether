@@ -8,7 +8,8 @@ import { Dashboard } from './pages/Dashboard.page';
 import { Login } from './pages/Login/Login.page';
 import { Register } from './pages/Register/Register.page';
 import { Settings } from './pages/Settings.page';
-
+import { Reports } from './pages/Reports.page';
+import { AgentDashboard } from './pages/AgentDashboard.page';
 
 const router = createBrowserRouter([
   {
@@ -33,7 +34,15 @@ const router = createBrowserRouter([
       },
       {
         element: <ProtectedRoute />,
+        children: [{ path: '/reports', element: <Reports /> }],
+      },
+      {
+        element: <ProtectedRoute />,
         children: [{ path: '/settings', element: <Settings /> }],
+      },
+      {
+        element: <ProtectedRoute />,
+        children: [{ path: '/agent', element: <AgentDashboard /> }],
       },
     ],
   },

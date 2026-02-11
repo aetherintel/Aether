@@ -473,6 +473,7 @@ class QueueService:
         
         return {
             "job_id": job.id,
+            "id": job.id,
             "status": status,
             "queue": queue_name,
             "mode": mode,

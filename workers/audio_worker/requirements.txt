@@ -1,6 +1,6 @@
 # Core runtime
 redis==5.0.1
-rq==1.15.1
+rq==1.16.2
 requests==2.31.0
 pydantic
 # Audio transcription (ARM + CPU-safe versions)
