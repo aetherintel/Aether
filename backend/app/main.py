@@ -37,26 +37,12 @@ app.include_router(stats_controller.router)
 app.include_router(dashboard_controller.router)
 app.include_router(agent_controller.router)
 
+    # Dynamic origins from environment
 origins = [
-    "http://localhost",
-    "http://localhost:5173",
-    "https://æther.tech",
-    "https://xn--ther-uoa.tech",
-    "http://localhost:8080",
-    "http://localhost:9001",
-    "http://keycloak:8080",
-    "http://65.108.38.53",
-    "http://65.108.38.53:8080",
-    "http://65.108.38.53:9001",
-    "http://65.108.38.53:5173",
-    "https://aethery.cloud",
-    "https://aethery.cloud:8080",
-    "https://aethery.cloud:9001",
-    "https://aethery.cloud:5173",
-    "http://aethery.cloud",
-    "http://aethery.cloud:8080",
-    "http://aethery.cloud:9001",
-    "http://aethery.cloud:5173"
+    os.getenv("FRONTEND_URL", "http://localhost:5173"),
+    os.getenv("KEYCLOAK_URL", "http://keycloak:8080"),
+    f"https://{os.getenv('PROD_DOMAIN', 'localhost')}",
+    f"http://{os.getenv('PROD_DOMAIN', 'localhost')}",
 ]
 
 app.add_middleware(
