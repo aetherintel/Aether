@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from contextlib import asynccontextmanager
+import os
 
 from controller import message_controller
 from controller import auth_controller
