@@ -308,7 +308,6 @@ services:
           memory: 2G
           devices:
             - driver: nvidia
-              count: 1
               capabilities: [gpu]
 
   # ============================================================================
@@ -348,7 +347,6 @@ services:
           memory: 1G
           devices:
             - driver: nvidia
-              count: 1
               capabilities: [gpu]
 
   # ============================================================================
@@ -387,7 +385,6 @@ services:
           memory: 1G
           devices:
             - driver: nvidia
-              count: 1
               capabilities: [gpu]
 
   # ============================================================================
@@ -425,7 +422,6 @@ services:
           memory: 1G
           devices:
             - driver: nvidia
-              count: 1
               capabilities: [gpu]
 
   # ============================================================================
@@ -498,7 +494,6 @@ services:
         reservations:
           devices:
             - driver: nvidia
-              count: 1
               capabilities: [gpu]
 
   # ============================================================================
