@@ -51,9 +51,7 @@ jobs:
           - service: emotion-worker
             context: .
             dockerfile: ./workers/emotion_worker/Dockerfile
-          - service: classification-worker
-            context: .
-            dockerfile: ./workers/classification_worker/Dockerfile
+
           - service: geolocation-worker
             context: .
             dockerfile: ./workers/geolocation_worker/Dockerfile
@@ -199,7 +197,7 @@ jobs:
               backend frontend \
               telegram-worker report-worker \
               translation-worker image-worker audio-worker \
-              emotion-worker classification-worker geolocation-worker \
+              emotion-worker geolocation-worker \
               llm-service photon mcp-neo4j-cypher-server
 
             # ═══════════════════════════════════════════════════════════════
@@ -212,10 +210,10 @@ jobs:
             sleep 10
             
             echo "🗄️ checking/creating databases..."
-            # Create DBs if not exist (Idempotent)
-            docker exec -i postgres psql -U $DB_USER -d postgres -c "SELECT 'CREATE DATABASE keycloak' WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'keycloak')\gexec" || true
-            docker exec -i postgres psql -U $DB_USER -d postgres -c "SELECT 'CREATE DATABASE telegramdb' WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'telegramdb')\gexec" || true
-            docker exec -i postgres psql -U $DB_USER -d postgres -c "SELECT 'CREATE DATABASE aether' WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'aether')\gexec" || true
+            # Try to create DBs, ignore error if they exist
+            docker exec -i postgres createdb -U $DB_USER keycloak 2>/dev/null || true
+            docker exec -i postgres createdb -U $DB_USER telegramdb 2>/dev/null || true
+            docker exec -i postgres createdb -U $DB_USER aether 2>/dev/null || true
 
             # ═══════════════════════════════════════════════════════════════
             # PHASE 3: Keycloak (smart rebuild)
@@ -312,7 +310,7 @@ jobs:
               --scale geolocation-worker=2 \
               --force-recreate --no-build \
               telegram-worker translation-worker audio-worker emotion-worker \
-              image-worker classification-worker geolocation-worker report-worker llm-service
+              image-worker geolocation-worker report-worker llm-service
 
             # ═══════════════════════════════════════════════════════════════
             # PHASE 7: Cleanup

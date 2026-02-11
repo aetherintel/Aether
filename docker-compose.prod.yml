@@ -592,13 +592,7 @@ services:
     volumes:
       - app_emotion_models:/models
 
-  classifier-models:
-    build:
-      context: ./models
-      dockerfile: classifier/Dockerfile
-    image: ghcr.io/${GITHUB_REPOSITORY_OWNER:-aetherintel}/aether-classifier-models:latest
-    volumes:
-      - app_classifier_models:/models
+
 
   image-models:
     build:
