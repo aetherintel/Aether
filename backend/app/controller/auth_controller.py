@@ -114,7 +114,7 @@ def send_verification_email(user_id: str, admin_token: str):
     # Query Parameter für Redirect (EXTERN URL!)
     params = {
         # TODO: redirect URL einfügen
-        "redirect_uri": os.getenv("FRONTEND_URL", "http://65.108.38.53/"),
+        "redirect_uri": os.getenv("FRONTEND_URL", "http://localhost:5173/"),
         "client_id": os.getenv("KEYCLOAK_CLIENT_ID")
     }
     print(f"Sending verification email to user {user_id} with params: {params}")
