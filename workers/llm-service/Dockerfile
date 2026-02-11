@@ -11,7 +11,13 @@ RUN apt-get update && apt-get install -y \
 
 COPY requirements.txt .
 
-RUN CMAKE_ARGS="-DGGML_AVX2=ON" pip install --no-cache-dir llama-cpp-python --upgrade --force-reinstall --no-cache-dir
+ARG USE_CUDA=false
+RUN if [ "$USE_CUDA" = "true" ]; then \
+      pip install llama-cpp-python --no-cache-dir --force-reinstall --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cu122; \
+    else \
+      CMAKE_ARGS="-DGGML_AVX2=ON" pip install --no-cache-dir llama-cpp-python --force-reinstall; \
+    fi
+
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY main.py .

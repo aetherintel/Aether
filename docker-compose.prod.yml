@@ -288,6 +288,10 @@ services:
         reservations:
           cpus: '1'
           memory: 2G
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
 
   # ============================================================================
   # IMAGE ANALYSIS WORKER
@@ -324,6 +328,10 @@ services:
           memory: 4G
         reservations:
           memory: 1G
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
 
   # ============================================================================
   # AUDIO TRANSCRIPTION WORKER (Whisper)
@@ -359,6 +367,10 @@ services:
           memory: 6G
         reservations:
           memory: 1G
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
 
   # ============================================================================
   # EMOTION ANALYSIS WORKER
@@ -393,6 +405,10 @@ services:
           memory: 4G
         reservations:
           memory: 1G
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
 
   # ============================================================================
   # CLASSIFICATION WORKER
@@ -428,6 +444,10 @@ services:
           memory: 3G
         reservations:
           memory: 1G
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
 
   # ============================================================================
   # GEOLOCATION WORKER
@@ -481,7 +501,7 @@ services:
     volumes:
       - app_llm_models:/models/llm    # Shared models volume
     environment:
-      - MODEL_PATH=/models/llm/Phi-3.5-mini-instruct-Q6_K.gguf
+      - MODEL_PATH=/models/llm/qwen2.5-7b-instruct-q4_k_m.gguf
       - N_THREADS=6
       - N_CTX=8192
     restart: unless-stopped
@@ -494,6 +514,13 @@ services:
       - aether-network
     depends_on:
       - llm-models
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
 
   # ============================================================================
   # PHOTON GEOCODING SERVICE

@@ -63,6 +63,8 @@ jobs:
           - service: llm-service
             context: ./workers/llm-service
             dockerfile: ./workers/llm-service/Dockerfile
+            build-args: |
+              USE_CUDA=true
 
           # Model Data Containers
           - service: llm-models
