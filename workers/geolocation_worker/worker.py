@@ -4,7 +4,7 @@ import asyncio
 import os
 import pickle
 from typing import List, Dict, Optional, Tuple
-import spacy
+from gliner import GLiNER  # Replaces spaCy
 from rq import get_current_job
 from neo4j import AsyncGraphDatabase
 import requests
@@ -16,29 +16,32 @@ logger = logging.getLogger(__name__)
 NEO4J_URI = os.getenv("NEO4J_URI", "bolt://neo4j:7687")
 NEO4J_USER = os.getenv("NEO4J_USER", "neo4j")
 NEO4J_PASSWORD = os.getenv("NEO4J_PASSWORD")
-PHOTON_URL = os.getenv("PHOTON_URL", "http://photon:2322")
+
 GEONAMES_DATA_DIR = os.getenv("GEONAMES_DATA_DIR", "/app/models/geolocation/geonames")
+GLINER_MODEL_PATH = os.getenv("GLINER_MODEL_PATH", "/app/models/geolocation/gliner_model")
 
 driver = AsyncGraphDatabase.driver(NEO4J_URI, auth=(NEO4J_USER, NEO4J_PASSWORD))
 
 # Global state
-_nlp = None
+_gliner_model = None
 _geonames_loaded = False
 GEONAMES_INDEX = {}
 ALTERNATE_NAMES = {}
 
 
-def get_nlp():
-    """Lazy load spaCy model"""
-    global _nlp
-    if _nlp is None:
+def get_gliner_model():
+    """Lazy load GLiNER model"""
+    global _gliner_model
+    if _gliner_model is None:
         try:
-            _nlp = spacy.load("de_core_news_sm")
-            logger.info("✅ spaCy German model loaded")
+            logger.info(f"🚀 Loading GLiNER model from {GLINER_MODEL_PATH}...")
+            # Load from local path, ensure map_location is set for CPU if needed
+            _gliner_model = GLiNER.from_pretrained(GLINER_MODEL_PATH, local_files_only=True)
+            logger.info("✅ GLiNER model loaded")
         except Exception as e:
-            logger.error(f"❌ Failed to load spaCy model: {e}")
-            _nlp = False  # Mark as failed
-    return _nlp if _nlp else None
+            logger.error(f"❌ Failed to load GLiNER model: {e}")
+            _gliner_model = False  # Mark as failed
+    return _gliner_model if _gliner_model else None
 
 
 # workers/geolocation_worker/worker.py
@@ -120,20 +123,51 @@ def resolve_toponym(location_name: str, context: str = "") -> Optional[Dict]:
 # NER - Extract Location Entities
 # ============================================================================
 
+# Common false positives in German text that GLiNER might pick up as locations
+BLOCKLIST = {
+    "land", "stadt", "staat", "ort", "region", "platz", "straße", "weg", 
+    "hier", "da", "dort", "heimat", "bund", "insel", "berg", "fluss",
+    "osten", "westen", "norden", "süden",
+    "polizei", "regierung", "amt", "behörde" 
+}
+
 def extract_location_entities(text: str) -> List[Tuple[str, int, int]]:
-    """Use spaCy NER to extract location entities"""
-    nlp = get_nlp()
-    if not nlp:
+    """Use GLiNER to extract location entities with filtering"""
+    model = get_gliner_model()
+    if not model:
         return []
     
-    doc = nlp(text)
-    locations = []
+    # Focused labels for GLiNER
+    labels = ["city", "country", "location", "landmark"]
     
-    for ent in doc.ents:
-        if ent.label_ in ['LOC', 'GPE']:
-            locations.append((ent.text, ent.start_char, ent.end_char))
-    
-    return locations
+    try:
+        # GLiNER predict_entities
+        # Increased threshold to 0.60 to reduce noise like "Land"
+        entities = model.predict_entities(text, labels, threshold=0.60)
+        
+        locations = []
+        for ent in entities:
+            raw_text = ent['text']
+            clean_text = raw_text.lower().strip()
+            
+            # Filter 1: Length
+            if len(clean_text) < 3:
+                continue
+                
+            # Filter 2: Blocklist
+            if clean_text in BLOCKLIST:
+                continue
+            
+            # Filter 3: Blocklist substring (cautious)
+            # e.g. "mein Land" -> "land" is in blocklist, but "Deutschland" is not.
+            # checks if the exact extracted entity is in blocklist.
+            
+            locations.append((raw_text, ent['start'], ent['end']))
+            
+        return locations
+    except Exception as e:
+        logger.error(f"GLiNER prediction failed: {e}")
+        return []
 
 
 # ============================================================================
@@ -181,13 +215,12 @@ def resolve_toponym(location_name: str, context: str = "") -> Optional[Dict]:
 
 
 # ============================================================================
-# Geocoding with Fallback
+# Geocoding (GeoNames Only)
 # ============================================================================
 
-async def geocode_with_fallback(location_name: str, geonames_data: Optional[Dict]) -> Optional[Dict]:
-    """Geocode with GeoNames first, Photon as fallback"""
+async def geocode_location(location_name: str, geonames_data: Optional[Dict]) -> Optional[Dict]:
+    """Geocode using GeoNames data"""
     
-    # Strategy 1: GeoNames (offline, fast)
     if geonames_data:
         return {
             'lat': geonames_data['lat'],
@@ -200,39 +233,6 @@ async def geocode_with_fallback(location_name: str, geonames_data: Optional[Dict
             'admin2': geonames_data.get('admin2'),
             'population': geonames_data.get('population', 0)
         }
-    
-    # Strategy 2: Photon fallback (with retry and timeout)
-    try:
-        response = requests.get(
-            f"{PHOTON_URL}/api",
-            params={'q': location_name, 'limit': 1, 'lang': 'de'},
-            timeout=5
-        )
-        
-        if response.status_code == 200:
-            data = response.json()
-            if data.get('features'):
-                feature = data['features'][0]
-                geometry = feature.get('geometry', {})
-                properties = feature.get('properties', {})
-                
-                if geometry.get('coordinates'):
-                    lng, lat = geometry['coordinates']
-                    return {
-                        'lat': lat,
-                        'lng': lng,
-                        'display_name': properties.get('name', location_name),
-                        'osm_id': properties.get('osm_id'),
-                        'source': 'photon',
-                        'city': properties.get('city'),
-                        'country': properties.get('country', 'Deutschland')
-                    }
-    except requests.exceptions.ConnectionError:
-        logger.warning(f"Photon unavailable for '{location_name}'")
-    except requests.exceptions.Timeout:
-        logger.warning(f"Photon timeout for '{location_name}'")
-    except Exception as e:
-        logger.warning(f"Photon error for '{location_name}': {e}")
     
     return None
 
@@ -276,7 +276,7 @@ async def _extract_and_update_location_async(
             context = text[max(0, start-50):min(len(text), end+50)]
             
             geonames_data = resolve_toponym(entity_text, context)
-            coords = await geocode_with_fallback(entity_text, geonames_data)
+            coords = await geocode_location(entity_text, geonames_data)
             
             if coords:
                 locations.append({

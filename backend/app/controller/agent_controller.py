@@ -65,6 +65,28 @@ async def query_agent(request: AgentRequest):
         metadata=result.metadata
     )
 
+class FeedbackRequest(BaseModel):
+    question: str
+    cypher: str
+    rating: int # 1 for positive, -1 for negative
+
+@router.post("/feedback")
+async def submit_feedback(request: FeedbackRequest):
+    """
+    Receives user feedback (Thumbs Up/Down) for a generated query.
+    Positive feedback is saved to improve future generation (Few-Shot).
+    """
+    service = AgentService()
+    success = await service.save_feedback(
+        request.question,
+        request.cypher,
+        request.rating
+    )
+    if success:
+        return {"status": "success", "message": "Feedback received"}
+    else:
+         raise HTTPException(status_code=500, detail="Failed to save feedback")
+
 @router.post("/cancel/{request_id}")
 async def cancel_agent_request(request_id: str):
     """Cancels a running agent request by ID."""

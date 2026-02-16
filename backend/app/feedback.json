@@ -1,0 +1,8 @@
+[
+  {
+    "question": "Message Threads",
+    "cypher": "MATCH (m:Message)-[r:REPLY_TO]->(p:Message), (m:Message) RETURN m, p ORDER BY m.date DESC LIMIT 50",
+    "rating": 1,
+    "timestamp": "TODO_add_timestamp"
+  }
+]

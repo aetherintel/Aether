@@ -17,7 +17,7 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 router = APIRouter(prefix="/auth", tags=["auth"])
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 docker_client = docker.from_env()
-KEYCLOAK_BASE_URL = "http://keycloak:8080/keycloak"
+KEYCLOAK_BASE_URL = os.getenv("KEYCLOAK_BASE_URL", "http://keycloak:8080/keycloak")
 
 
 def user_ctx(token_data: dict = Depends(get_current_user)) -> UserCtx:
@@ -48,8 +48,10 @@ def get_admin_token():
         "client_id": os.getenv("KEYCLOAK_ADMIN_CLIENT_ID"),
         "client_secret": os.getenv("KEYCLOAK_ADMIN_CLIENT_SECRET")
     }
+    logger.info(f"Getting Admin Token from: {token_url}")
     response = requests.post(token_url, data=data)
     if response.status_code != 200:
+        logger.error(f"Admin login failed: {response.status_code} - {response.text}")
         raise HTTPException(status_code=500, detail="Admin login failed")
     return response.json()["access_token"]
 
@@ -68,7 +70,7 @@ def login(form_data: OAuth2PasswordRequestForm = Depends()):
     print(f"Login payload: {payload}")
     headers = { "Content-Type": "application/x-www-form-urlencoded" }
     response = requests.post(token_url, data=payload, headers=headers)
-    print(f"Login response: {response.status_code} - {response.text} - {response.text}")
+    print(f"Login response: {response.status_code} - {response.text}")
     if response.status_code != 200:
         raise HTTPException(status_code=401, detail="Login failed")
     return response.json()
@@ -152,8 +154,13 @@ def register(data: RegisterRequest):
         }]
     }
     
+    logger.info(f"Registering user at: {user_url}")
+    logger.info(f"Payload: {user_payload}")
+
     # User erstellen
     response = requests.post(user_url, headers=headers, json=user_payload)
+    
+    logger.info(f"Register Response: {response.status_code} - {response.text}")
     
     if response.status_code == 201:
         # User ID aus Location Header extrahieren

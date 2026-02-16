@@ -67,9 +67,30 @@ export const agentService = {
       await fetch(`${API_URL}/agent/cancel/${request_id}`, {
           method: 'POST',
           headers: {
+              'Content-Type': 'application/json',
               Authorization: `Bearer ${token}`
           }
       });
+  },
+
+  async submitFeedback(question: string, cypher: string, rating: number): Promise<boolean> {
+      const token = localStorage.getItem('token');
+      if (!token) return false;
+
+      try {
+          const response = await fetch(`${API_URL}/agent/feedback`, {
+              method: 'POST',
+              headers: {
+                  'Content-Type': 'application/json',
+                  Authorization: `Bearer ${token}`
+              },
+              body: JSON.stringify({ question, cypher, rating })
+          });
+          return response.ok;
+      } catch (e) {
+          console.error("Feedback failed", e);
+          return false;
+      }
   },
 
   async getSystemPrompts(): Promise<Record<string, string>> {

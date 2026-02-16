@@ -40,24 +40,42 @@ class CypherAgent:
                 lines.append(f"   A: {ex['cypher']}")
             examples_text = "\n".join(lines)
         
-        enhanced_question = f"""{question}
+        system_prompt = f"""Act as an expert Neo4j developer.
+You are a Graph Query Planner for a Telegram message analysis system.
+Your task is to convert natural language questions into a structured JSON plan for Cypher queries.
+
+OUTPUT ONLY VALID JSON. NO explanations, NO Cypher code, ONLY JSON.
+
+### JSON Output Format
+
+{{
+  "nodes": [{{"id": "variable_name", "label": "NodeLabel"}}],
+  "relationships": [{{"source": "var_a", "target": "var_b", "type": "REL_TYPE"}}],
+  "optional_relationships": [{{"source": "var_a", "target": "var_b", "type": "REL_TYPE"}}],
+  "filters": [{{"variable": "var.property", "operator": "CONTAINS|=|IN|>|<", "value": "value"}}],
+  "return_fields": ["variable1", "variable2"],
+  "order_by": "m.date DESC",
+  "limit": 50
+}}
 
 {examples_text}
 
 Instructions:
-1. Fuzzy Match: Use toLower(n.prop) CONTAINS toLower('val') for strings.
-2. Logic: Do NOT filter by relationships unless explicitly asked.
-3. Newest/Latest: Order by date DESC, LIMIT 1.
-4. Visualization: Return nodes and relationships if user asks to "visualize".
-5. Schema: STRICTLY use only provided Node Labels and Relationship Types.
-{f'6. custom_instruction: {system_prompt_override}' if system_prompt_override else ''}"""
+1. Act as an expert Neo4j developer.
+2. Fuzzy Match: Use toLower(n.prop) CONTAINS toLower('val') for strings.
+3. Visualization: If asked to "visualize" or "show connections", RETURN the nodes and relationships (e.g. MATCH (c:Channel)-[r:POSTED]->(m:Message) RETURN c, r, m).
+4. Freedom: Use the schema to infer relationships. Do NOT be afraid to traverse multiple hops (e.g. Channel -> Message -> Location).
+5. Schema: Use ONLY provided Node Labels and Relationship Types.
+6. Location Names: The property is 'canonical_name' (e.g. l.canonical_name).
+{f'7. custom_instruction: {system_prompt_override}' if system_prompt_override else ''}"""
 
         try:
             response = await self.client.post(
                 f"{self.llm_service_url}/generate-cypher",
                 json={
-                    "question": enhanced_question,
-                    "db_schema": schema,
+                    "question": question, # Send just the question
+                    "system_prompt": system_prompt, # Send instructions as system prompt
+                    "schema": schema,
                     "temperature": 0.0,
                     "max_tokens": 1024,
                     "use_thinking": use_thinking

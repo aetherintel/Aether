@@ -12,6 +12,8 @@ services:
       - ./docker/db-init:/docker-entrypoint-initdb.d
     networks:
       - aether-network
+    ports:
+      - "5432:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${DB_USER}"]
       interval: 10s
@@ -108,6 +110,10 @@ services:
       PYTHONPATH: /app
       REDIS_HOST: redis
       REDIS_PORT: 6379
+      # Use host.docker.internal to access SSH tunnel on host machine
+      LLM_SERVICE_URL: http://host.docker.internal:8001
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - tg_sessions:/app/sessions
@@ -240,6 +246,7 @@ services:
       - aether-network
 
   translation-worker:
+    profiles: ["gpu-local"]
     build:
       context: .
       dockerfile: workers/translation_worker/Dockerfile
@@ -281,6 +288,7 @@ services:
           memory: 3G
 
   image-worker:
+    # profiles: ["gpu-local"]  <-- Enabled locally for file access
     build:
       context: .
       dockerfile: workers/image_worker/Dockerfile
@@ -318,6 +326,7 @@ services:
           memory: 2G
 
   audio-worker:
+    # profiles: ["gpu-local"]  <-- Enabled locally for file access
     build:
       context: .
       dockerfile: workers/audio_worker/Dockerfile
@@ -354,6 +363,7 @@ services:
           memory: 2G
 
   emotion-worker:
+    profiles: ["gpu-local"]
     build:
       context: .
       dockerfile: workers/emotion_worker/Dockerfile
@@ -389,6 +399,7 @@ services:
           memory: 1G
 
   classification-worker:
+    profiles: ["gpu-local"]
     build:
       context: .
       dockerfile: workers/classification_worker/Dockerfile
@@ -446,11 +457,10 @@ services:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       JOB_SECRET_TOKEN: ${JOB_SECRET_TOKEN}
-      PHOTON_URL: http://photon:2322
+
     volumes:
       - ./aether_lib:/app/aether_lib:ro
-      - app_geolocation_models:/app/models/geolocation
-      - app_photon_data:/app/photon_data
+      - app_geolocation_data_v2:/app/models/geolocation
     depends_on:
       redis:
         condition: service_started
@@ -458,8 +468,7 @@ services:
         condition: service_healthy
       postgres:
         condition: service_started
-      photon:
-        condition: service_started
+
       geolocation-models:
         condition: service_started
     networks:
@@ -472,6 +481,7 @@ services:
         reservations:
           memory: 512M
   llm-service:
+      profiles: ["gpu-local"]
       build: ./workers/llm-service
       container_name: aether-llm-service
       ports:
@@ -482,7 +492,7 @@ services:
       environment:
         - MODEL_PATH=/models/llm/qwen2.5-7b-instruct-q4_k_m.gguf
         - N_THREADS=8
-        - N_CTX=8192
+        - N_CTX=16384
       restart: unless-stopped
       healthcheck:
         test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
@@ -492,30 +502,9 @@ services:
       networks:
         - aether-network
 
-  photon:
-    build:
-      context: .
-      dockerfile: docker/photon/Dockerfile
-    container_name: aether-photon
-    ports:
-      - "2322:2322"
-    volumes:
-      - ./models/geocoding/photon/photon_data:/photon/photon_data
-    environment:
-      JAVA_OPTS: -Xmx2g
-    networks:
-      - aether-network
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:2322/api?q=Berlin"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 60s
-    depends_on:
-      - postgres
 
   translation-models:
+    profiles: ["gpu-local"]
     build:
       context: ./models
       dockerfile: translation/Dockerfile
@@ -523,13 +512,16 @@ services:
       - app_translation_models:/models
 
   audio-models:
+    # profiles: ["gpu-local"]
     build:
       context: ./models
       dockerfile: audio/Dockerfile
+    image: ghcr.io/${GITHUB_REPOSITORY_OWNER:-aetherintel}/aether-audio-models:latest
     volumes:
       - app_audio_models:/models
 
   emotion-models:
+    profiles: ["gpu-local"]
     build:
       context: ./models
       dockerfile: emotion/Dockerfile
@@ -537,6 +529,7 @@ services:
       - app_emotion_models:/models
 
   classifier-models:
+    profiles: ["gpu-local"]
     build:
       context: ./models
       dockerfile: classifier/Dockerfile
@@ -544,20 +537,28 @@ services:
       - app_classifier_models:/models
 
   image-models:
+    # profiles: ["gpu-local"]
     build:
       context: ./models
       dockerfile: image/Dockerfile
+    image: ghcr.io/${GITHUB_REPOSITORY_OWNER:-aetherintel}/aether-image-models:latest
     volumes:
       - app_image_models:/models
 
   geolocation-models:
+     # Geolocation stays local (CPU), so NO PROFILE here (or make explicit "core"?)
+     # User said "remote gpu instance are excluded". Geolocation is CPU.
+     # But wait, geolocation-models are large.
+     # User task validation said: "keep local".
+     # So I will NOT add profile to geolocation-models or geolocation-worker.
     build:
       context: ./models
       dockerfile: geolocation/Dockerfile
     volumes:
-      - app_geolocation_models:/models
+      - app_geolocation_data_v2:/models
   
   llm-models:
+    profiles: ["gpu-local"]
     build:
       context: ./models
       dockerfile: llm/Dockerfile
@@ -576,8 +577,8 @@ volumes:
   app_emotion_models:
   app_classifier_models:
   app_image_models:
-  app_geolocation_models:
-  app_photon_data:
+  app_geolocation_data_v2:
+
   app_llm_models:
 
 networks:

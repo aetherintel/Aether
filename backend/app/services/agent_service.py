@@ -92,6 +92,62 @@ class AgentService:
 
         return AgentResponse(message=f"Unknown command: `{command}`. Type `/help` for available commands.")
 
+    async def save_feedback(self, question: str, cypher: str, rating: int) -> bool:
+        """
+        Saves user feedback to a JSON file.
+        Rating: 1 (derived from thumb up) or -1 (thumb down).
+        Only saves positive feedback (+1) as few-shot examples for now.
+        """
+        import json
+        import os
+        
+        FEEDBACK_FILE = "/app/feedback.json"
+        
+        # We only want to learn from GOOD examples (Rating > 0)
+        # Bad examples could be used for "negative constraints" later, but for few-shot we want "Do This".
+        if rating < 1:
+            logger.info(f"Ignoring negative feedback for learning: {question}")
+            return True # Successfully "processed" (ignored)
+
+        entry = {
+            "question": question,
+            "cypher": cypher,
+            "rating": rating,
+            "timestamp": "TODO_add_timestamp"
+        }
+
+        try:
+            existing = []
+            if os.path.exists(FEEDBACK_FILE):
+                try:
+                    with open(FEEDBACK_FILE, 'r') as f:
+                        content = f.read()
+                        if content:
+                            existing = json.loads(content)
+                except Exception as read_err:
+                     logger.warning(f"Could not read existing feedback: {read_err}")
+            
+            # Check for duplicates (overwrite if exists?)
+            # Let's just append or update based on question
+            updated = False
+            for i, ex in enumerate(existing):
+                if ex.get("question") == question:
+                    existing[i] = entry # Update
+                    updated = True
+                    break
+            
+            if not updated:
+                existing.append(entry)
+            
+            with open(FEEDBACK_FILE, 'w') as f:
+                json.dump(existing, f, indent=2)
+                
+            logger.info(f"Saved feedback for: {question}")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to save feedback: {e}")
+            return False
+
     async def get_system_prompts(self) -> Dict[str, str]:
         return self.system_prompts
 

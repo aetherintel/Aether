@@ -1,22 +1,27 @@
 # workers/llm-service/Dockerfile
-FROM python:3.11-slim
+FROM nvidia/cuda:12.2.2-runtime-ubuntu22.04
 
 WORKDIR /app
 
+# Install Python and build dependencies
 RUN apt-get update && apt-get install -y \
+    python3.11 \
+    python3-pip \
+    python3.11-venv \
     build-essential \
     cmake \
     wget \
+    git \
     && rm -rf /var/lib/apt/lists/*
+
+# Symlink python3 to python if not exists
+RUN ln -s /usr/bin/python3.11 /usr/bin/python
 
 COPY requirements.txt .
 
-ARG USE_CUDA=false
-RUN if [ "$USE_CUDA" = "true" ]; then \
-      pip install llama-cpp-python --no-cache-dir --force-reinstall --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cu122; \
-    else \
-      CMAKE_ARGS="-DGGML_AVX2=ON" pip install --no-cache-dir llama-cpp-python --force-reinstall; \
-    fi
+# ARG USE_CUDA=true
+# Force CUDA installation for remote GPU worker
+RUN pip install llama-cpp-python --no-cache-dir --force-reinstall --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cu122
 
 RUN pip install --no-cache-dir -r requirements.txt
 

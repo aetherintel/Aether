@@ -18,7 +18,8 @@ llm = None
 @app.on_event("startup")
 async def load_model():
     global llm
-    model_path = os.getenv("MODEL_PATH", "/models/llm/Phi-3.5-mini-instruct-Q6_K.gguf")
+    # Default to the path expected in the container, but allow override
+    model_path = os.getenv("MODEL_PATH", "/models/llm/codestral-22b-v0.1-q4_k_m.gguf")
     
     logger.info(f"Loading model from {model_path}...")
     try:
@@ -27,6 +28,7 @@ async def load_model():
             n_ctx=int(os.getenv("N_CTX", "16384")),
             n_threads=int(os.getenv("N_THREADS", "8")),
             n_batch=512,
+            n_gpu_layers=int(os.getenv("N_GPU_LAYERS", "-1")), # Offload all layers to GPU
             verbose=False,
             # chat_format="chatml" # Removed to allow auto-detection (Llama 3 needs different format)
         )
@@ -40,6 +42,7 @@ class CypherRequest(BaseModel):
     temperature: float = 0.0
     max_tokens: int = 1024
     use_thinking: bool = False
+    system_prompt: Optional[str] = None
 
     class Config:
         populate_by_name = True
@@ -283,20 +286,17 @@ Now convert the user's question to JSON following the examples above.
 async def generate_cypher(request: CypherRequest):
     if llm is None:
         raise HTTPException(status_code=503, detail="Model not loaded")
+
+    sys_instruction = request.system_prompt if request.system_prompt else SYSTEM_PROMPT
+
+    user_content = f"Schema:\n{request.db_schema}\n\nQuestion: {request.question}\n\nResponse (JSON):"
     
-    user_content = f"""Schema:
-{request.db_schema}
-
-Question: {request.question}
-
-Response (JSON):"""
-
     start = time.time()
     
     try:
         response = llm.create_chat_completion(
             messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "system", "content": sys_instruction},
                 {"role": "user", "content": user_content}
             ],
             temperature=request.temperature,

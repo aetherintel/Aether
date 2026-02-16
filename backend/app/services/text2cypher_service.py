@@ -48,6 +48,8 @@ class Text2CypherService:
             # 1. Get Schema
             schema_text, schema_dict = await self.get_schema()
             
+            cypher_query = None
+            
             # --- PHASE 3: TEMPLATE CHECK ---
             template_plan = QueryTemplates.match(question)
             if template_plan:
@@ -103,7 +105,7 @@ class Text2CypherService:
                                 system_prompt_override=system_prompt_override,
                                 examples=examples
                             ),
-                            timeout=45.0
+                            timeout=120.0
                         )
                     except asyncio.TimeoutError:
                         logger.error("LLM Generation Timed Out (45s). Using fallback.")
@@ -125,18 +127,35 @@ class Text2CypherService:
                             plan = json.loads(plan_str)
                             cypher_query = self._build_cypher_from_plan(plan, schema_dict)
                             
-                            # Save to Cache (TTL 1 hour)
-                            if self.redis and cypher_query:
-                                try:
-                                    self.redis.setex(cache_key, 3600, plan_str)
-                                    logger.info("💾 Plan cached in Redis (TTL 1h)")
-                                except Exception as e:
-                                    logger.warning(f"Redis set failed: {e}")
+                            # Disable Caching as per user request
+                            # if self.redis and cypher_query:
+                            #     try:
+                            #         self.redis.setex(cache_key, 3600, plan_str)
+                            #         logger.info("💾 Plan cached in Redis (TTL 1h)")
+                            #     except Exception as e:
+                            #         logger.warning(f"Redis set failed: {e}")
                                     
                         except json.JSONDecodeError:
                             # Fallback if model failed to produce JSON 
                             logger.error(f"Failed to parse JSON plan: {plan_str[:100]}...")
                             cypher_query = None
+
+            # ROBUSTNESS: Check if plan has 'query' key (Text2Cypher format) instead of 'nodes'
+            if isinstance(plan, dict) and 'nodes' not in plan and 'query' in plan:
+                 logger.warning("LLM returned 'query' format instead of Graph Plan. Attempting to extraction.")
+                 # Does query have cypher directly?
+                 # e.g. {"query": "MATCH ..."} or {"query": {"match_pattern": ...}}
+                 q_val = plan.get('query')
+                 if isinstance(q_val, str) and "MATCH" in q_val.upper():
+                      cypher_query = q_val
+                      logger.info(f"Extracted Cypher from 'query' key: {cypher_query}")
+                 elif isinstance(q_val, dict) and 'match_pattern' in q_val:
+                      # Reconstruct from match_pattern / where_clause / return_clause
+                      mp = q_val.get('match_pattern', '')
+                      wc = q_val.get('where_clause', '')
+                      rc = q_val.get('return_clause', '')
+                      cypher_query = f"MATCH {mp} {wc} RETURN {rc} LIMIT 50"
+                      logger.info(f"Reconstructed Cypher from structured query: {cypher_query}")
             
 
  
@@ -786,13 +805,13 @@ class Text2CypherService:
                        "emotions", "classifications", "location_names"],
             "Channel": ["channel_id", "owner_id", "username", "title"],
             "User": ["user_id", "owner_id", "username", "first_name", "last_name"],
-            "Location": ["name", "owner_id", "latitude", "longitude", "country", "mention_count"],
-            "Emotion": [],  # Hide this node - deprecated
-            "Classification": []  # Hide this node - deprecated
+            "Location": ["canonical_name", "owner_id", "latitude", "longitude", "country", "mention_count"],
+            "Emotion": ["name", "score"],  
+            "Classification": ["label", "confidence"]
         }
 
         # Relationships to hide (deprecated)
-        HIDDEN_RELATIONSHIPS = ["HAS_EMOTION", "HAS_CLASSIFICATION", "PART_OF"]
+        HIDDEN_RELATIONSHIPS = []
 
         async with sse_client(self.mcp_url, headers={"Host": "localhost"}) as streams:
             async with ClientSession(streams[0], streams[1]) as session:

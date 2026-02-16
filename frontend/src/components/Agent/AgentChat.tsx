@@ -3,11 +3,14 @@ import {
     Autocomplete, ActionIcon, Stack, Paper, Text, Loader, Button, 
     Group, Box, ScrollArea, Table, Avatar, Select, Modal, Code, Card, SimpleGrid
 } from '@mantine/core';
-import { IconSend, IconDatabaseImport, IconRobot, IconUser, IconSettings, IconX } from '@tabler/icons-react';
+import { IconSend, IconDatabaseImport, IconRobot, IconUser, IconSettings, IconX, IconThumbUp, IconThumbDown } from '@tabler/icons-react';
 import { agentService, AgentResponse, CommandSuggestion } from '../../services/agentService';
 import { GraphRAGWidget } from '../Dashboard/GraphRAGWidget';
 import { notifications } from '@mantine/notifications';
 import { PieChart, BarChart } from '@mantine/charts';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import { motion, AnimatePresence } from 'framer-motion';
 
 interface AgentChatProps {
   embedded?: boolean;
@@ -41,7 +44,7 @@ export const AgentChat: React.FC<AgentChatProps> = ({ embedded = false }) => {
       setMessages([{
           id: 'init',
           sender: 'agent',
-          text: 'Hello! I am your Aether Agent. You can ask me to visualize data, summarize cases, or run analysis. Type `/help` for commands.',
+          text: '👋 **Hello!** I am your **Aether Agent**. \n\nYou can ask me to `visualize data`, `summarize cases`, or run analysis.\n\nType `/help` for commands.',
           timestamp: new Date()
       }]);
   }, []);
@@ -52,7 +55,9 @@ export const AgentChat: React.FC<AgentChatProps> = ({ embedded = false }) => {
 
   const scrollToBottom = () => {
       if (scrollViewport.current) {
-          scrollViewport.current.scrollTo({ top: scrollViewport.current.scrollHeight, behavior: 'smooth' });
+          setTimeout(() => {
+              scrollViewport.current?.scrollTo({ top: scrollViewport.current.scrollHeight, behavior: 'smooth' });
+          }, 100);
       }
   };
 
@@ -248,93 +253,156 @@ export const AgentChat: React.FC<AgentChatProps> = ({ embedded = false }) => {
         </Paper>
 
         {/* Chat Area */}
-        <Paper flex={1} p="md" radius="md" withBorder bg="var(--mantine-color-body)" style={{ overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+        <Paper flex={1} p="md" radius="md" withBorder bg="var(--mantine-color-gray-0)" style={{ overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
             <ScrollArea viewportRef={scrollViewport} style={{ flex: 1 }}>
                 <Stack gap="lg" pb="xl">
-                    {messages.map((msg) => (
-                        <Box key={msg.id} style={{ alignSelf: msg.sender === 'user' ? 'flex-end' : 'flex-start', maxWidth: '90%' }}>
-                            <Group align="flex-start" gap="xs" style={{flexDirection: msg.sender === 'user' ? 'row-reverse' : 'row'}}>
-                                <Avatar color={msg.sender === 'user' ? 'blue' : 'green'} radius="xl">
-                                    {msg.sender === 'user' ? <IconUser size={18} /> : <IconRobot size={18} />}
-                                </Avatar>
-                                <Paper withBorder p="sm" radius="md" bg={msg.sender === 'user' ? 'var(--mantine-color-blue-light)' : undefined}>
-                                    {/* Text Content */}
-                                    <Text size="sm" style={{ whiteSpace: 'pre-wrap' }}>{msg.text}</Text>
+                    <AnimatePresence initial={false}>
+                        {messages.map((msg) => (
+                            <motion.div
+                                key={msg.id}
+                                initial={{ opacity: 0, y: 20, scale: 0.95 }}
+                                animate={{ opacity: 1, y: 0, scale: 1 }}
+                                transition={{ duration: 0.3 }}
+                                style={{ 
+                                    alignSelf: msg.sender === 'user' ? 'flex-end' : 'flex-start', 
+                                    maxWidth: '92%',
+                                    width: 'fit-content' // Important for alignment
+                                }}
+                                onLayoutAnimationComplete={() => console.log("MSG DEBUG:", msg)}
+                            >
+                                <Group align="flex-start" gap="xs" style={{flexDirection: msg.sender === 'user' ? 'row-reverse' : 'row'}}>
+                                    <Avatar color={msg.sender === 'user' ? 'blue' : 'green'} radius="xl" size="md">
+                                        {msg.sender === 'user' ? <IconUser size={20} /> : <IconRobot size={20} />}
+                                    </Avatar>
                                     
-                                    {/* Widgets */}
-                                    {msg.widgetType === 'graph' && (
-                                        <Box mt="sm" h={400} w={600} style={{ border: '1px solid var(--mantine-color-default-border)', borderRadius: 'var(--mantine-radius-sm)', position: 'relative' }}>
-                                            <GraphRAGWidget data={msg.widgetData} />
-                                        </Box>
-                                    )}
-                                    {msg.widgetType === 'table' && (
-                                        <Box mt="sm" w="100%">
-                                            {renderTable(msg.widgetData)}
-                                        </Box>
-                                    )}
-                                    
-                                    {msg.widgetType === 'pie' && (
-                                        <Box mt="sm" h={300} w={400}>
-                                            <Text fw={500} size="sm" mb="xs">Distribution</Text>
-                                            <PieChart 
-                                                data={transformPieData(msg.widgetData)} 
-                                                withTooltip 
-                                                withLabelsLine 
-                                                labelsPosition="outside" 
-                                                withLabels 
-                                                size={200}
-                                            />
-                                        </Box>
-                                    )}
+                                    <Paper 
+                                        withBorder 
+                                        p="md" 
+                                        radius="lg" 
+                                        bg={msg.sender === 'user' ? 'blue.0' : 'white'}
+                                        shadow="sm"
+                                        style={{ minWidth: 200 }}
+                                    >
+                                        {/* Markdown Text Content */}
+                                        <div className="markdown-body" style={{ fontSize: '0.95rem', lineHeight: 1.6 }}>
+                                            <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                                                {msg.text}
+                                            </ReactMarkdown>
+                                        </div>
+                                        
+                                        {/* Widgets */}
+                                        {msg.widgetType === 'graph' && (
+                                            <Box mt="md" h={500} w={700} style={{ border: '1px solid #374151', borderRadius: '8px', overflow: 'hidden' }}>
+                                                <GraphRAGWidget data={msg.widgetData} />
+                                            </Box>
+                                        )}
+                                        {msg.widgetType === 'table' && (
+                                            <Box mt="sm" w="100%">
+                                                {renderTable(msg.widgetData)}
+                                            </Box>
+                                        )}
+                                        
+                                        {msg.widgetType === 'pie' && (
+                                            <Box mt="sm" h={300} w={400}>
+                                                <Text fw={500} size="sm" mb="xs">Distribution</Text>
+                                                <PieChart 
+                                                    data={transformPieData(msg.widgetData)} 
+                                                    withTooltip 
+                                                    withLabelsLine 
+                                                    labelsPosition="outside" 
+                                                    withLabels 
+                                                    size={200}
+                                                />
+                                            </Box>
+                                        )}
 
-                                    {msg.widgetType === 'bar' && (
-                                        <Box mt="sm" h={300} w={500}>
-                                             <Text fw={500} size="sm" mb="xs">Trend Analysis</Text>
-                                             {(() => {
-                                                 const { data, dataKey, series } = transformBarData(msg.widgetData);
-                                                 return (
-                                                    <BarChart
-                                                        h={250}
-                                                        data={data}
-                                                        dataKey={dataKey}
-                                                        series={series}
-                                                        tickLine="y"
-                                                    />
-                                                 );
-                                             })()}
-                                        </Box>
-                                    )}
-                                    
-                                    {msg.widgetType === 'kpi' && msg.widgetData && msg.widgetData.length > 0 && (
-                                        <Card withBorder radius="md" mt="sm">
-                                            <Group justify="space-between">
-                                                <Text size="xs" c="dimmed" fw={700} tt="uppercase">
-                                                    {Object.keys(msg.widgetData[0])[0]}
-                                                </Text>
-                                            </Group>
-                                            <Group align="flex-end" gap="xs" mt={25}>
-                                                <Text style={{ fontSize: '2rem', fontWeight: 700, lineHeight: 1 }}>
-                                                    {Object.values(msg.widgetData[0])[0] as React.ReactNode}
-                                                </Text>
-                                            </Group>
-                                        </Card>
-                                    )}
+                                        {msg.widgetType === 'bar' && (
+                                            <Box mt="sm" h={300} w={500}>
+                                                 <Text fw={500} size="sm" mb="xs">Trend Analysis</Text>
+                                                 {(() => {
+                                                     const { data, dataKey, series } = transformBarData(msg.widgetData);
+                                                     return (
+                                                        <BarChart
+                                                            h={250}
+                                                            data={data}
+                                                            dataKey={dataKey}
+                                                            series={series}
+                                                            tickLine="y"
+                                                        />
+                                                     );
+                                                 })()}
+                                            </Box>
+                                        )}
+                                        
+                                        {msg.widgetType === 'kpi' && msg.widgetData && msg.widgetData.length > 0 && (
+                                            <Card withBorder radius="md" mt="sm">
+                                                <Group justify="space-between">
+                                                    <Text size="xs" c="dimmed" fw={700} tt="uppercase">
+                                                        {Object.keys(msg.widgetData[0])[0]}
+                                                    </Text>
+                                                </Group>
+                                                <Group align="flex-end" gap="xs" mt={25}>
+                                                    <Text style={{ fontSize: '2rem', fontWeight: 700, lineHeight: 1 }}>
+                                                        {Object.values(msg.widgetData[0])[0] as React.ReactNode}
+                                                    </Text>
+                                                </Group>
+                                            </Card>
+                                        )}
 
-                                    {/* Metadata / Cypher Debug */}
-                                    {msg.metadata?.cypher && (
-                                        <Box mt="xs">
-                                            <Text size="xs" c="dimmed" fw={500}>Generated Cypher:</Text>
-                                            <Code block>{msg.metadata.cypher}</Code>
-                                        </Box>
-                                    )}
-                                </Paper>
-                            </Group>
-                        </Box>
-                    ))}
+                                        {/* Metadata / Cypher Debug */}
+                                        {msg.metadata?.cypher && (
+                                            <Box mt="xs">
+                                                <Text size="xs" c="dimmed" fw={500}>Generated Cypher:</Text>
+                                                <Code block style={{ fontSize: '0.75rem' }}>{msg.metadata.cypher}</Code>
+                                                
+                                                {/* Feedback Buttons */}
+                                                <Group mt="xs" gap="xs">
+                                                    <Text size="xs">Rate:</Text>
+                                                    <ActionIcon 
+                                                        variant="subtle" 
+                                                        color="green" 
+                                                        size="sm" 
+                                                        onClick={() => {
+                                                            agentService.submitFeedback(
+                                                                msg.metadata.question || "Unknown", 
+                                                                msg.metadata.cypher, 
+                                                                1
+                                                            );
+                                                            notifications.show({ message: 'Thanks for the feedback!', color: 'green' });
+                                                        }}
+                                                        title="Good Query (Save as Example)"
+                                                    >
+                                                        <IconThumbUp size={16} />
+                                                    </ActionIcon>
+                                                    <ActionIcon 
+                                                        variant="subtle" 
+                                                        color="red" 
+                                                        size="sm" 
+                                                        onClick={() => {
+                                                            agentService.submitFeedback(
+                                                                msg.metadata.question || "Unknown", 
+                                                                msg.metadata.cypher, 
+                                                                -1
+                                                            );
+                                                            notifications.show({ message: 'Feedback recorded', color: 'gray' });
+                                                        }}
+                                                        title="Bad Query"
+                                                    >
+                                                        <IconThumbDown size={16} />
+                                                    </ActionIcon>
+                                                </Group>
+                                            </Box>
+                                        )}
+                                    </Paper>
+                                </Group>
+                            </motion.div>
+                        ))}
+                    </AnimatePresence>
+                    
                     {loading && (
-                        <Group>
-                            <Avatar color="green" radius="xl"><IconRobot size={18} /></Avatar>
-                            <Loader size="sm" type="dots" />
+                        <Group ml={50}>
+                            <Loader size="sm" type="dots" color="gray" />
+                            <Text size="xs" c="dimmed" fs="italic">Analyzing...</Text>
                         </Group>
                     )}
                 </Stack>
