@@ -116,9 +116,16 @@ class QueryTemplates:
 
         # 6. Keyword Search (Fallback if "about X" is used)
         # "messages about tanks"
+        # EXCLUDE: location-related questions and questions asking for analysis (should use LLM for these)
         about_match = re.search(r'\babout\s+(.+)', q)
         if about_match:
             term = about_match.group(1)
+            # Exclude location-related questions - should go to LLM
+            if any(kw in q for kw in ["location", "place", "city", "country"]):
+                return None
+            # Exclude questions asking "what is/are" - these need analysis
+            if "what is" in q or "what are" in q:
+                return None
             # Exclude strict keywords
             if term not in ["the", "latest", "newest"]:
                  return {

@@ -37,6 +37,16 @@ STATIC_EXAMPLES = [
         "cypher": "MATCH (c:Channel)-[:POSTED]->(m:Message)-[:MENTIONS_LOCATION]->(l:Location) RETURN c, m, l LIMIT 100"
     },
     {
+        "keywords": ["most mentioned", "top location", "most frequent location"],
+        "question": "What is the most mentioned location?",
+        "cypher": "MATCH (m:Message)-[:MENTIONS_LOCATION]->(l:Location) RETURN l.canonical_name AS location, COUNT(m) AS message_count ORDER BY message_count DESC LIMIT 1"
+    },
+    {
+        "keywords": ["most mentioned", "messages about", "location messages"],
+        "question": "What is the most mentioned location and what messages have been sent about it?",
+        "cypher": "MATCH (m:Message)-[:MENTIONS_LOCATION]->(l:Location) WITH l, COUNT(m) AS msg_count, COLLECT(m)[..10] AS sample_messages RETURN l.canonical_name AS location, msg_count, sample_messages"
+    },
+    {
         "keywords": ["interaction", "reply", "respond", "who"],
         "question": "Show me user interactions (who replies to whom)",
         "cypher": "MATCH (u1:User)-[:SENT]->(m1:Message)<-[:REPLY_TO]-(m2:Message)<-[:SENT]-(u2:User) RETURN u1, u2, count(*) as interactions ORDER BY interactions DESC LIMIT 50"

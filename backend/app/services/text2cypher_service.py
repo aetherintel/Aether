@@ -36,7 +36,7 @@ class Text2CypherService:
             logger.error(f"Failed to connect to Redis: {e}")
             self.redis = None
 
-    async def run_text2cypher(self, question: str, history: List[str] = [], system_prompt_key: str = "default") -> Dict[str, Any]:
+    async def run_text2cypher(self, question: str, history: List[str] = [], system_prompt_key: str = "default", owner_id: Optional[str] = None) -> Dict[str, Any]:
         """
         Orchestrates the Text2Cypher flow with separated sessions to avoid timeouts.
         1. Get Schema (Session 1)
@@ -50,98 +50,87 @@ class Text2CypherService:
             
             cypher_query = None
             
-            # --- PHASE 3: TEMPLATE CHECK ---
-            template_plan = QueryTemplates.match(question)
-            if template_plan:
-                logger.info("⚡ Using Template Plan (Bypassing LLM)")
-                cypher_query = self._build_cypher_from_plan(template_plan, schema_dict)
-                # Skip to execution
-                # But we need to pretend we have a result for the flow?
-                # Actually, we can just set plan and skip LLM generation
-                plan = template_plan
-                # Cache hit on template? No need to cache template results, they are fast.
-            else:
-                # --- PHASE 2: REDIS CACHE CHECK ---
-                cache_key = self._get_cache_key(question, schema_text)
-                cached_plan_str = None
-                
-                if self.redis:
-                    try:
-                        cached_plan_str = self.redis.get(cache_key)
-                        if cached_plan_str:
-                            logger.info("🚀 Redis Cache Hit! Using cached plan.")
-                    except Exception as e:
-                        logger.warning(f"Redis get failed: {e}")
+            # --- PHASE 2: REDIS CACHE CHECK ---
+            cache_key = self._get_cache_key(question, schema_text)
+            cached_plan_str = None
 
-                if cached_plan_str:
-                     try:
-                         plan = json.loads(cached_plan_str)
-                         cypher_query = self._build_cypher_from_plan(plan, schema_dict)
-                     except json.JSONDecodeError:
-                         logger.warning("Cached plan invalid JSON. Regenerating.")
-                         cached_plan_str = None
+            if self.redis:
+                try:
+                    cached_plan_str = self.redis.get(cache_key)
+                    if cached_plan_str:
+                        logger.info("🚀 Redis Cache Hit! Using cached plan.")
+                except Exception as e:
+                    logger.warning(f"Redis get failed: {e}")
 
-                if not cached_plan_str:
-                    # 2. Generate Plan (LLM)
-                    system_prompt_override = None
-                    if system_prompt_key and system_prompt_key != "default":
-                         # Pass the persona as a hint
-                         system_prompt_override = f"Persona: {system_prompt_key}. "
-                         if system_prompt_key in ["storyteller", "data_analyst"]:
-                             system_prompt_override += "Focus on extracting data properties (text, names, dates) AND related node names (e.g. Emotion.name, Location.name) that allow for rich narrative summarization."
-        
-                    # Get few-shot examples
-                    examples = get_examples(question)
-                    if examples:
-                        logger.info(f"Injecting {len(examples)} examples into prompt")
+            if cached_plan_str:
+                try:
+                    plan = json.loads(cached_plan_str)
+                    cypher_query = self._build_cypher_from_plan(plan, schema_dict)
+                except json.JSONDecodeError:
+                    logger.warning("Cached plan invalid JSON. Regenerating.")
+                    cached_plan_str = None
 
-                    plan_str = None
-                    try:
-                        cypher_result = await asyncio.wait_for(
-                            self.cypher_agent.generate_cypher(
-                                question=question,
-                                schema=schema_text,
-                                use_thinking=False,
-                                system_prompt_override=system_prompt_override,
-                                examples=examples
-                            ),
-                            timeout=120.0
-                        )
-                    except asyncio.TimeoutError:
-                        logger.error("LLM Generation Timed Out (45s). Using fallback.")
-                        # FALLBACK: Use "Latest messages" template
-                        plan = QueryTemplates.match("latest messages")
+            if not cached_plan_str:
+                # 2. Generate Plan (LLM)
+                system_prompt_override = None
+                if system_prompt_key and system_prompt_key != "default":
+                    # Pass the persona as a hint
+                    system_prompt_override = f"Persona: {system_prompt_key}. "
+                    if system_prompt_key in ["storyteller", "data_analyst"]:
+                        system_prompt_override += "Focus on extracting data properties (text, names, dates) AND related node names (e.g. Emotion.name, Location.name) that allow for rich narrative summarization."
+
+                # Get few-shot examples
+                examples = get_examples(question)
+                if examples:
+                    logger.info(f"Injecting {len(examples)} examples into prompt")
+
+                plan_str = None
+                plan = None
+                try:
+                    cypher_result = await asyncio.wait_for(
+                        self.cypher_agent.generate_cypher(
+                            question=question,
+                            schema=schema_text,
+                            use_thinking=False,
+                            system_prompt_override=system_prompt_override,
+                            examples=examples
+                        ),
+                        timeout=120.0
+                    )
+                except asyncio.TimeoutError:
+                    logger.error("LLM Generation Timed Out (120s). Trying template fallback.")
+                    plan = QueryTemplates.match(question)
+                    if plan:
                         cypher_query = self._build_cypher_from_plan(plan, schema_dict)
-                        # Do NOT cache fallback as the specific question result
-                        cypher_result = {} # To avoid unpacking error below if referenced
+                        cypher_result = {}
                         plan_str = None
-                    except Exception as e:
-                         logger.error(f"LLM Generation Failed: {e}")
+                    else:
+                        cypher_result = {}
+                        plan_str = None
+                except Exception as e:
+                    logger.error(f"LLM Generation Failed OR Service Offline: {e}. Trying template fallback.")
+                    plan = QueryTemplates.match(question)
+                    if plan:
+                         cypher_query = self._build_cypher_from_plan(plan, schema_dict)
                          cypher_result = {}
                          plan_str = None
-                    
-                    if not plan_str and 'cypher_result' in locals() and cypher_result:
-                        # The "cypher" field now contains the JSON plan string
-                        plan_str = cypher_result.get("cypher")
-                        try:
-                            plan = json.loads(plan_str)
-                            cypher_query = self._build_cypher_from_plan(plan, schema_dict)
-                            
-                            # Disable Caching as per user request
-                            # if self.redis and cypher_query:
-                            #     try:
-                            #         self.redis.setex(cache_key, 3600, plan_str)
-                            #         logger.info("💾 Plan cached in Redis (TTL 1h)")
-                            #     except Exception as e:
-                            #         logger.warning(f"Redis set failed: {e}")
-                                    
-                        except json.JSONDecodeError:
-                            # Fallback if model failed to produce JSON 
-                            logger.error(f"Failed to parse JSON plan: {plan_str[:100]}...")
-                            cypher_query = None
+                    else:
+                         cypher_result = {}
+                         plan_str = None
+
+                if not plan_str and 'cypher_result' in locals() and cypher_result:
+                    # The "cypher" field now contains the JSON plan string
+                    plan_str = cypher_result.get("cypher")
+                    try:
+                        plan = json.loads(plan_str)
+                        cypher_query = self._build_cypher_from_plan(plan, schema_dict)
+                    except json.JSONDecodeError:
+                        # Fallback if model failed to produce JSON
+                        logger.error(f"Failed to parse JSON plan: {plan_str[:100]}...")
+                        cypher_query = None
 
             # ROBUSTNESS: Check if plan has 'query' key (Text2Cypher format) instead of 'nodes'
-            if isinstance(plan, dict) and 'nodes' not in plan and 'query' in plan:
+            if plan is not None and isinstance(plan, dict) and 'nodes' not in plan and 'query' in plan:
                  logger.warning("LLM returned 'query' format instead of Graph Plan. Attempting to extraction.")
                  # Does query have cypher directly?
                  # e.g. {"query": "MATCH ..."} or {"query": {"match_pattern": ...}}
@@ -176,9 +165,40 @@ class Text2CypherService:
                  # cypher_query = cypher_result.get("raw_output", "") # Removed as per instruction
 
             if not cypher_query:
-                raise ValueError("Failed to generate a valid Cypher query from the plan.")
+                # Provide a friendly fallback if the LLM couldn't give us a query (often means it's offline or hallucinating)
+                offline_msg = (
+                    "**The AI Reasoning Service is currently unavailable or didn't understand the complex query.**\n\n"
+                    "Since the AI couldn't generate a custom database query, I tried to fall back to a predefined template but didn't find a match.\n\n"
+                    "**What you can do:**\n"
+                    "- Try simpler queries that match templates (e.g., *'latest messages'*, *'messages from Berlin'*).\n"
+                    "- Use `/help` to see common slash commands.\n"
+                    "- Check the predefined **Dashboard** tabs for standard views."
+                )
+                logger.error("Failed to generate a valid Cypher query from the plan or template.")
+                return {
+                    "summary": offline_msg,
+                    "visualization": {"type": "table", "data": []},
+                    "cypher": "",
+                    "error": "Failed to generate Cypher query"
+                }
             
-            # 3. Execute Query
+            # 3. Inject owner_id filter to scope queries to the requesting user's data
+            if owner_id and cypher_query:
+                cypher_query = self._inject_owner_id_filter(cypher_query, owner_id)
+                logger.info(f"Query after owner_id injection: {cypher_query}")
+
+            # 4. Validate Query
+            is_valid, validation_error = self._validate_cypher_query(cypher_query)
+            if not is_valid:
+                logger.error(f"Query validation failed: {validation_error}")
+                return {
+                    "summary": f"I encountered an issue with the generated query: {validation_error}. Please try rephrasing your question.",
+                    "visualization": {"type": "table", "data": []},
+                    "cypher": cypher_query,
+                    "error": validation_error
+                }
+
+            # 5. Execute Query
             logger.info(f"Executing Cypher: {cypher_query}")
             data = await self._execute_query(cypher_query)
             
@@ -187,19 +207,34 @@ class Text2CypherService:
             graph_data = self._transform_to_graph(data)
             logger.info(f"Transformed Graph Data: {len(graph_data['nodes'])} nodes, {len(graph_data['links'])} links")
             
+            # 4.5 Clean up data before visualization/sending to frontend
+            # The frontend doesn't need internal routing IDs. 
+            if data and isinstance(data, list):
+                for row in data:
+                    if isinstance(row, dict):
+                        row.pop("owner_id", None)
+                        # Optionally remove 'mid' if it's not useful visually, but kept here for now
+                        
             # 5. Determine visualization type
+            # Check for explicit visualization keywords in the question
+            question_lower = question.lower()
+            user_wants_graph = any(kw in question_lower for kw in [
+                "visualize", "visualization", "graph", "network", "connections", 
+                "relationships", "show the connection", "map", "diagram"
+            ])
+            
             # If graph has no nodes (or just 1 info node) or data is flat tabular, prefer table
             viz_type = "graph"
             viz_data = graph_data
             
-            # Heuristic: If we converted it to just "Result" nodes or "Info" nodes, it's likely tabular
+            # Heuristic: If we converted it to just "Result" or "Info" nodes, it's likely tabular
             is_tabular = False
             
             # Check if all nodes are "Result" or "Info"
             if graph_data["nodes"] and all(n.get("label") in ["Result", "Info", "Unknown"] for n in graph_data["nodes"]):
                 is_tabular = True
             
-            # If explicit "count" or "sum" in keys, it's tabular
+            # If explicit "count" or "sum" in keys, it's tabular (unless user wants graph)
             if data and isinstance(data, list) and len(data) > 0:
                 first_row = data[0]
                 # If keys contain 'count', 'sum', 'avg', or doesn't look like graph components
@@ -210,23 +245,53 @@ class Text2CypherService:
             if not is_tabular and not graph_data["nodes"] and data:
                 is_tabular = True
 
-            # Heuristic: If there are NO relationships (links), a table is usually better than disconnected nodes
-            if not graph_data["links"]:
-                is_tabular = True
-            
-            if is_tabular:
-                viz_type = "table"
-                viz_data = data # Send raw list of dicts for table
+            # If we have both nodes AND links, it's always a graph regardless of question
+            if graph_data["nodes"] and graph_data["links"]:
+                is_tabular = False
 
-                # Enhanced Visualization: Check for Pie/Bar candidates
-                if data and isinstance(data, list) and len(data) > 0:
-                    first_row = data[0]
-                    keys = list(first_row.keys())
-                    
+            # Heuristic: nodes but no links — prefer table unless user explicitly wants graph
+            elif graph_data["nodes"] and not graph_data["links"] and not user_wants_graph:
+                is_tabular = True
+
+            # Override: If user asked for a graph and we have nodes, force it
+            if user_wants_graph and graph_data["nodes"]:
+                is_tabular = False
+            
+            # 🚀 SMART WIZARD: Auto-detect special visualizations for "wow" factor
+            if is_tabular and data and isinstance(data, list) and len(data) > 0:
+                first_row = data[0]
+                keys = list(first_row.keys())
+                
+                # Check for Location Data (latitude + longitude)
+                has_lat = any(k.lower() in ['latitude', 'lat'] for k in keys)
+                has_lng = any(k.lower() in ['longitude', 'lng'] for k in keys)
+                has_location_name = any(k.lower() in ['canonical_name', 'place'] for k in keys)
+
+                if (has_lat and has_lng) or (has_location_name and (has_lat or has_lng)):
+                    viz_type = "location_map"
+                    viz_data = data
+                    logger.info("🎯 Auto-detected location data → showing map")
+                
+                # Check for Emotion Data
+                elif any(k.lower() in ['emotion', 'sentiment', 'feeling'] for k in keys):
+                    viz_type = "emotion_analysis"
+                    viz_data = data
+                    logger.info("🎯 Auto-detected emotion data → showing emotion analysis")
+                
+                # Check for User/Influencer Data
+                elif any(k.lower() in ['user', 'author', 'sender', 'username'] for k in keys):
+                    if any(k.lower() in ['count', 'messages', 'posts'] for k in keys):
+                        viz_type = "top_influencers"
+                        viz_data = data
+                        logger.info("🎯 Auto-detected user/influencer data → showing top influencers")
+                
+                # Original Pie/Bar/KPI logic
+                else:
                     # Candidate: 2 columns, one is number, one is string
                     if len(keys) == 1 and isinstance(first_row[keys[0]], (int, float)):
                         # Single value -> KPI Card
                         viz_type = "kpi"
+                        viz_data = data
                     
                     elif len(keys) == 2:
                         val1 = first_row[keys[0]]
@@ -240,10 +305,22 @@ class Text2CypherService:
                              # Pie for small number of categories
                              if len(data) <= 10:
                                  viz_type = "pie"
+                                 viz_data = data
                              else:
                                  viz_type = "bar"
-            
-            
+                                 viz_data = data
+
+                    # Fallback: if still undecided, use table
+                    if viz_type == "graph":
+                        viz_type = "table"
+                        viz_data = data
+
+            # Hard safety net: never return an empty graph
+            if viz_type == "graph" and not graph_data["nodes"]:
+                viz_type = "table"
+                viz_data = data
+                logger.info("⚠️ Graph had 0 nodes — falling back to table")
+
             # 6. Generate Summary (if needed)
             summary_text = f"**Generated Cypher:**\n`{cypher_query}`"
             
@@ -269,8 +346,16 @@ class Text2CypherService:
             import traceback
             logger.error(f"Text2Cypher Orchestration Failed: {e}")
             logger.error(traceback.format_exc())
+            
+            offline_msg = (
+                "⚠️ **The AI Reasoning Service is currently unavailable.**\n\n"
+                "While I cannot connect to the language model right now, you can still:\n"
+                "- Use `/help` to see the available command structure.\n"
+                "- Access your data directly through the predefined **Dashboard** tabs.\n"
+            )
+
             return {
-                "summary": f"Error: {str(e)}",
+                "summary": f"{offline_msg}\n\n*(Technical Details: {str(e)})*",
                 "visualization": {
                     "type": "table",
                     "data": []
@@ -893,34 +978,126 @@ class Text2CypherService:
                     logger.error(f"Failed to simplify schema: {e}")
                     return raw_schema, {} # Fallback
 
-    async def _execute_query(self, cypher_query: str) -> List[Dict]:
+    async def _execute_query(self, cypher_query: str, max_retries: int = 2) -> List[Dict]:
         """
         Executes the Cypher query via MCP in a separate session.
+        Includes retry logic for transient failures.
         """
-        async with sse_client(self.mcp_url, headers={"Host": "localhost"}) as streams:
-            async with ClientSession(streams[0], streams[1]) as session:
-                await session.initialize()
-                
-                tools = await session.list_tools()
-                # Look for execution tool, usually 'read-cypher' or 'cypher-read'
-                exec_tool = next((t for t in tools.tools if "read" in t.name and "cypher" in t.name), None)
-                if not exec_tool:
-                     # Fallback check
-                     exec_tool = next((t for t in tools.tools if "execute" in t.name), None)
-                
-                if not exec_tool:
-                     raise Exception("Could not find a cypher execution tool in MCP server.")
+        last_error = None
+        
+        for attempt in range(max_retries + 1):
+            try:
+                async with sse_client(self.mcp_url, headers={"Host": "localhost"}) as streams:
+                    async with ClientSession(streams[0], streams[1]) as session:
+                        await session.initialize()
+                        
+                        tools = await session.list_tools()
+                        exec_tool = next((t for t in tools.tools if "read" in t.name and "cypher" in t.name), None)
+                        if not exec_tool:
+                            exec_tool = next((t for t in tools.tools if "execute" in t.name), None)
+                        
+                        if not exec_tool:
+                            raise Exception("Could not find a cypher execution tool in MCP server.")
 
-                execution_result = await session.call_tool(exec_tool.name, arguments={"query": cypher_query})
-                results_text = execution_result.content[0].text
-                
-                # Try to parse as JSON
-                try:
-                    data = json.loads(results_text)
-                    return data
-                except json.JSONDecodeError:
-                    # Return as wrapped text object
-                    return [{"result": results_text}]
+                        execution_result = await session.call_tool(exec_tool.name, arguments={"query": cypher_query})
+                        results_text = execution_result.content[0].text
+                        
+                        try:
+                            data = json.loads(results_text)
+                            return data
+                        except json.JSONDecodeError:
+                            return [{"result": results_text}]
+                            
+            except Exception as e:
+                last_error = e
+                if attempt < max_retries:
+                    wait_time = (attempt + 1) * 2
+                    logger.warning(f"Cypher execution failed (attempt {attempt + 1}/{max_retries + 1}), retrying in {wait_time}s: {e}")
+                    await asyncio.sleep(wait_time)
+                else:
+                    logger.error(f"Cypher execution failed after {max_retries + 1} attempts: {e}")
+        
+        raise last_error or Exception("Cypher execution failed")
+
+    def _inject_owner_id_filter(self, cypher_query: str, owner_id: str) -> str:
+        """
+        Injects an owner_id WHERE condition into the generated Cypher query.
+        This ensures all agent queries are scoped to the authenticated user's data,
+        preventing cross-tenant data leakage.
+
+        Strategy: find all node variables used in MATCH clauses and add
+        `var.owner_id = '<id>'` conditions. We do this by parsing node aliases
+        from the query rather than relying on the LLM to include them.
+        """
+        import re
+
+        if not cypher_query or not owner_id:
+            return cypher_query
+
+        # Extract node variable aliases from MATCH patterns: (m:Message), (c:Channel), etc.
+        # Matches both (var:Label) and plain (var) forms
+        node_pattern = re.compile(r'\((\w+)(?::[\w|]+)?\)', re.IGNORECASE)
+        matches = node_pattern.findall(cypher_query)
+
+        # Known node variable aliases that carry owner_id
+        # (Location uses owner_id too but queries tend to reach it via Message)
+        owner_id_nodes = {"m", "c", "u", "l"}  # Message, Channel, User, Location
+        vars_to_filter = [v for v in dict.fromkeys(matches) if v in owner_id_nodes]
+
+        if not vars_to_filter:
+            logger.warning("owner_id injection: no known node variables found, skipping")
+            return cypher_query
+
+        owner_conditions = " AND ".join(
+            f"{v}.owner_id = '{owner_id}'" for v in vars_to_filter
+        )
+
+        # Inject into existing WHERE or add a new one before RETURN
+        if re.search(r'\bWHERE\b', cypher_query, re.IGNORECASE):
+            # Append to existing WHERE clause
+            cypher_query = re.sub(
+                r'\bWHERE\b',
+                f'WHERE {owner_conditions} AND',
+                cypher_query,
+                count=1,
+                flags=re.IGNORECASE
+            )
+        else:
+            # Insert WHERE before RETURN / ORDER BY / LIMIT
+            cypher_query = re.sub(
+                r'\b(RETURN|ORDER BY|LIMIT)\b',
+                f'WHERE {owner_conditions} \\1',
+                cypher_query,
+                count=1,
+                flags=re.IGNORECASE
+            )
+
+        return cypher_query
+
+    def _validate_cypher_query(self, cypher_query: str) -> tuple[bool, str]:
+        """
+        Pre-execution validation of Cypher query.
+        Returns (is_valid, error_message).
+        """
+        if not cypher_query or not cypher_query.strip():
+            return False, "Empty query"
+        
+        dangerous_keywords = ["DETACH DELETE", "DELETE", "REMOVE", "DROP", "SET n =", "MATCH (n) DETACH"]
+        for kw in dangerous_keywords:
+            if kw in cypher_query.upper():
+                return False, f"Potentially dangerous keyword detected: {kw}"
+        
+        forbidden_rels = ["HAS_EMOTION", "HAS_CLASSIFICATION", "CONTAINS_LOCATION", "POSTED_IN", "SENT_BY"]
+        for rel in forbidden_rels:
+            if f":{rel}" in cypher_query.upper():
+                return False, f"Invalid relationship type: {rel}. Use: HAS_MESSAGE, SENT, REPLY_TO, MENTIONS_LOCATION, PART_OF"
+        
+        forbidden_nodes = [":Emotion", ":Classification"]
+        for node in forbidden_nodes:
+            if node in cypher_query:
+                return False, f"Invalid node type: {node.replace(':', '')}. These are properties, not nodes!"
+        
+        return True, ""
 
     def _transform_to_graph(self, data: List[Dict]) -> Dict[str, List]:
         nodes = []
@@ -939,6 +1116,10 @@ class Text2CypherService:
                         label_text = n_props["text"]
                         if len(label_text) > 20:
                              label_text = label_text[:20] + "..."
+                    elif "original_text" in n_props:
+                        label_text = n_props["original_text"]
+                        if len(label_text) > 20:
+                             label_text = label_text[:20] + "..."
                 
                 # Check directly in props if not found (sometimes props are the node dict itself)
                 if label_text == str(n_id) and isinstance(n_props, dict):
@@ -954,95 +1135,105 @@ class Text2CypherService:
                 })
                 node_ids.add(n_id)
 
+        VAR_LABEL_MAP = {
+            "c": "Channel", "m": "Message", "u": "User",
+            "l": "Location", "e": "Emotion", "a": "Author"
+        }
+
         if isinstance(data, list):
             logger.info(f"Transforming data (list of {len(data)} items)")
             for i, record in enumerate(data):
                 if not isinstance(record, dict):
-                     logger.warning(f"Record {i} is not a dict: {type(record)} - {record}")
-                     continue
-                
-                # First pass: Collect all potential nodes in this record
+                    logger.warning(f"Record {i} is not a dict: {type(record)} - {record}")
+                    continue
+
                 record_nodes = []
                 has_explicit_rel = False
-                
+
                 for key, value in record.items():
+
                     if isinstance(value, dict):
-                        # 1. Try to detect Standard Node (Neo4j JSON format)
-                        # Switch to LEGACY IDs (Integers) to ensure consistency with Relationship start/end,
-                        # which often lack elementId references in some driver versions/MCP setups.
+                        # --- 1. Standard Neo4j node format: {id/identity, labels, properties} ---
                         n_id = value.get("id") or value.get("identity")
-                        # Fallback to elementId only if legacy ID matches nothing
-                        if n_id is None: n_id = value.get("elementId")
-
+                        if n_id is None:
+                            n_id = value.get("elementId")
                         n_labels = value.get("labels")
-                        
-                        if n_id is not None and n_labels is not None:
-                             # It's definitely a node in standard format
-                             lbl = n_labels[0] if isinstance(n_labels, list) and n_labels else (n_labels if isinstance(n_labels, str) else "Node")
-                             add_node(n_id, lbl, value.get("properties", value))
-                             record_nodes.append(str(n_id))
-                             continue
 
-                        # 2. Try to detect Relationship
-                        # Always use 'start' and 'end' (Legacy Integers) as primary keys
-                        r_start = value.get("start")
-                        if r_start is None: r_start = value.get("startNodeElementId")
-                        
-                        r_end = value.get("end")
-                        if r_end is None: r_end = value.get("endNodeElementId")
+                        if n_id is not None and n_labels is not None:
+                            lbl = n_labels[0] if isinstance(n_labels, list) and n_labels else (n_labels if isinstance(n_labels, str) else "Node")
+                            add_node(n_id, lbl, value.get("properties", value))
+                            record_nodes.append(str(n_id))
+                            continue
+
+                        # --- 2. Relationship object: {start, end, type} ---
+                        r_start = value.get("start") or value.get("startNodeElementId")
+                        r_end = value.get("end") or value.get("endNodeElementId")
                         r_type = value.get("type")
-                        
+
                         if r_start is not None and r_end is not None and r_type is not None:
                             s_id = str(r_start)
                             e_id = str(r_end)
-                            if s_id not in node_ids: add_node(s_id, "Unknown")
-                            if e_id not in node_ids: add_node(e_id, "Unknown")
+                            if s_id not in node_ids:
+                                add_node(s_id, "Unknown")
+                            if e_id not in node_ids:
+                                add_node(e_id, "Unknown")
                             links.append({"source": s_id, "target": e_id, "label": r_type})
                             has_explicit_rel = True
                             continue
-                            
-                        # 3. Permissive Node Detection (for Map/Dict results like RETURN n)
-                        # The value IS the properties. The ID might be inside or we infer it.
-                        # Look for common ID fields inside the dict
-                        potential_id = value.get("channel_id") or value.get("mid") or value.get("message_id") or value.get("id") or value.get("label_id")
-                        
+
+                        # --- 3. Flat property dict (MCP returns node props directly) ---
+                        # Guess label from the query variable name (key)
+                        guessed_label = VAR_LABEL_MAP.get(key, key.capitalize() if len(key) <= 3 else "Node")
+
+                        potential_id = (value.get("channel_id") or value.get("mid") or
+                                        value.get("user_id") or value.get("canonical_name") or
+                                        value.get("id") or value.get("username"))
+
                         if potential_id:
-                            # Guess label from key
-                            # key = "c" -> Channel? "m" -> Message? "e" -> Emotion?
-                            guessed_label = "Node"
-                            if key == "c": guessed_label = "Channel"
-                            elif key == "m": guessed_label = "Message"
-                            elif key == "e": guessed_label = "Emotion"
-                            elif key == "a": guessed_label = "Author"
-                            elif key == "l": guessed_label = "Location"
-                            elif len(key) > 2: guessed_label = key.capitalize()
-                            
                             add_node(potential_id, guessed_label, value)
                             record_nodes.append(str(potential_id))
                             continue
-                            
-                        # If it has specific characteristic keys, treat as node even if ID is weak
-                        if "username" in value: # Channel or Author
-                             uid = value.get("username")
-                             add_node(uid, "Channel" if "channel_id" in value else "User", value)
-                             record_nodes.append(str(uid))
-                        elif "original_text" in value: # Message
-                             # Fallback ID for message if mid missing?
-                             mid = value.get("mid") # Should be there
-                             if mid: 
-                                 add_node(mid, "Message", value)
-                                 record_nodes.append(str(mid))
-                        elif "name" in value and "label_id" in value: # Emotion
-                             lid = value.get("label_id")
-                             add_node(lid, "Emotion", value)
-                             record_nodes.append(str(lid))
 
-                # Create implicit links
-                # If we have multiple nodes in a row but no explicit relationship object,
-                # we assume they are connected (e.g. Message -> Location)
+                        # Characteristic-key fallbacks
+                        if "username" in value:
+                            uid = value.get("username")
+                            add_node(uid, "Channel" if "channel_id" in value else "User", value)
+                            record_nodes.append(str(uid))
+                        elif "mid" in value or "original_text" in value:
+                            mid = value.get("mid")
+                            if mid:
+                                add_node(mid, "Message", value)
+                                record_nodes.append(str(mid))
+                        elif "canonical_name" in value or ("latitude" in value and "longitude" in value):
+                            lid = value.get("canonical_name") or value.get("location_id")
+                            if lid:
+                                add_node(lid, "Location", value)
+                                record_nodes.append(str(lid))
+
+                    elif isinstance(value, list):
+                        # --- COLLECT() results: list of node objects ---
+                        for item in value:
+                            if not isinstance(item, dict):
+                                continue
+                            n_id = item.get("id") or item.get("identity") or item.get("elementId")
+                            n_labels = item.get("labels")
+                            if n_id and n_labels:
+                                lbl = n_labels[0] if isinstance(n_labels, list) else n_labels
+                                add_node(n_id, lbl, item.get("properties", item))
+                                record_nodes.append(str(n_id))
+                            elif "mid" in item or "original_text" in item:
+                                mid = item.get("mid")
+                                if mid:
+                                    add_node(mid, "Message", item)
+                                    record_nodes.append(str(mid))
+                            elif "canonical_name" in item:
+                                lid = item.get("canonical_name")
+                                if lid:
+                                    add_node(lid, "Location", item)
+                                    record_nodes.append(str(lid))
+
+                # Create implicit links between nodes returned in the same record
                 if len(record_nodes) > 1 and not has_explicit_rel:
-                    # Connect the first node to all others? Or chain them?
-                    # Usually the first node is the 'center' (Message).
                     center_node = record_nodes[0]
                     for other_node in record_nodes[1:]:
                         links.append({
@@ -1051,14 +1242,45 @@ class Text2CypherService:
                             "label": "RELATED"
                         })
 
-        if not nodes:
-             # Minimal info node
-             pass
-             
-        if not nodes and data:
-             # If no graph components found but data exists, it's likely tabular.
-             # Transform ensures we return *something* for graph view if forced?
-             # No, if empty nodes, the controller/service logic sets is_tabular=True
-             pass
-             
+        # Fallback: if the LLM returned property paths (e.g. "u.username", "c.username")
+        # instead of full nodes, synthesize graph nodes from them so we still get a graph.
+        if not nodes and data and isinstance(data, list):
+            # Detect property-path keys like "u.username", "c.title"
+            sample = data[0]
+            prop_path_keys = [k for k in sample.keys() if '.' in k]
+
+            if prop_path_keys:
+                # Group keys by variable prefix: {"u": ["u.username"], "c": ["c.username", "c.title"]}
+                var_groups: dict = {}
+                for k in sample.keys():
+                    if '.' in k:
+                        var, prop = k.split('.', 1)
+                        var_groups.setdefault(var, []).append((k, prop))
+                    # Scalar keys like "count(m)" — skip for graph
+
+                # Label guesses from variable name
+                label_map = {
+                    "u": "User", "m": "Message", "c": "Channel",
+                    "l": "Location", "e": "Emotion", "cl": "Classification"
+                }
+
+                for record in data:
+                    record_nodes = []
+                    for var, fields in var_groups.items():
+                        # Build a props dict for this synthetic node
+                        props = {prop: record.get(fk) for fk, prop in fields}
+                        # Use first field value as the node ID (e.g. username)
+                        first_val = record.get(fields[0][0])
+                        if first_val is None:
+                            continue
+                        node_id = f"{var}:{first_val}"
+                        label = label_map.get(var, var.capitalize())
+                        add_node(node_id, label, props)
+                        record_nodes.append(node_id)
+
+                    # Connect nodes within each record
+                    if len(record_nodes) > 1:
+                        for other in record_nodes[1:]:
+                            links.append({"source": record_nodes[0], "target": other, "label": "RELATED"})
+
         return {"nodes": nodes, "links": links}

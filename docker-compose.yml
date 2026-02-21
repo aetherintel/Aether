@@ -267,15 +267,12 @@ services:
       NEO4J_PASSWORD: ${NEO4J_PASSWORD}
     volumes:
       - ./aether_lib:/app/aether_lib:ro
-      - app_translation_models:/app/models
     depends_on:
       redis:
         condition: service_started
       neo4j:
         condition: service_healthy
       postgres:
-        condition: service_started
-      translation-models:
         condition: service_started
     networks:
       - aether-network
@@ -308,14 +305,11 @@ services:
     volumes:
       - ${MEDIA_PATH}:/shared/media:ro
       - ./aether_lib:/app/aether_lib:ro
-      - app_image_models:/app/models/image
     depends_on:
       redis:
         condition: service_started
       neo4j:
         condition: service_healthy
-      image-models:
-        condition: service_started
     networks:
       - aether-network
     deploy:
@@ -344,15 +338,12 @@ services:
       USE_QUANTIZATION: "true"
     volumes:
       - ./aether_lib:/app/aether_lib:ro
-      - app_audio_models:/app/models/audio
       - ${MEDIA_PATH}:/shared/media:ro
     depends_on:
       redis:
         condition: service_started
       neo4j:
         condition: service_healthy
-      audio-models:
-        condition: service_started
     networks:
       - aether-network
     deploy:
@@ -381,14 +372,11 @@ services:
       USE_QUANTIZATION: "true"
     volumes:
       - ./aether_lib:/app/aether_lib:ro
-      - app_emotion_models:/app/models
     depends_on:
       redis:
         condition: service_started
       neo4j:
         condition: service_healthy
-      emotion-models:
-        condition: service_started
     networks:
       - aether-network
     deploy:
@@ -417,15 +405,12 @@ services:
       USE_QUANTIZATION: "true"
     volumes:
       - ./aether_lib:/app/aether_lib:ro
-      - app_classifier_models:/app/models/classifier
       - ${MEDIA_PATH}:/shared/media:ro
     depends_on:
       redis:
         condition: service_started
       neo4j:
         condition: service_healthy
-      classifier-models:
-        condition: service_started
     networks:
       - aether-network
     deploy:
@@ -460,16 +445,12 @@ services:
 
     volumes:
       - ./aether_lib:/app/aether_lib:ro
-      - app_geolocation_data_v2:/app/models/geolocation
     depends_on:
       redis:
         condition: service_started
       neo4j:
         condition: service_healthy
       postgres:
-        condition: service_started
-
-      geolocation-models:
         condition: service_started
     networks:
       - aether-network
@@ -503,68 +484,6 @@ services:
         - aether-network
 
 
-  translation-models:
-    profiles: ["gpu-local"]
-    build:
-      context: ./models
-      dockerfile: translation/Dockerfile
-    volumes:
-      - app_translation_models:/models
-
-  audio-models:
-    # profiles: ["gpu-local"]
-    build:
-      context: ./models
-      dockerfile: audio/Dockerfile
-    image: ghcr.io/${GITHUB_REPOSITORY_OWNER:-aetherintel}/aether-audio-models:latest
-    volumes:
-      - app_audio_models:/models
-
-  emotion-models:
-    profiles: ["gpu-local"]
-    build:
-      context: ./models
-      dockerfile: emotion/Dockerfile
-    volumes:
-      - app_emotion_models:/models
-
-  classifier-models:
-    profiles: ["gpu-local"]
-    build:
-      context: ./models
-      dockerfile: classifier/Dockerfile
-    volumes:
-      - app_classifier_models:/models
-
-  image-models:
-    # profiles: ["gpu-local"]
-    build:
-      context: ./models
-      dockerfile: image/Dockerfile
-    image: ghcr.io/${GITHUB_REPOSITORY_OWNER:-aetherintel}/aether-image-models:latest
-    volumes:
-      - app_image_models:/models
-
-  geolocation-models:
-     # Geolocation stays local (CPU), so NO PROFILE here (or make explicit "core"?)
-     # User said "remote gpu instance are excluded". Geolocation is CPU.
-     # But wait, geolocation-models are large.
-     # User task validation said: "keep local".
-     # So I will NOT add profile to geolocation-models or geolocation-worker.
-    build:
-      context: ./models
-      dockerfile: geolocation/Dockerfile
-    volumes:
-      - app_geolocation_data_v2:/models
-  
-  llm-models:
-    profiles: ["gpu-local"]
-    build:
-      context: ./models
-      dockerfile: llm/Dockerfile
-    volumes:
-      - app_llm_models:/models
-
 volumes:
   pgdata:
   neo4j_data:
@@ -572,14 +491,6 @@ volumes:
   keycloak_data:
   tg_sessions:
   redis-data:
-  app_translation_models:
-  app_audio_models:
-  app_emotion_models:
-  app_classifier_models:
-  app_image_models:
-  app_geolocation_data_v2:
-
-  app_llm_models:
 
 networks:
   aether-network:

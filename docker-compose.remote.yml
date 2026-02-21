@@ -5,6 +5,9 @@
 # All workers use network_mode: host to access SSH-tunneled local services
 # (Redis, Postgres, Neo4j) on localhost.
 #
+# Worker images are self-contained — model weights are baked in at CI build
+# time and pulled from GHCR. No volume mounts or model-data sidecars needed.
+#
 # Usage:
 #   docker compose -f docker-compose.remote.yml --env-file .env.remote up -d
 # =============================================================================
@@ -12,37 +15,9 @@
 services:
 
   # ============================================================================
-  # MODEL DATA CONTAINERS (one-shot, populate volumes then exit)
-  # ============================================================================
-
-  llm-models:
-    image: ghcr.io/${GITHUB_REPOSITORY_OWNER:-aetherintel}/aether-llm-models:latest
-    build:
-      context: ./models
-      dockerfile: llm/Dockerfile
-    volumes:
-      - app_llm_models:/models/llm_vol
-
-  translation-models:
-    image: ghcr.io/${GITHUB_REPOSITORY_OWNER:-aetherintel}/aether-translation-models:latest
-    build:
-      context: ./models
-      dockerfile: translation/Dockerfile
-    volumes:
-      - app_translation_models:/models
-
-  emotion-models:
-    image: ghcr.io/${GITHUB_REPOSITORY_OWNER:-aetherintel}/aether-emotion-models:latest
-    build:
-      context: ./models
-      dockerfile: emotion/Dockerfile
-    volumes:
-      - app_emotion_models:/models
-
-
-
-  # ============================================================================
   # LLM SERVICE (GPU)
+  # LLM model is too large to bake into the image (~22GB) so it stays on a
+  # named volume populated separately.
   # ============================================================================
 
   llm-service:
@@ -60,12 +35,10 @@ services:
       - N_CTX=${N_CTX:-16384}
     volumes:
       - app_llm_models:/models/llm
-    depends_on:
-      llm-models:
-        condition: service_completed_successfully
 
   # ============================================================================
   # TRANSLATION WORKER (GPU)
+  # Model weights (~1.2GB) are baked into the image — pull and run.
   # ============================================================================
 
   translation-worker:
@@ -92,22 +65,10 @@ services:
       - NEO4J_USER=${NEO4J_USER}
       - NEO4J_PASSWORD=${NEO4J_PASSWORD}
       - DATABASE_URL=postgresql://${DB_USER}:${DB_PASSWORD}@localhost:5432/${POSTGRES_DB}
-    volumes:
-      - app_translation_models:/app/models
-    depends_on:
-      translation-models:
-        condition: service_started
-
-  # ============================================================================
-  # IMAGE ANALYSIS WORKER (GPU)
-  # ============================================================================
-
-
-
-
 
   # ============================================================================
   # EMOTION ANALYSIS WORKER (GPU)
+  # Model weights (~1GB) are baked into the image — pull and run.
   # ============================================================================
 
   emotion-worker:
@@ -126,19 +87,13 @@ services:
     environment:
       - NVIDIA_VISIBLE_DEVICES=all
       - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+      - REDIS_HOST=localhost
+      - REDIS_PORT=6379
       - NEO4J_URI=bolt://localhost:7687
       - NEO4J_USER=${NEO4J_USER}
       - NEO4J_PASSWORD=${NEO4J_PASSWORD}
       - MODELS_PATH=/app/models
       - USE_QUANTIZATION=true
-    volumes:
-      - app_emotion_models:/app/models
-    depends_on:
-      emotion-models:
-        condition: service_started
 
 volumes:
   app_llm_models:
-  app_translation_models:
-  app_audio_models:
-  app_emotion_models:

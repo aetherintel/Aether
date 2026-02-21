@@ -1,0 +1,67 @@
+name: GPU Deployment
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: 'Action to perform'
+        required: true
+        default: 'deploy'
+        type: choice
+        options:
+          - deploy
+          - start
+          - stop
+          - check
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_PREFIX: ${{ github.repository_owner }}/aether
+
+jobs:
+  deploy-gpu:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 🧾 Checkout repository
+        uses: actions/checkout@v4
+
+      - name: 🔑 Write SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.VAST_SSH_KEY }}" > ~/.ssh/vast_ai_key
+          chmod 600 ~/.ssh/vast_ai_key
+
+      - name: 🧹 Clear old host key
+        run: |
+          ssh-keygen -R "[${{ secrets.VAST_IP }}]:${{ secrets.VAST_PORT }}" 2>/dev/null || true
+
+      - name: 🚀 Deploy GPU Workers
+        if: github.event.inputs.action == 'deploy'
+        run: |
+          export SSH_KEY_PATH="$HOME/.ssh/vast_ai_key"
+          ./scripts/connect_remote_gpu.sh
+
+      - name: 🚀 Start GPU Workers (daemon)
+        if: github.event.inputs.action == 'start'
+        run: |
+          export SSH_KEY_PATH="$HOME/.ssh/vast_ai_key"
+          ./scripts/connect_remote_gpu.sh --daemon
+
+      - name: 🔍 Check GPU Status
+        if: github.event.inputs.action == 'check'
+        run: |
+          export SSH_KEY_PATH="$HOME/.ssh/vast_ai_key"
+          ./scripts/connect_remote_gpu.sh --check
+
+      - name: 🛑 Stop GPU Workers
+        if: github.event.inputs.action == 'stop'
+        run: |
+          export SSH_KEY_PATH="$HOME/.ssh/vast_ai_key"
+          ssh -p "${{ secrets.VAST_PORT }}" \
+            -o StrictHostKeyChecking=accept-new \
+            -i ~/.ssh/vast_ai_key \
+            root@${{ secrets.VAST_IP }} \
+            "cd ~/aether && docker compose -f docker-compose.remote.yml down"
+          
+          # Kill tunnel
+          pkill -f "autossh.*${{ secrets.VAST_IP }}" || true

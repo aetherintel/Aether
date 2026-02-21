@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Body
+from fastapi import APIRouter, HTTPException, Body, Depends
 from pydantic import BaseModel
 from typing import List, Optional, Any, Dict
 import asyncio
@@ -6,6 +6,7 @@ import logging
 
 from services.agent_service import AgentService
 from services.task_registry import TaskRegistry
+from services.auth_ctx import user_ctx, UserCtx
 
 logger = logging.getLogger(__name__)
 
@@ -27,14 +28,16 @@ class AgentResponse(BaseModel):
     metadata: Optional[Dict[str, Any]] = {}
 
 @router.post("/query", response_model=AgentResponse)
-async def query_agent(request: AgentRequest):
+async def query_agent(request: AgentRequest, user: UserCtx = Depends(user_ctx)):
     service = AgentService()
-    
+    owner_id = user["id"]
+
     # Create the coroutine but don't await immediately
     coro = service.process_message(
-        request.message, 
-        request.history, 
-        request.system_prompt_key
+        request.message,
+        request.history,
+        request.system_prompt_key,
+        owner_id=owner_id
     )
     
     if request.request_id:

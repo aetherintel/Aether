@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { 
-    Autocomplete, ActionIcon, Stack, Paper, Text, Loader, Button, 
-    Group, Box, ScrollArea, Table, Avatar, Select, Modal, Code, Card, SimpleGrid
+import {
+    Autocomplete, ActionIcon, Stack, Paper, Text, Loader, Button,
+    Group, Box, ScrollArea, Table, Avatar, Select, Modal, Code, Card, SimpleGrid, Badge
 } from '@mantine/core';
 import { IconSend, IconDatabaseImport, IconRobot, IconUser, IconSettings, IconX, IconThumbUp, IconThumbDown } from '@tabler/icons-react';
 import { agentService, AgentResponse, CommandSuggestion } from '../../services/agentService';
@@ -20,7 +20,7 @@ interface ChatMessage {
     id: string;
     sender: 'user' | 'agent';
     text: string;
-    widgetType?: 'graph' | 'table' | 'pie' | 'bar' | 'kpi';
+    widgetType?: 'graph' | 'table' | 'pie' | 'bar' | 'kpi' | 'location_map' | 'emotion_analysis' | 'top_influencers';
     widgetData?: any;
     metadata?: any;
     timestamp: Date;
@@ -30,15 +30,14 @@ export const AgentChat: React.FC<AgentChatProps> = ({ embedded = false }) => {
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [systemPrompts, setSystemPrompts] = useState<Record<string, string>>({});
-  const [activePromptKey, setActivePromptKey] = useState<string>("default");
+
   const [suggestions, setSuggestions] = useState<CommandSuggestion[]>([]);
   const [activeRequestId, setActiveRequestId] = useState<string | null>(null);
   
   const scrollViewport = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-      loadSystemPrompts();
+
       loadSuggestions();
       // Add initial greeting
       setMessages([{
@@ -61,14 +60,7 @@ export const AgentChat: React.FC<AgentChatProps> = ({ embedded = false }) => {
       }
   };
 
-  const loadSystemPrompts = async () => {
-      try {
-          const prompts = await agentService.getSystemPrompts();
-          setSystemPrompts(prompts);
-      } catch (e) {
-          console.error("Failed to load prompts", e);
-      }
-  };
+
 
   const loadSuggestions = async () => {
       try {
@@ -104,7 +96,7 @@ export const AgentChat: React.FC<AgentChatProps> = ({ embedded = false }) => {
         const response: AgentResponse = await agentService.queryAgent(
             userMsg.text, 
             history, 
-            activePromptKey,
+            "default",
             requestId
         );
         
@@ -167,24 +159,69 @@ export const AgentChat: React.FC<AgentChatProps> = ({ embedded = false }) => {
 
   const renderTable = (data: any[]) => {
       if (!data || data.length === 0) return <Text size="sm">No data to display</Text>;
-      const keys = Object.keys(data[0]);
       
+      // Fields we don't want to show the user in a raw table view
+      const ignoredKeys = ['owner_id', 'mid', '_id', 'geolocation_status', 'image_analysis_status', 'audio_transcription_status', 'translation_status'];
+      const keys = Object.keys(data[0]).filter(k => !ignoredKeys.includes(k));
+      
+      if (keys.length === 0) return <Text size="sm">No displayable data</Text>;
+
       return (
-          <ScrollArea h={300}>
+          <ScrollArea h={350}>
             <Table stickyHeader striped highlightOnHover>
                 <Table.Thead>
                     <Table.Tr>
-                        {keys.map(k => <Table.Th key={k}>{k}</Table.Th>)}
+                        {keys.map(k => <Table.Th key={k}>{k.replace(/_/g, ' ')}</Table.Th>)}
                     </Table.Tr>
                 </Table.Thead>
                 <Table.Tbody>
                     {data.map((row, i) => (
                         <Table.Tr key={i}>
-                            {keys.map(k => (
-                                <Table.Td key={k}>
-                                    {typeof row[k] === 'object' ? JSON.stringify(row[k]) : String(row[k])}
-                                </Table.Td>
-                            ))}
+                            {keys.map(k => {
+                                const val = row[k];
+                                let displayVal: React.ReactNode = String(val);
+                                
+                                if (val === null || val === undefined) {
+                                    displayVal = <Text c="dimmed" fs="italic" size="sm">null</Text>;
+                                } else if (typeof val === 'boolean') {
+                                    displayVal = <Badge color={val ? 'green' : 'gray'}>{val ? 'Yes' : 'No'}</Badge>;
+                                } else if (typeof val === 'object' && val !== null) {
+                                    if (Array.isArray(val)) {
+                                        displayVal = <Text size="sm">{val.join(', ')}</Text>;
+                                    } else {
+                                        const objKeys = Object.keys(val);
+                                        if (objKeys.length === 0) {
+                                            displayVal = <Text size="sm" c="dimmed" fs="italic">Empty</Text>;
+                                        } else {
+                                            displayVal = (
+                                                <Table withTableBorder withColumnBorders>
+                                                    <Table.Tbody>
+                                                        {objKeys.map(ok => (
+                                                            <Table.Tr key={ok}>
+                                                                <Table.Td fw={500} style={{ padding: '2px 4px', fontSize: '0.75rem' }}>{ok}</Table.Td>
+                                                                <Table.Td style={{ padding: '2px 4px', fontSize: '0.75rem' }}>
+                                                                    {typeof val[ok] === 'object' ? JSON.stringify(val[ok]) : String(val[ok])}
+                                                                </Table.Td>
+                                                            </Table.Tr>
+                                                        ))}
+                                                    </Table.Tbody>
+                                                </Table>
+                                            );
+                                        }
+                                    }
+                                } else if (typeof val === 'string' && val.length > 100) {
+                                    // Truncate long strings for better table UX
+                                    displayVal = <Text size="sm" lineClamp={3} title={val}>{val}</Text>;
+                                } else {
+                                    displayVal = <Text size="sm">{String(val)}</Text>;
+                                }
+                                
+                                return (
+                                    <Table.Td key={k} style={{ maxWidth: 300, verticalAlign: 'top' }}>
+                                        {displayVal}
+                                    </Table.Td>
+                                );
+                            })}
                         </Table.Tr>
                     ))}
                 </Table.Tbody>
@@ -237,14 +274,7 @@ export const AgentChat: React.FC<AgentChatProps> = ({ embedded = false }) => {
                     <Text fw={600}>Agent Chat</Text>
                 </Group>
                 <Group>
-                    <Select 
-                        data={Object.keys(systemPrompts).map(k => ({ value: k, label: k }))}
-                        value={activePromptKey}
-                        onChange={(v) => setActivePromptKey(v || 'default')}
-                        size="xs"
-                        placeholder="System Prompt"
-                        w={150}
-                    />
+
                     <Button variant="light" size="xs" onClick={handleInitialize} leftSection={<IconDatabaseImport size={14}/>}>
                         Re-Index
                     </Button>
@@ -318,17 +348,23 @@ export const AgentChat: React.FC<AgentChatProps> = ({ embedded = false }) => {
 
                                         {msg.widgetType === 'bar' && (
                                             <Box mt="sm" h={300} w={500}>
-                                                 <Text fw={500} size="sm" mb="xs">Trend Analysis</Text>
                                                  {(() => {
                                                      const { data, dataKey, series } = transformBarData(msg.widgetData);
+                                                     const valueKey = series[0]?.name || '';
+                                                     const title = valueKey
+                                                         ? `${valueKey.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())} by ${dataKey.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}`
+                                                         : 'Results';
                                                      return (
-                                                        <BarChart
-                                                            h={250}
-                                                            data={data}
-                                                            dataKey={dataKey}
-                                                            series={series}
-                                                            tickLine="y"
-                                                        />
+                                                         <>
+                                                             <Text fw={500} size="sm" mb="xs">{title}</Text>
+                                                             <BarChart
+                                                                 h={250}
+                                                                 data={data}
+                                                                 dataKey={dataKey}
+                                                                 series={series}
+                                                                 tickLine="y"
+                                                             />
+                                                         </>
                                                      );
                                                  })()}
                                             </Box>
@@ -343,10 +379,105 @@ export const AgentChat: React.FC<AgentChatProps> = ({ embedded = false }) => {
                                                 </Group>
                                                 <Group align="flex-end" gap="xs" mt={25}>
                                                     <Text style={{ fontSize: '2rem', fontWeight: 700, lineHeight: 1 }}>
-                                                        {Object.values(msg.widgetData[0])[0] as React.ReactNode}
+                                                        {String(Object.values(msg.widgetData[0])[0])}
                                                     </Text>
                                                 </Group>
                                             </Card>
+                                        )}
+
+                                        {/* 🎯 Location Map Widget - Auto-detected for location queries */}
+                                        {msg.widgetType === 'location_map' && msg.widgetData && msg.widgetData.length > 0 && (
+                                            <Box mt="md">
+                                                <Text fw={500} size="sm" mb="xs" c="dimmed">📍 Location Analysis</Text>
+                                                <Card withBorder radius="md" p="sm">
+                                                    <ScrollArea h={300}>
+                                                        <Stack gap="xs">
+                                                            {msg.widgetData.slice(0, 10).map((item: any, idx: number) => (
+                                                                <Paper key={idx} p="xs" withBorder>
+                                                                    <Group justify="space-between">
+                                                                        <Group>
+                                                                            <Text fw={500}>📍 {item.canonical_name || item.location || item.name || 'Unknown'}</Text>
+                                                                            {item.country && <Badge size="xs">{item.country}</Badge>}
+                                                                        </Group>
+                                                                        <Group>
+                                                                            {(item.latitude || item.lat) && (item.longitude || item.lng) && (
+                                                                                <Text size="xs" c="dimmed">
+                                                                                    {(item.latitude ?? item.lat).toFixed(2)}, {(item.longitude ?? item.lng).toFixed(2)}
+                                                                                </Text>
+                                                                            )}
+                                                                            <Badge color="blue">{item.message_count || item.count || 1}</Badge>
+                                                                        </Group>
+                                                                    </Group>
+                                                                </Paper>
+                                                            ))}
+                                                        </Stack>
+                                                    </ScrollArea>
+                                                </Card>
+                                            </Box>
+                                        )}
+
+                                        {/* 🎯 Emotion Analysis Widget - Auto-detected for emotion queries */}
+                                        {msg.widgetType === 'emotion_analysis' && msg.widgetData && msg.widgetData.length > 0 && (
+                                            <Box mt="md">
+                                                <Text fw={500} size="sm" mb="xs" c="dimmed">💭 Emotion Analysis</Text>
+                                                <Card withBorder radius="md" p="sm">
+                                                    <SimpleGrid cols={2} spacing="xs">
+                                                        {msg.widgetData.slice(0, 6).map((item: any, idx: number) => {
+                                                            const emotion = Object.keys(item)[0];
+                                                            const score = Object.values(item)[0];
+                                                            const emoji = emotion === 'anger' ? '😠' : 
+                                                                          emotion === 'joy' ? '😊' : 
+                                                                          emotion === 'fear' ? '😨' : 
+                                                                          emotion === 'sadness' ? '😢' : 
+                                                                          emotion === 'surprise' ? '😲' : 
+                                                                          emotion === 'disgust' ? '🤢' : 
+                                                                          emotion === 'love' ? '❤️' : '😐';
+                                                            return (
+                                                                <Paper key={idx} p="xs" withBorder>
+                                                                    <Group>
+                                                                        <Text size="xl">{emoji}</Text>
+                                                                        <Box>
+                                                                            <Text size="sm" fw={500} tt="capitalize">{emotion}</Text>
+                                                                            <Text size="xs" c="dimmed">{String(score)}</Text>
+                                                                        </Box>
+                                                                    </Group>
+                                                                </Paper>
+                                                            );
+                                                        })}
+                                                    </SimpleGrid>
+                                                </Card>
+                                            </Box>
+                                        )}
+
+                                        {/* 🎯 Top Influencers Widget - Auto-detected for user activity queries */}
+                                        {msg.widgetType === 'top_influencers' && msg.widgetData && msg.widgetData.length > 0 && (
+                                            <Box mt="md">
+                                                <Text fw={500} size="sm" mb="xs" c="dimmed">🏆 Top Contributors</Text>
+                                                <Card withBorder radius="md" p="sm">
+                                                    <Stack gap="xs">
+                                                        {msg.widgetData.slice(0, 10).map((item: any, idx: number) => (
+                                                            <Paper key={idx} p="xs" withBorder>
+                                                                <Group justify="space-between">
+                                                                    <Group>
+                                                                        <Avatar size="sm" color="blue">
+                                                                            {idx + 1}
+                                                                        </Avatar>
+                                                                        <Box>
+                                                                            <Text size="sm" fw={500}>
+                                                                                {item.username || item.user || item.author || item.name || 'Unknown'}
+                                                                            </Text>
+                                                                            {item.channel && <Text size="xs" c="dimmed">#{item.channel}</Text>}
+                                                                        </Box>
+                                                                    </Group>
+                                                                    <Badge color="grape">
+                                                                        {item.message_count || item.count || item.messages || 0} msgs
+                                                                    </Badge>
+                                                                </Group>
+                                                            </Paper>
+                                                        ))}
+                                                    </Stack>
+                                                </Card>
+                                            </Box>
                                         )}
 
                                         {/* Metadata / Cypher Debug */}

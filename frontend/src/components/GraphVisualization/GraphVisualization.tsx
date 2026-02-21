@@ -91,7 +91,7 @@ const GraphVisualization: React.FC<GraphVisualizationProps> = ({
       id: node.id,
       label: node.label,
       group: node.type,
-      title: `${node.type}: ${node.label}`,
+      title: node.name || node.label,
       color: getNodeColor(node.type),
       size: Math.max((node.properties?.message_count || 1) * 2, 15),
       font: { size: 12, color: '#000000' },

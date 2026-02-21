@@ -246,12 +246,9 @@ class QueueService:
         logger.info(f"📤 Enqueueing emotion analysis job: {job_id}")
         
         job = self.queues['emotion'].enqueue(
-            'worker.classify_emotion_job',
+            'workers.emotion_worker.worker.classify_emotion_job',
             message_id=payload.message_id,
             text=payload.text,
-            neo4j_uri=os.getenv('NEO4J_URI'),
-            neo4j_user=os.getenv('NEO4J_USER'),
-            neo4j_password=os.getenv('NEO4J_PASSWORD'),
             threshold=payload.threshold,
             owner_id=payload.owner_id,
             case_id=payload.case_id,

@@ -38,23 +38,30 @@ jobs:
             context: .
             dockerfile: ./workers/report_worker/Dockerfile
 
-          # AI Worker services
+          # AI Worker services — model weights are baked in at build time
           - service: translation-worker
             context: .
             dockerfile: ./workers/translation_worker/Dockerfile
-          - service: image-worker
-            context: .
-            dockerfile: ./workers/image_worker/Dockerfile
           - service: audio-worker
             context: .
             dockerfile: ./workers/audio_worker/Dockerfile
-          - service: emotion-worker
+          - service: image-worker
             context: .
-            dockerfile: ./workers/emotion_worker/Dockerfile
-
+            dockerfile: ./workers/image_worker/Dockerfile
+          - service: classification-worker
+            context: .
+            dockerfile: ./workers/classification_worker/Dockerfile
           - service: geolocation-worker
             context: .
             dockerfile: ./workers/geolocation_worker/Dockerfile
+          # Emotion worker: custom model weights downloaded from GitHub Release at build time
+          - service: emotion-worker
+            context: .
+            dockerfile: ./workers/emotion_worker/Dockerfile
+            build-args: |
+              GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }}
+              GITHUB_REPOSITORY=${{ github.repository }}
+              MODEL_RELEASE_TAG=models-v1
           - service: photon
             context: .
             dockerfile: ./docker/photon/Dockerfile
@@ -103,8 +110,66 @@ jobs:
           build-args: ${{ matrix.build-args }}
 
   # ============================================================
-  # DEPLOY TO PRODUCTION VM (runs once after all builds)
+  # DEPLOY GPU WORKERS TO VAST.AI (fire and forget via separate workflow)
+  # Note: GPU deployment runs independently - can be triggered manually or via
+  # workflow_dispatch. The main pipeline does NOT wait for GPU to be ready.
   # ============================================================
+  deploy-gpu:
+    runs-on: ubuntu-latest
+    needs: build-and-push
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - name: 🧾 Checkout repository
+        uses: actions/checkout@v4
+
+      - name: 🔑 Write SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.VAST_SSH_KEY }}" > ~/.ssh/vast_ai_key
+          chmod 600 ~/.ssh/vast_ai_key
+
+      - name: 🚀 Trigger GPU deployment workflow
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.actions.createWorkflowDispatch({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: 'gpu-deployment.yml',
+              ref: 'main',
+              inputs: {
+                action: 'deploy'
+              }
+            })
+            console.log('GPU deployment workflow triggered')
+
+      - name: ✅ GPU deployment initiated
+        run: |
+          echo "🚀 GPU deployment started in background"
+          echo "   Monitor at: https://github.com/${{ github.repository }}/actions/workflows/gpu-deployment.yml"
+          echo "   Or manually trigger: https://github.com/${{ github.repository }}/actions/workflows/gpu-deployment.yml/dispatch"
+
+  # ============================================================
+  # WAIT FOR GPU (optional - only if you need to ensure GPU is ready before deploy)
+  # ============================================================
+  wait-gpu:
+    runs-on: ubuntu-latest
+    needs: deploy
+    if: github.ref == 'refs/heads/main' && false  # Disabled by default - enable if needed
+    steps:
+      - name: 🧾 Checkout repository
+        uses: actions/checkout@v4
+
+      - name: 🔑 Write SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.VAST_SSH_KEY }}" > ~/.ssh/vast_ai_key
+          chmod 600 ~/.ssh/vast_ai_key
+
+      - name: ⏳ Wait for GPU workers
+        run: |
+          export SSH_KEY_PATH="$HOME/.ssh/vast_ai_key"
+          ./scripts/connect_remote_gpu.sh --wait
   deploy:
     runs-on: ubuntu-latest
     needs: build-and-push

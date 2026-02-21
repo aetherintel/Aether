@@ -16,35 +16,25 @@ class AgentService:
     def __init__(self):
         self.text2cypher = Text2CypherService()
         self.system_prompts = {
-            "default": "You are a helpful Aether assistant. You can visualize data, summarize cases, and answer questions.",
-            "data_analyst": "You are a data analyst. Focus on trends, statistics, and graph structures.",
-            "storyteller": "You are a storyteller. Summarize events as a narrative.",
-            "programmer": "You are a python expert. Provide code snippets and technical explanations."
+            "default": "You are Aether, a helpful AI assistant for analyzing Telegram message data. You can visualize graphs, summarize trends, and answer questions about messages, channels, users, and locations.",
+            "data_analyst": "You are a data analyst specializing in message analytics. Focus on trends, statistics, distributions, and patterns. Provide insights with specific numbers and percentages. Use bullet points for clarity.",
+            "storyteller": "You are a storyteller who weaves narrative from data. Transform query results into engaging stories that highlight key events, actors, and developments. Make the data come alive with context.",
+            "programmer": "You are a Python expert and Neo4j specialist. Explain technical concepts clearly with code examples when relevant. Focus on data structures and algorithms.",
+            "investigator": "You are a digital investigator. Focus on finding connections, anomalies, and suspicious patterns. Look for unusual activity, outliers, and potential risks. Provide actionable insights."
         }
 
-    async def process_message(self, message: str, history: List[str] = [], system_prompt_key: str = "default") -> AgentResponse:
+    async def process_message(self, message: str, history: List[str] = [], system_prompt_key: str = "default", owner_id: Optional[str] = None) -> AgentResponse:
         """
         Main entry point for the agent. Parses commands or delegates to LLM/Text2Cypher.
         """
-        logger.info(f"Agent received: {message} with prompt {system_prompt_key}")
+        logger.info(f"Agent received: {message} with prompt {system_prompt_key}, owner_id={owner_id}")
 
         # 1. Command Parsing
         if message.startswith("/"):
-            return await self._handle_command(message, history)
+            return await self._handle_command(message, history, owner_id=owner_id)
 
-        # 2. Default Behavior (Text2Cypher for now, but wrapped)
-        # In the future, we can decide based on system prompt whether to use Text2Cypher or just chat.
-        # For now, let's assume everything is a data query unless specified otherwise.
-        
-        # We need to inject the system prompt logic into Text2Cypher or handle it here.
-        # Since Text2Cypher is specific to graph generation, we might want a General Conversation Agent too.
-        # For this step, we will wrap the Text2Cypher result.
-        
         try:
-            # TODO: Pass system prompt to Text2Cypher if possible, or use a general LLM for non-graph questions.
-            # detailed_prompt = self.system_prompts.get(system_prompt_key, self.system_prompts["default"])
-            
-            result = await self.text2cypher.run_text2cypher(message, history, system_prompt_key=system_prompt_key)
+            result = await self.text2cypher.run_text2cypher(message, history, system_prompt_key=system_prompt_key, owner_id=owner_id)
             
             return AgentResponse(
                 message=result.get("summary", ""),
@@ -56,7 +46,7 @@ class AgentService:
             logger.error(f"Agent processing failed: {e}")
             return AgentResponse(message=f"I encountered an error: {str(e)}")
 
-    async def _handle_command(self, message: str, history: List[str]) -> AgentResponse:
+    async def _handle_command(self, message: str, history: List[str], owner_id: Optional[str] = None) -> AgentResponse:
         parts = message.split(" ", 1)
         command = parts[0].lower()
         args = parts[1] if len(parts) > 1 else ""
@@ -65,20 +55,21 @@ class AgentService:
             return AgentResponse(
                 message="**Available Commands:**\n"
                         "- `/visualize <query>`: Force a graph visualization.\n"
-                        "- `/summarize <text/query>`: Summarize the results.\n"
-                        "- `/sys list`: List available system prompts.\n"
-                        "- `/sys set <key>`: Set the active system prompt (client-side mostly)."
+                        "- `/showmap <query>`: Generate a map visualization of locations.\n"
+                        "- `/summarize <text/query>`: Summarize the results."
             )
         
         elif command == "/visualize":
-            # Force graph visualization
-            return await self.process_message(args, history) 
+            return await self.process_message(args, history, owner_id=owner_id)
+
+        elif command in ["/showmap", "/show_map"]:
+            # Inject instruction to extract location data and use a persona good at data extraction
+            enhanced_args = f"{args}. Ensure you return location names as canonical_name, latitude as lat, and longitude as lng in the results."
+            return await self.process_message(enhanced_args, history, system_prompt_key="data_analyst", owner_id=owner_id)
 
         elif command == "/summarize":
-             # For now, just pass it through as a normal message but with a summarization hint
-             # Ideally we would call a summarization chain
              args = f"Summarize the following: {args}" if args else "Summarize the last context."
-             return await self.process_message(args, history, "storyteller") 
+             return await self.process_message(args, history, "storyteller", owner_id=owner_id) 
         
         elif command == "/sys":
             subcmd_parts = args.split(" ", 1)
@@ -154,25 +145,10 @@ class AgentService:
     async def get_suggested_commands(self) -> List[Dict[str, str]]:
         """
         Returns a list of suggested commands/queries for the frontend autocomplete.
-        Ideally this could be dynamic based on user role or case context.
         """
         return [
-            # Exploration
-            {"category": "Exploration", "label": "Latest Messages", "query": "Show me the latest 20 messages"},
-            {"category": "Exploration", "label": "Active Channels", "query": "Show me the channels with the most messages"},
-            {"category": "Exploration", "label": "Media Content", "query": "Show me messages with photos or videos"},
-
-            # Analysis
-            {"category": "Analysis", "label": "Negative Sentiment", "query": "Show me messages with negative emotions"},
-            {"category": "Analysis", "label": "Violent Content", "query": "Show me messages classified as violence"},
-            {"category": "Analysis", "label": "Keyword Search", "query": "Find messages containing 'war' or 'conflict'"},
-
-            # Visualization
-            {"category": "Visualization", "label": "Channel Network", "query": "Visualize the connection between Channels and Messages"},
-            {"category": "Visualization", "label": "Location Map", "query": "Visualize messages and their locations"},
-            {"category": "Visualization", "label": "User Interactions", "query": "Visualize relationships between Users and Messages"},
-
-            # Network
-            {"category": "Network", "label": "Message Threads", "query": "Show me message threads (replies)"},
-            {"category": "Network", "label": "Shared Locations", "query": "Show me locations mentioned by multiple channels"}
+            {"category": "Commands", "label": "Visualize Graph", "query": "/visualize "},
+            {"category": "Commands", "label": "Show Map", "query": "/showmap "},
+            {"category": "Commands", "label": "Summarize Data", "query": "/summarize "},
+            {"category": "Commands", "label": "Help", "query": "/help"}
         ]
