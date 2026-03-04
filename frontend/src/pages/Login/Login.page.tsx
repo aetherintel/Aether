@@ -48,8 +48,7 @@ export function Login() {
   const handleLogin = async (values: LoginCredentials) => {
     try {
       const response = await keycloakLogin(values);
-      // Store token (localStorage, context, etc.)
-      login(response.access_token);
+      login(response.access_token, (response as any).refresh_token, (response as any).expires_in);
 
       navigate('/'); // Redirect after successful login
 

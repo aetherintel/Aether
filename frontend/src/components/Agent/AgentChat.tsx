@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
     Autocomplete, ActionIcon, Stack, Paper, Text, Loader, Button,
-    Group, Box, ScrollArea, Table, Avatar, Select, Modal, Code, Card, SimpleGrid, Badge
+    Group, Box, ScrollArea, Table, Avatar, Select, Modal, Code, Card, SimpleGrid, Badge, Collapse
 } from '@mantine/core';
-import { IconSend, IconDatabaseImport, IconRobot, IconUser, IconSettings, IconX, IconThumbUp, IconThumbDown } from '@tabler/icons-react';
+import { IconSend, IconDatabaseImport, IconRobot, IconUser, IconSettings, IconX, IconThumbUp, IconThumbDown, IconCode, IconChevronDown, IconChevronRight } from '@tabler/icons-react';
 import { agentService, AgentResponse, CommandSuggestion } from '../../services/agentService';
 import { GraphRAGWidget } from '../Dashboard/GraphRAGWidget';
 import { notifications } from '@mantine/notifications';
@@ -49,27 +49,58 @@ interface ChatMessage {
     timestamp: Date;
 }
 
+const CHAT_STORAGE_KEY = 'aether_agent_chat_history';
+
+function loadMessagesFromStorage(): ChatMessage[] {
+    try {
+        const raw = sessionStorage.getItem(CHAT_STORAGE_KEY);
+        if (!raw) return [];
+        const parsed: ChatMessage[] = JSON.parse(raw);
+        // Re-hydrate Date objects
+        return parsed.map(m => ({ ...m, timestamp: new Date(m.timestamp) }));
+    } catch {
+        return [];
+    }
+}
+
+function saveMessagesToStorage(msgs: ChatMessage[]) {
+    try {
+        sessionStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(msgs));
+    } catch {
+        // sessionStorage full or unavailable — silently ignore
+    }
+}
+
 export const AgentChat: React.FC<AgentChatProps> = ({ embedded = false }) => {
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(false);
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-
-  const [suggestions, setSuggestions] = useState<CommandSuggestion[]>([]);
-  const [activeRequestId, setActiveRequestId] = useState<string | null>(null);
-  
-  const scrollViewport = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-
-      loadSuggestions();
-      // Add initial greeting
-      setMessages([{
+  const [messages, setMessages] = useState<ChatMessage[]>(() => {
+      const stored = loadMessagesFromStorage();
+      if (stored.length > 0) return stored;
+      return [{
           id: 'init',
           sender: 'agent',
           text: '👋 **Hello!** I am your **Aether Agent**. \n\nYou can ask me to `visualize data`, `summarize cases`, or run analysis.\n\nType `/help` for commands.',
           timestamp: new Date()
-      }]);
+      }];
+  });
+
+  const [suggestions, setSuggestions] = useState<CommandSuggestion[]>([]);
+  const [activeRequestId, setActiveRequestId] = useState<string | null>(null);
+  const [expandedCypher, setExpandedCypher] = useState<Set<string>>(new Set());
+  const [slowQuery, setSlowQuery] = useState(false);
+  const slowQueryTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const scrollViewport = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+      loadSuggestions();
   }, []);
+
+  // Persist chat history to sessionStorage whenever messages change
+  useEffect(() => {
+      saveMessagesToStorage(messages);
+  }, [messages]);
 
   useEffect(() => {
       scrollToBottom();
@@ -111,6 +142,8 @@ export const AgentChat: React.FC<AgentChatProps> = ({ embedded = false }) => {
     setMessages(prev => [...prev, userMsg]);
     setQuery('');
     setLoading(true);
+    setSlowQuery(false);
+    slowQueryTimer.current = setTimeout(() => setSlowQuery(true), 8000);
 
     try {
         // Collect history (last 10 messages)
@@ -157,6 +190,11 @@ export const AgentChat: React.FC<AgentChatProps> = ({ embedded = false }) => {
     } finally {
       setLoading(false);
       setActiveRequestId(null);
+      setSlowQuery(false);
+      if (slowQueryTimer.current) {
+          clearTimeout(slowQueryTimer.current);
+          slowQueryTimer.current = null;
+      }
     }
   };
 
@@ -433,12 +471,53 @@ export const AgentChat: React.FC<AgentChatProps> = ({ embedded = false }) => {
                                                                 {validPoints.map((item: any, idx: number) => {
                                                                     const lat = item.lat ?? item.latitude;
                                                                     const lng = item.lng ?? item.longitude;
+                                                                    const mentions = item.mention_count ?? 1;
+                                                                    const radius = Math.min(Math.max(8 + Math.sqrt(mentions) * 2, 10), 36);
+                                                                    const hue = Math.max(0, 120 - mentions * 4);
+                                                                    const circleIcon = L.divIcon({
+                                                                        className: '',
+                                                                        html: `<div style="width:${radius*2}px;height:${radius*2}px;border-radius:50%;background:hsl(${hue},80%,50%);border:2px solid white;opacity:0.85;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:bold;color:white;box-shadow:0 1px 4px rgba(0,0,0,0.4)">${mentions > 1 ? mentions : ''}</div>`,
+                                                                        iconSize: [radius * 2, radius * 2],
+                                                                        iconAnchor: [radius, radius],
+                                                                    });
+                                                                    const sampleMsgs: Array<{text: string; date?: string}> = item.sample_messages || [];
                                                                     return (
-                                                                        <Marker key={idx} position={[lat, lng]}>
-                                                                            <Popup>
-                                                                                <strong>{item.canonical_name || 'Unknown'}</strong>
-                                                                                {item.country && <div><small>{item.country}</small></div>}
-                                                                                {item.mention_count && <div><small>{item.mention_count} mentions</small></div>}
+                                                                        <Marker key={idx} position={[lat, lng]} icon={circleIcon}>
+                                                                            <Popup minWidth={260} maxWidth={320}>
+                                                                                <div style={{ fontFamily: 'system-ui, sans-serif' }}>
+                                                                                    <div style={{ fontWeight: 700, fontSize: '0.95rem', marginBottom: 2 }}>
+                                                                                        📍 {item.canonical_name || 'Unknown'}
+                                                                                    </div>
+                                                                                    {item.country && (
+                                                                                        <div style={{ fontSize: '0.75rem', color: '#888', marginBottom: 6 }}>
+                                                                                            🌍 {item.country}
+                                                                                        </div>
+                                                                                    )}
+                                                                                    <div style={{ display: 'inline-block', background: `hsl(${hue},80%,45%)`, color: 'white', borderRadius: 10, padding: '2px 10px', fontSize: '0.72rem', fontWeight: 700, marginBottom: sampleMsgs.length ? 8 : 0 }}>
+                                                                                        {mentions} {mentions === 1 ? 'mention' : 'mentions'}
+                                                                                    </div>
+                                                                                    {sampleMsgs.length > 0 && (
+                                                                                        <div style={{ borderTop: '1px solid #e9ecef', paddingTop: 6 }}>
+                                                                                            <div style={{ fontSize: '0.68rem', color: '#aaa', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 5 }}>
+                                                                                                Recent messages
+                                                                                            </div>
+                                                                                            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 180, overflowY: 'auto' }}>
+                                                                                                {sampleMsgs.map((msg, mi) => (
+                                                                                                    <div key={mi} style={{ background: '#f8f9fa', borderRadius: 6, padding: '5px 8px', borderLeft: '3px solid #4dabf7' }}>
+                                                                                                        <div style={{ fontSize: '0.76rem', color: '#333', lineHeight: 1.4 }}>
+                                                                                                            {msg.text && msg.text.length > 140 ? msg.text.substring(0, 140) + '…' : (msg.text || '—')}
+                                                                                                        </div>
+                                                                                                        {msg.date && (
+                                                                                                            <div style={{ fontSize: '0.65rem', color: '#bbb', marginTop: 3 }}>
+                                                                                                                {new Date(msg.date).toLocaleDateString('de-DE', { day: '2-digit', month: 'short', year: 'numeric' })}
+                                                                                                            </div>
+                                                                                                        )}
+                                                                                                    </div>
+                                                                                                ))}
+                                                                                            </div>
+                                                                                        </div>
+                                                                                    )}
+                                                                                </div>
                                                                             </Popup>
                                                                         </Marker>
                                                                     );
@@ -514,54 +593,69 @@ export const AgentChat: React.FC<AgentChatProps> = ({ embedded = false }) => {
                                             </Box>
                                         )}
 
-                                        {/* Metadata / Cypher Debug */}
+                                        {/* Feedback + collapsible Cypher debug */}
                                         {msg.metadata?.cypher && (
                                             <Box mt="xs">
-                                                <Text size="xs" c="dimmed" fw={500}>Generated Cypher:</Text>
-                                                <Code block style={{ fontSize: '0.75rem' }}>
-                                                    {msg.metadata.cypher
-                                                        ?.replace(/\b\w+\.owner_id\s*=\s*'[^']*'\s*(AND\s*)?/gi, '')
-                                                        .replace(/\bAND\s+RETURN\b/gi, 'RETURN')
-                                                        .replace(/WHERE\s+RETURN/gi, 'RETURN')
-                                                        .trim()}
-                                                </Code>
-                                                
-                                                {/* Feedback Buttons */}
-                                                <Group mt="xs" gap="xs">
-                                                    <Text size="xs">Rate:</Text>
-                                                    <ActionIcon 
-                                                        variant="subtle" 
-                                                        color="green" 
-                                                        size="sm" 
+                                                <Group gap="xs" align="center">
+                                                    <Text size="xs" c="dimmed">Rate this result:</Text>
+                                                    <ActionIcon
+                                                        variant="subtle"
+                                                        color="green"
+                                                        size="sm"
                                                         onClick={() => {
                                                             agentService.submitFeedback(
-                                                                msg.metadata.question || "Unknown", 
-                                                                msg.metadata.cypher, 
+                                                                msg.metadata.question || "Unknown",
+                                                                msg.metadata.cypher,
                                                                 1
                                                             );
                                                             notifications.show({ message: 'Thanks for the feedback!', color: 'green' });
                                                         }}
-                                                        title="Good Query (Save as Example)"
+                                                        title="Good result"
                                                     >
-                                                        <IconThumbUp size={16} />
+                                                        <IconThumbUp size={14} />
                                                     </ActionIcon>
-                                                    <ActionIcon 
-                                                        variant="subtle" 
-                                                        color="red" 
-                                                        size="sm" 
+                                                    <ActionIcon
+                                                        variant="subtle"
+                                                        color="red"
+                                                        size="sm"
                                                         onClick={() => {
                                                             agentService.submitFeedback(
-                                                                msg.metadata.question || "Unknown", 
-                                                                msg.metadata.cypher, 
+                                                                msg.metadata.question || "Unknown",
+                                                                msg.metadata.cypher,
                                                                 -1
                                                             );
                                                             notifications.show({ message: 'Feedback recorded', color: 'gray' });
                                                         }}
-                                                        title="Bad Query"
+                                                        title="Bad result"
                                                     >
-                                                        <IconThumbDown size={16} />
+                                                        <IconThumbDown size={14} />
+                                                    </ActionIcon>
+                                                    <ActionIcon
+                                                        variant="subtle"
+                                                        color="gray"
+                                                        size="sm"
+                                                        onClick={() => setExpandedCypher(prev => {
+                                                            const next = new Set(prev);
+                                                            next.has(msg.id) ? next.delete(msg.id) : next.add(msg.id);
+                                                            return next;
+                                                        })}
+                                                        title="Show generated query"
+                                                    >
+                                                        {expandedCypher.has(msg.id) ? <IconChevronDown size={14} /> : <IconCode size={14} />}
                                                     </ActionIcon>
                                                 </Group>
+                                                <Collapse in={expandedCypher.has(msg.id)}>
+                                                    <Box mt="xs">
+                                                        <Text size="xs" c="dimmed" fw={500} mb={4}>Generated Query:</Text>
+                                                        <Code block style={{ fontSize: '0.72rem' }}>
+                                                            {msg.metadata.cypher
+                                                                ?.replace(/\b\w+\.owner_id\s*=\s*'[^']*'\s*(AND\s*)?/gi, '')
+                                                                .replace(/\bAND\s+RETURN\b/gi, 'RETURN')
+                                                                .replace(/WHERE\s+RETURN/gi, 'RETURN')
+                                                                .trim()}
+                                                        </Code>
+                                                    </Box>
+                                                </Collapse>
                                             </Box>
                                         )}
                                     </Paper>
@@ -571,9 +665,11 @@ export const AgentChat: React.FC<AgentChatProps> = ({ embedded = false }) => {
                     </AnimatePresence>
                     
                     {loading && (
-                        <Group ml={50}>
-                            <Loader size="sm" type="dots" color="gray" />
-                            <Text size="xs" c="dimmed" fs="italic">Analyzing...</Text>
+                        <Group ml={50} align="center">
+                            <Loader size="sm" type="dots" color={slowQuery ? "orange" : "gray"} />
+                            <Text size="xs" c={slowQuery ? "orange" : "dimmed"} fs="italic">
+                                {slowQuery ? "Still working — complex query, almost there..." : "Analyzing..."}
+                            </Text>
                         </Group>
                     )}
                 </Stack>

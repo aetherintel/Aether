@@ -128,12 +128,15 @@ class QueryTemplates:
                 return None
             # Exclude strict keywords
             if term not in ["the", "latest", "newest"]:
+                 # Search both original and translated text for best coverage
+                 # (original may be in a foreign language, translated is German)
                  return {
                     "nodes": [{"id": "m", "label": "Message"}],
                     "relationships": [],
                     "optional_relationships": [],
                     "filters": [
-                        {"variable": "m.text", "operator": "CONTAINS", "value": term}
+                        {"variable": "m.original_text", "operator": "CONTAINS", "value": term},
+                        {"variable": "m.translated_text", "operator": "OR_CONTAINS", "value": term}
                     ],
                     "return_fields": ["m"],
                     "order_by": "m.date DESC",

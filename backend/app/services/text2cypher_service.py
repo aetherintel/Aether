@@ -228,9 +228,18 @@ class Text2CypherService:
                     "error": validation_error
                 }
 
-            # 5. Execute Query
+            # 5. Execute Query (10-second hard limit)
             logger.info(f"Executing Cypher: {cypher_query}")
-            data = await self._execute_query(cypher_query)
+            try:
+                data = await asyncio.wait_for(self._execute_query(cypher_query), timeout=10.0)
+            except asyncio.TimeoutError:
+                logger.error("Query execution timed out after 10 seconds.")
+                return {
+                    "summary": "⏱️ **Query timed out** (>10 seconds).\n\nTry a more specific question or add filters to reduce the result size.",
+                    "visualization": {"type": "table", "data": []},
+                    "cypher": cypher_query,
+                    "error": "Query execution timed out"
+                }
             
             # 4. Transform to Graph
             logger.info(f"Raw MCP Result Data (First 2 records): {json.dumps(data[:2], default=str) if isinstance(data, list) else str(data)}")
@@ -632,6 +641,21 @@ class Text2CypherService:
 
             if not prop or not op: continue
 
+            # Special operator: OR_CONTAINS — search this field OR the previous field
+            # Used for bilingual keyword search: (m.original_text CONTAINS x OR m.translated_text CONTAINS x)
+            if op.upper() == "OR_CONTAINS":
+                if isinstance(val, str) and not val.startswith("'"):
+                    val_quoted = f"'{val}'"
+                else:
+                    val_quoted = str(val)
+                # Merge with previous CONTAINS clause if any
+                if where_clauses:
+                    last = where_clauses[-1]
+                    where_clauses[-1] = f"({last} OR {prop} CONTAINS {val_quoted})"
+                else:
+                    where_clauses.append(f"{prop} CONTAINS {val_quoted}")
+                continue
+
             # SANITIZATION: Skip evident placeholders from weak models
             if "n.prop" in prop or "val" == str(val) or "/" in op:
                  logger.warning(f"Skipping invalid filter placeholder: {prop} {op} {val}")
@@ -966,7 +990,7 @@ class Text2CypherService:
 
         # Define simplified property whitelist for each node type
         SIMPLIFIED_PROPERTIES = {
-            "Message": ["mid", "owner_id", "date", "original_text", "language", "media_type", "media_path",
+            "Message": ["mid", "owner_id", "date", "original_text", "translated_text", "language", "media_type", "media_path",
                        "location_names"],
             "Channel": ["channel_id", "owner_id", "username", "title"],
             "User": ["user_id", "owner_id", "username", "first_name", "last_name"],
@@ -1049,7 +1073,8 @@ class Text2CypherService:
                     lines.append("Euphorie / Begeisterung, Mobilisierende Hoffnung,")
                     lines.append("Stolz / Selbstermächtigung, Solidarität / Zusammenhalt")
                     lines.append("## Emotion query pattern: MATCH (m:Message)-[:HAS_EMOTION]->(e:Emotion) WHERE e.name CONTAINS 'Wut'")
-                    lines.append("## Keyword search: always use m.original_text CONTAINS '...' — there is NO m.text property")
+                    lines.append("## Keyword search: use BOTH fields for best coverage: (toLower(m.original_text) CONTAINS 'term' OR toLower(m.translated_text) CONTAINS 'term')")
+                    lines.append("## m.original_text = raw text (may be Russian, Arabic, etc.), m.translated_text = German translation (may be null if not yet translated)")
                     lines.append("## NEVER use aggregate functions (count, sum, avg) inside WHERE clauses — aggregates only belong in RETURN or HAVING (use WITH for HAVING)")
                     lines.append("## GRAPH queries: RETURN ALL matched node variables to make edges visible. Example: MATCH (u:User)-[:SENT]->(m:Message) RETURN u, m — never RETURN u alone when messages are matched")
 

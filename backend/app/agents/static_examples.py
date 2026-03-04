@@ -14,7 +14,7 @@ STATIC_EXAMPLES = [
     {
         "keywords": ["sentiment", "emotion", "feeling", "anger", "joy", "fear"],
         "question": "Summarize the sentiment of messages about politics",
-        "cypher": "MATCH (m:Message) WHERE m.text CONTAINS 'politics' RETURN m.emotions, count(*) ORDER BY count(*) DESC"
+        "cypher": "MATCH (m:Message) WHERE (m.original_text CONTAINS 'politics' OR m.translated_text CONTAINS 'politics') RETURN m.emotions, count(*) ORDER BY count(*) DESC"
     },
     {
         "keywords": ["popular", "top", "viral", "most"],
@@ -29,7 +29,7 @@ STATIC_EXAMPLES = [
     {
         "keywords": ["search", "find", "keyword", "term", "contains"],
         "question": "Search messages for 'apple'",
-        "cypher": "MATCH (m:Message) WHERE toLower(m.text) CONTAINS 'apple' RETURN m ORDER BY m.date DESC LIMIT 20"
+        "cypher": "MATCH (m:Message) WHERE (toLower(m.original_text) CONTAINS 'apple' OR toLower(m.translated_text) CONTAINS 'apple') RETURN m ORDER BY m.date DESC LIMIT 20"
     },
     {
         "keywords": ["location", "place", "city", "country", "around", "map"],

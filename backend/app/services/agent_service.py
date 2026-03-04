@@ -109,17 +109,21 @@ class AgentService:
                 f"{filter_hint}. "
                 "IMPORTANT: Build a Cypher query that answers this question AND returns results "
                 "suitable for a map widget. "
-                "The query MUST always return these five columns (use these exact aliases): "
+                "The query MUST always return these columns (use these exact aliases): "
                 "l.latitude AS lat, l.longitude AS lng, l.canonical_name AS canonical_name, "
-                "l.country AS country, l.mention_count AS mention_count. "
+                "l.country AS country, l.mention_count AS mention_count, "
+                "AND also sample_messages: use WITH l, collect(m)[..3] AS sample_msgs BEFORE the RETURN, "
+                "then: [msg IN sample_msgs | {text: coalesce(msg.translated_text, msg.original_text), date: toString(msg.date)}] AS sample_messages. "
                 "If ordering or filtering by a count (e.g. number of emotions, messages), add that "
                 "as an ADDITIONAL return column with an alias and use it in ORDER BY. "
                 "Example for 'locations with most emotions': "
-                "MATCH (m:Message)-[:MENTIONS_LOCATION]->(l:Location), (m)-[:HAS_EMOTION]->(e:Emotion) "
+                "MATCH (m:Message)-[:MENTIONS_LOCATION]->(l:Location) OPTIONAL MATCH (m)-[:HAS_EMOTION]->(e:Emotion) "
+                "WITH l, collect(m)[..3] AS sample_msgs, count(e) AS emotion_count "
                 "RETURN l.latitude AS lat, l.longitude AS lng, l.canonical_name AS canonical_name, "
-                "l.country AS country, l.mention_count AS mention_count, count(e) AS emotion_count "
+                "l.country AS country, l.mention_count AS mention_count, emotion_count, "
+                "[msg IN sample_msgs | {text: coalesce(msg.translated_text, msg.original_text), date: toString(msg.date)}] AS sample_messages "
                 "ORDER BY emotion_count DESC LIMIT 10. "
-                "Do NOT return full node variables — only flat properties plus any extra aggregation columns."
+                "Do NOT return full node variables — only flat properties plus aggregation columns."
             )
             try:
                 result = await self.text2cypher.run_text2cypher(
@@ -146,25 +150,18 @@ class AgentService:
             if has_filter else ""
         )
 
-        # Hardcoded fallback: all locations for this owner
-        if owner_id:
-            cypher = (
-                "MATCH (m:Message)-[:MENTIONS_LOCATION]->(l:Location) "
-                f"WHERE m.owner_id = '{owner_id}' AND l.latitude IS NOT NULL AND l.longitude IS NOT NULL "
-                "RETURN l.latitude AS lat, l.longitude AS lng, "
-                "l.canonical_name AS canonical_name, l.country AS country, "
-                "l.mention_count AS mention_count "
-                "ORDER BY l.mention_count DESC LIMIT 500"
-            )
-        else:
-            cypher = (
-                "MATCH (m:Message)-[:MENTIONS_LOCATION]->(l:Location) "
-                "WHERE l.latitude IS NOT NULL AND l.longitude IS NOT NULL "
-                "RETURN l.latitude AS lat, l.longitude AS lng, "
-                "l.canonical_name AS canonical_name, l.country AS country, "
-                "l.mention_count AS mention_count "
-                "ORDER BY l.mention_count DESC LIMIT 500"
-            )
+        # Hardcoded fallback: all locations with sample messages for rich map popups
+        owner_filter = f"WHERE m.owner_id = '{owner_id}' AND l.latitude IS NOT NULL AND l.longitude IS NOT NULL" if owner_id else "WHERE l.latitude IS NOT NULL AND l.longitude IS NOT NULL"
+        cypher = (
+            "MATCH (m:Message)-[:MENTIONS_LOCATION]->(l:Location) "
+            f"{owner_filter} "
+            "WITH l, collect(m)[..3] AS sample_msgs "
+            "RETURN l.latitude AS lat, l.longitude AS lng, "
+            "l.canonical_name AS canonical_name, l.country AS country, "
+            "l.mention_count AS mention_count, "
+            "[msg IN sample_msgs | {text: coalesce(msg.translated_text, msg.original_text), date: toString(msg.date)}] AS sample_messages "
+            "ORDER BY l.mention_count DESC LIMIT 300"
+        )
         try:
             data = await self.text2cypher._execute_query(cypher)
             if not data:

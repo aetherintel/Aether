@@ -9,6 +9,7 @@ import { useAuthStore } from '../../store/client/authStore';
 import { useStore } from '../../store/client/useStore';
 import AppHeader from '../AppHeader/AppHeader';
 import { Navbar } from '../Navbar/Navbar';
+import { SessionExpiredModal } from '../SessionExpiredModal';
 import classes from './AppContainer.module.css';
 
 export default function AppContainer() {
@@ -67,6 +68,7 @@ export default function AppContainer() {
           </Container>
         </Suspense>
       </AppShell.Main>
+      <SessionExpiredModal />
     </AppShell>
   );
 }
