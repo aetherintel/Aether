@@ -18,12 +18,20 @@ RUN touch /app/workers/__init__.py && \
 
 # Bake EasyOCR model weights into the image (en, de, tr, ru, ar)
 RUN python - <<'EOF'
-import easyocr, os
+import easyocr, os, time
 out = "/app/models/image/easyocr"
 os.makedirs(out, exist_ok=True)
 for langs in [['en', 'de', 'tr'], ['ru', 'en'], ['ar', 'en']]:
     print(f"Downloading EasyOCR models for: {langs}")
-    easyocr.Reader(langs, gpu=False, model_storage_directory=out, download_enabled=True)
+    for attempt in range(5):
+        try:
+            easyocr.Reader(langs, gpu=False, model_storage_directory=out, download_enabled=True)
+            break
+        except Exception as e:
+            print(f"  Attempt {attempt+1} failed: {e}. Retrying in 5s...")
+            time.sleep(5)
+    else:
+        raise RuntimeError(f"Failed to download EasyOCR models for {langs} after 5 attempts")
 print("EasyOCR models saved to", out)
 EOF
 

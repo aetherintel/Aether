@@ -12,7 +12,14 @@ VALID_NODES = {"Message", "Channel", "User", "Location"}
 class CypherAgent:
     def __init__(self, llm_service_url: str = "http://llm-service:8001"):
         self.llm_service_url = llm_service_url
-        self.client = httpx.AsyncClient(timeout=600.0)
+        # Modal token auth (no-op when headers are None — local dev path)
+        import os
+        modal_key = os.getenv("MODAL_TOKEN_ID")
+        modal_secret = os.getenv("MODAL_TOKEN_SECRET")
+        headers = {}
+        if modal_key and modal_secret:
+            headers = {"Modal-Key": modal_key, "Modal-Secret": modal_secret}
+        self.client = httpx.AsyncClient(timeout=600.0, headers=headers)
     
     async def _embed_text(self, text: str) -> List[float]:
         """Lokales Embedding vom LLM Service"""
@@ -122,7 +129,7 @@ Now convert to JSON:"""
 
         try:
             response = await self.client.post(
-                f"{self.llm_service_url}/generate-cypher",
+                f"{self.llm_service_url}",
                 json={
                     "question": question,
                     "system_prompt": system_prompt,
@@ -172,10 +179,10 @@ Now convert to JSON:"""
         """Reuse für Summarization"""
         try:
             response = await self.client.post(
-                f"{self.llm_service_url}/generate-cypher",
+                f"{self.llm_service_url}",
                 json={
                     "question": prompt,
-                    "db_schema": "",
+                    "schema": "",
                     "temperature": 0.7,
                     "max_tokens": 1024,
                     "use_thinking": False

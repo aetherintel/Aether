@@ -82,10 +82,12 @@ services:
       ENVIRONMENT: prod
       GITHUB_USER: ${GITHUB_USER}
       GITHUB_TOKEN: ${GITHUB_TOKEN}
-      # Use host.docker.internal to access SSH tunnel on host machine
-      LLM_SERVICE_URL: http://host.docker.internal:8001
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+      LLM_SERVICE_URL: ${MODAL_LLM_URL}
+      MODAL_LLM_URL: ${MODAL_LLM_URL}
+      USE_MODAL: ${USE_MODAL:-true}
+      MODAL_TOKEN_ID: ${MODAL_TOKEN_ID}
+      MODAL_TOKEN_SECRET: ${MODAL_TOKEN_SECRET}
+      MODAL_EMOTION_URL: ${MODAL_EMOTION_URL}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - tg_sessions:/app/sessions

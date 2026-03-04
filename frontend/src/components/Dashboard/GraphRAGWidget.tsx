@@ -1,9 +1,9 @@
-import React, { useRef, useEffect, useMemo } from 'react';
+import React, { useRef, useEffect } from 'react';
 import ForceGraph2D from 'react-force-graph-2d';
 import { useElementSize } from '@mantine/hooks';
 import { Box, Paper, Text, Badge, Group, ActionIcon, Tooltip } from '@mantine/core';
 import { GraphNode, GraphLink } from '../../services/agentService';
-import { IconZoomIn, IconZoomOut, IconFocusCentered, IconInfoCircle } from '@tabler/icons-react';
+import { IconZoomIn, IconZoomOut, IconFocusCentered } from '@tabler/icons-react';
 
 interface GraphRAGWidgetProps {
   data: {
@@ -23,7 +23,7 @@ const EMOJI_MAP: Record<string, string> = {
     'Message': '💬',
     'User': '👤',
     'Channel': '📢',
-    'Location': '📍', 
+    'Location': '📍',
     'Emotion': '🎭',
     'Classification': '🏷️',
     'Unknown': '❓'
@@ -37,6 +37,16 @@ const COLOR_MAP: Record<string, string> = {
     'Emotion': '#CC5DE8', // Grape
     'Classification': '#845EF7', // Violet
     'Unknown': '#868e96'
+};
+
+const EDGE_COLOR_MAP: Record<string, string> = {
+    'HAS_MESSAGE':        '#51CF66', // Green — channel → message
+    'SENT':               '#FF6B6B', // Red — user → message
+    'REPLY_TO':           '#339AF0', // Blue — message → message
+    'MENTIONS_LOCATION':  '#FF922B', // Orange — message → location
+    'HAS_EMOTION':        '#CC5DE8', // Grape — message → emotion
+    'RECOMMENDS':         '#FAB005', // Yellow — channel → channel
+    'PART_OF':            '#74C0FC', // Light blue
 };
 
 export const GraphRAGWidget: React.FC<GraphRAGWidgetProps> = ({ data }) => {
@@ -84,6 +94,10 @@ export const GraphRAGWidget: React.FC<GraphRAGWidgetProps> = ({ data }) => {
   const handleRecenter = () => {
       fgRef.current?.zoomToFit(400, 50);
   };
+
+  // Derive which node types and edge types are actually present in the data
+  const presentNodeTypes = Array.from(new Set(data.nodes.map((n: any) => n.label))).filter(Boolean) as string[];
+  const presentEdgeTypes = Array.from(new Set(data.links.map((l: any) => l.type))).filter(Boolean) as string[];
 
   return (
     <Paper 
@@ -221,12 +235,12 @@ export const GraphRAGWidget: React.FC<GraphRAGWidgetProps> = ({ data }) => {
                   ctx.fill();
               }}
               
-              linkWidth={1}
-              linkColor={() => '#374151'} // Dark grey links
-              linkDirectionalParticles={2} 
-              linkDirectionalParticleSpeed={0.005} // Slow flow
+              linkWidth={1.5}
+              linkColor={(link: any) => EDGE_COLOR_MAP[link.type] || '#4B5563'}
+              linkDirectionalParticles={2}
+              linkDirectionalParticleSpeed={0.005}
               linkDirectionalParticleWidth={2}
-              linkDirectionalParticleColor={() => '#4dabf7'} // Blue particles
+              linkDirectionalParticleColor={(link: any) => EDGE_COLOR_MAP[link.type] || '#4dabf7'}
               
               onNodeClick={(node: any) => {
                   setSelectedNode(node);
@@ -237,6 +251,43 @@ export const GraphRAGWidget: React.FC<GraphRAGWidgetProps> = ({ data }) => {
               onBackgroundClick={() => setSelectedNode(null)}
               cooldownTicks={100}
             />
+           )}
+       </Box>
+
+       {/* Legend — bottom left, only shows types present in this query result */}
+       <Box
+           style={{
+               position: 'absolute',
+               bottom: 16,
+               left: 16,
+               zIndex: 20,
+               background: 'rgba(17, 24, 39, 0.85)',
+               border: '1px solid #374151',
+               borderRadius: 8,
+               padding: '8px 12px',
+               backdropFilter: 'blur(8px)',
+               maxWidth: 200,
+           }}
+       >
+           {presentNodeTypes.length > 0 && (
+               <Box mb={presentEdgeTypes.length > 0 ? 6 : 0}>
+                   {presentNodeTypes.map((type) => (
+                       <Group key={type} gap={6} mb={2}>
+                           <Box style={{ width: 10, height: 10, borderRadius: '50%', background: COLOR_MAP[type] || '#868e96', flexShrink: 0 }} />
+                           <Text size="xs" c="dimmed">{EMOJI_MAP[type]} {type}</Text>
+                       </Group>
+                   ))}
+               </Box>
+           )}
+           {presentEdgeTypes.length > 0 && (
+               <Box style={{ borderTop: presentNodeTypes.length > 0 ? '1px solid #374151' : 'none', paddingTop: presentNodeTypes.length > 0 ? 6 : 0 }}>
+                   {presentEdgeTypes.map((type) => (
+                       <Group key={type} gap={6} mb={2}>
+                           <Box style={{ width: 14, height: 2, background: EDGE_COLOR_MAP[type] || '#4B5563', flexShrink: 0 }} />
+                           <Text size="xs" c="dimmed" style={{ fontSize: 10 }}>{type}</Text>
+                       </Group>
+                   ))}
+               </Box>
            )}
        </Box>
 

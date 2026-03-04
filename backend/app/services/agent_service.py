@@ -33,6 +33,11 @@ class AgentService:
         if message.startswith("/"):
             return await self._handle_command(message, history, owner_id=owner_id)
 
+        # 2. Intent Detection: map-related questions bypass the LLM
+        msg_lower = message.lower()
+        if any(phrase in msg_lower for phrase in ["show map", "map of", "show locations", "location map", "where are", "locations on map", "mentioned locations", "location visualization"]):
+            return await self._handle_showmap(message, owner_id=owner_id)
+
         try:
             result = await self.text2cypher.run_text2cypher(message, history, system_prompt_key=system_prompt_key, owner_id=owner_id)
             
@@ -63,9 +68,8 @@ class AgentService:
             return await self.process_message(args, history, owner_id=owner_id)
 
         elif command in ["/showmap", "/show_map"]:
-            # Inject instruction to extract location data and use a persona good at data extraction
-            enhanced_args = f"{args}. Ensure you return location names as canonical_name, latitude as lat, and longitude as lng in the results."
-            return await self.process_message(enhanced_args, history, system_prompt_key="data_analyst", owner_id=owner_id)
+            # Bypass LLM entirely — execute a hardcoded location query and return map widget directly
+            return await self._handle_showmap(args, owner_id=owner_id)
 
         elif command == "/summarize":
              args = f"Summarize the following: {args}" if args else "Summarize the last context."
@@ -82,6 +86,103 @@ class AgentService:
             return AgentResponse(message="Usage: `/sys list` or `/sys set <key>`")
 
         return AgentResponse(message=f"Unknown command: `{command}`. Type `/help` for available commands.")
+
+    async def _handle_showmap(self, filter_hint: str = "", owner_id: Optional[str] = None) -> AgentResponse:
+        """
+        Shows a location map. If a filter hint is given (e.g. "negative emotions"), uses the LLM
+        to build a filtered query that still returns flat lat/lng columns for the map widget.
+        Falls back to a hardcoded all-locations query when no filter is specified.
+        """
+        # Determine whether the user supplied a meaningful filter beyond just trigger phrases
+        stripped = filter_hint.lower()
+        for phrase in ["show map", "map of", "/showmap", "/show_map", "show locations",
+                        "location map", "where are", "locations on map", "mentioned locations",
+                        "location visualization", "showmap of the"]:
+            stripped = stripped.replace(phrase, "")
+        has_filter = len(stripped.strip()) > 3
+
+        if has_filter:
+            # Use the LLM but force the result to return flat location columns for the map widget.
+            # We allow an extra aggregation column for ordering (e.g. count(e)) but the five
+            # mandatory map columns must always be present so the map widget can render pins.
+            map_question = (
+                f"{filter_hint}. "
+                "IMPORTANT: Build a Cypher query that answers this question AND returns results "
+                "suitable for a map widget. "
+                "The query MUST always return these five columns (use these exact aliases): "
+                "l.latitude AS lat, l.longitude AS lng, l.canonical_name AS canonical_name, "
+                "l.country AS country, l.mention_count AS mention_count. "
+                "If ordering or filtering by a count (e.g. number of emotions, messages), add that "
+                "as an ADDITIONAL return column with an alias and use it in ORDER BY. "
+                "Example for 'locations with most emotions': "
+                "MATCH (m:Message)-[:MENTIONS_LOCATION]->(l:Location), (m)-[:HAS_EMOTION]->(e:Emotion) "
+                "RETURN l.latitude AS lat, l.longitude AS lng, l.canonical_name AS canonical_name, "
+                "l.country AS country, l.mention_count AS mention_count, count(e) AS emotion_count "
+                "ORDER BY emotion_count DESC LIMIT 10. "
+                "Do NOT return full node variables — only flat properties plus any extra aggregation columns."
+            )
+            try:
+                result = await self.text2cypher.run_text2cypher(
+                    map_question, [], system_prompt_key="default", owner_id=owner_id
+                )
+                data = result.get("visualization", {}).get("data") or []
+                cypher = result.get("cypher", "")
+                # Validate that the result actually has lat/lng columns
+                if data and isinstance(data, list) and ("lat" in data[0] or "latitude" in data[0]):
+                    return AgentResponse(
+                        message=f"**Map of {len(data)} locations**",
+                        widget_type="location_map",
+                        widget_data=data,
+                        metadata={"cypher": cypher}
+                    )
+                # Query returned 0 results or wrong columns — fall through to all-locations fallback
+                logger.warning("LLM map query returned no matching data, falling back to all-locations query")
+            except Exception as e:
+                logger.error(f"LLM map query failed: {e}, falling back to all-locations query")
+
+        fallback_note = (
+            "ℹ️ *Für deine Anfrage gibt es leider keine passenden Daten. "
+            "Hier ist stattdessen eine allgemeine Karte aller Orte.*\n\n"
+            if has_filter else ""
+        )
+
+        # Hardcoded fallback: all locations for this owner
+        if owner_id:
+            cypher = (
+                "MATCH (m:Message)-[:MENTIONS_LOCATION]->(l:Location) "
+                f"WHERE m.owner_id = '{owner_id}' AND l.latitude IS NOT NULL AND l.longitude IS NOT NULL "
+                "RETURN l.latitude AS lat, l.longitude AS lng, "
+                "l.canonical_name AS canonical_name, l.country AS country, "
+                "l.mention_count AS mention_count "
+                "ORDER BY l.mention_count DESC LIMIT 500"
+            )
+        else:
+            cypher = (
+                "MATCH (m:Message)-[:MENTIONS_LOCATION]->(l:Location) "
+                "WHERE l.latitude IS NOT NULL AND l.longitude IS NOT NULL "
+                "RETURN l.latitude AS lat, l.longitude AS lng, "
+                "l.canonical_name AS canonical_name, l.country AS country, "
+                "l.mention_count AS mention_count "
+                "ORDER BY l.mention_count DESC LIMIT 500"
+            )
+        try:
+            data = await self.text2cypher._execute_query(cypher)
+            if not data:
+                return AgentResponse(
+                    message="No location data found. Run a scrape with geolocation extraction enabled.",
+                    widget_type="table",
+                    widget_data=[],
+                    metadata={"cypher": cypher}
+                )
+            return AgentResponse(
+                message=f"{fallback_note}**Karte mit {len(data)} Orten**",
+                widget_type="location_map",
+                widget_data=data,
+                metadata={"cypher": cypher}
+            )
+        except Exception as e:
+            logger.error(f"showmap failed: {e}")
+            return AgentResponse(message=f"Failed to load location data: {e}")
 
     async def save_feedback(self, question: str, cypher: str, rating: int) -> bool:
         """

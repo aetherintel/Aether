@@ -110,10 +110,14 @@ services:
       PYTHONPATH: /app
       REDIS_HOST: redis
       REDIS_PORT: 6379
-      # Use host.docker.internal to access SSH tunnel on host machine
-      LLM_SERVICE_URL: http://host.docker.internal:8001
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+      # Modal GPU endpoints (set USE_MODAL=true + MODAL_* URLs for production)
+      LLM_SERVICE_URL: ${MODAL_LLM_URL:-}
+      MODAL_LLM_URL: ${MODAL_LLM_URL:-}
+      MODAL_TRANSLATION_URL: ${MODAL_TRANSLATION_URL:-}
+      MODAL_EMOTION_URL: ${MODAL_EMOTION_URL:-}
+      MODAL_TOKEN_ID: ${MODAL_TOKEN_ID:-}
+      MODAL_TOKEN_SECRET: ${MODAL_TOKEN_SECRET:-}
+      USE_MODAL: ${USE_MODAL:-false}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - tg_sessions:/app/sessions
@@ -192,6 +196,9 @@ services:
       REDIS_PORT: 6379
       OWNER_ID: ${OWNER_ID:-unknown}
       PYTHONPATH: /app
+      USE_MODAL: ${USE_MODAL:-false}
+      MODAL_EMOTION_URL: ${MODAL_EMOTION_URL:-}
+      MODAL_TRANSLATION_URL: ${MODAL_TRANSLATION_URL:-}
     volumes:
       - tg_sessions:/app/sessions
       - ${MEDIA_PATH}:/shared/media
@@ -461,28 +468,8 @@ services:
           memory: 2G
         reservations:
           memory: 512M
-  llm-service:
-      profiles: ["gpu-local"]
-      build: ./workers/llm-service
-      container_name: aether-llm-service
-      ports:
-        - "8001:8001"
-      volumes:
-        - ./models/llm:/models/llm    # Bind mount local models directory
-        - ./workers/llm-service:/app
-      environment:
-        - MODEL_PATH=/models/llm/qwen2.5-7b-instruct-q4_k_m.gguf
-        - N_THREADS=8
-        - N_CTX=16384
-      restart: unless-stopped
-      healthcheck:
-        test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
-        interval: 30s
-        timeout: 10s
-        retries: 3
-      networks:
-        - aether-network
-
+  # llm-service removed — now runs as Modal.com web endpoint (modal deploy modal/llm_service.py)
+  # For local GPU dev: docker compose --profile gpu-local up (not currently configured)
 
 volumes:
   pgdata:

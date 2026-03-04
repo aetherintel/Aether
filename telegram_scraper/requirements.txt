@@ -3,6 +3,7 @@ uvicorn[standard]
 python-dotenv
 python-jose[cryptography]
 requests
+httpx
 pydantic-settings
 docker 
 telethon==1.40

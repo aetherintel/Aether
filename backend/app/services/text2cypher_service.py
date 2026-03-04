@@ -21,9 +21,9 @@ class Text2CypherService:
         # MCP Server Config
         self.mcp_url = os.getenv("MCP_NEO4J_URL", "http://mcp-neo4j-cypher-server:8000/api/mcp/")
         
-        # Local LLM Agent
-        self.llm_service_url = os.getenv("LLM_SERVICE_URL", "http://aether-llm-service:8001")
-        self.cypher_agent = CypherAgent(llm_service_url=self.llm_service_url)
+        # Local LLM Agent (empty when Modal LLM not yet deployed)
+        self.llm_service_url = os.getenv("LLM_SERVICE_URL", "")
+        self.cypher_agent = CypherAgent(llm_service_url=self.llm_service_url) if self.llm_service_url else None
 
         # Redis Cache
         redis_host = os.getenv("REDIS_HOST", "redis")
@@ -86,6 +86,8 @@ class Text2CypherService:
 
                 plan_str = None
                 plan = None
+                if not self.cypher_agent:
+                    raise RuntimeError("LLM service not configured (MODAL_LLM_URL is unset). Deploy the Modal LLM endpoint first.")
                 try:
                     cypher_result = await asyncio.wait_for(
                         self.cypher_agent.generate_cypher(
@@ -95,10 +97,10 @@ class Text2CypherService:
                             system_prompt_override=system_prompt_override,
                             examples=examples
                         ),
-                        timeout=120.0
+                        timeout=300.0
                     )
                 except asyncio.TimeoutError:
-                    logger.error("LLM Generation Timed Out (120s). Trying template fallback.")
+                    logger.error("LLM Generation Timed Out (300s). Trying template fallback.")
                     plan = QueryTemplates.match(question)
                     if plan:
                         cypher_query = self._build_cypher_from_plan(plan, schema_dict)
@@ -187,6 +189,34 @@ class Text2CypherService:
                 cypher_query = self._inject_owner_id_filter(cypher_query, owner_id)
                 logger.info(f"Query after owner_id injection: {cypher_query}")
 
+            # 3b. If user asked for a graph visualization, ensure all matched node variables
+            # are in RETURN so edges are visible. The LLM sometimes drops intermediary nodes.
+            if cypher_query and any(kw in question.lower() for kw in ["visualize", "visualization", "graph", "network"]):
+                import re as _re
+                # Find all node variables defined in MATCH: (var:Label) or (var)
+                match_vars = set(_re.findall(r'\((\w+)(?::[\w|]+)?\)', cypher_query.split('WHERE')[0] if 'WHERE' in cypher_query.upper() else cypher_query.split('RETURN')[0], _re.IGNORECASE))
+                # Remove anonymous/irrelevant: single-letter throwaway, known non-vars
+                skip_vars = {'r', 'n'}
+                match_vars -= skip_vars
+                # Find variables already in RETURN
+                return_match = _re.search(r'\bRETURN\b(.*?)(?:\bORDER BY\b|\bLIMIT\b|$)', cypher_query, _re.IGNORECASE | _re.DOTALL)
+                if return_match and match_vars:
+                    return_clause = return_match.group(1).strip()
+                    # Extract plain variable names already returned (not aggregates/aliases)
+                    returned_vars = set(_re.findall(r'\b([a-z]\w*)\b(?!\s*[\(\.])', return_clause, _re.IGNORECASE))
+                    missing = match_vars - returned_vars
+                    if missing:
+                        logger.info(f"Graph expansion: adding missing vars to RETURN: {missing}")
+                        new_return = f"RETURN {return_clause}, {', '.join(sorted(missing))}"
+                        cypher_query = _re.sub(
+                            r'\bRETURN\b.*?(?=\s*(?:\bORDER BY\b|\bLIMIT\b|$))',
+                            new_return,
+                            cypher_query,
+                            count=1,
+                            flags=_re.IGNORECASE | _re.DOTALL
+                        )
+                        logger.info(f"Expanded RETURN: {cypher_query}")
+
             # 4. Validate Query
             is_valid, validation_error = self._validate_cypher_query(cypher_query)
             if not is_valid:
@@ -219,8 +249,8 @@ class Text2CypherService:
             # Check for explicit visualization keywords in the question
             question_lower = question.lower()
             user_wants_graph = any(kw in question_lower for kw in [
-                "visualize", "visualization", "graph", "network", "connections", 
-                "relationships", "show the connection", "map", "diagram"
+                "visualize", "visualization", "graph", "network", "connections",
+                "relationships", "show the connection", "diagram"
             ])
             
             # If graph has no nodes (or just 1 info node) or data is flat tabular, prefer table
@@ -322,13 +352,21 @@ class Text2CypherService:
                 logger.info("⚠️ Graph had 0 nodes — falling back to table")
 
             # 6. Generate Summary (if needed)
-            summary_text = f"**Generated Cypher:**\n`{cypher_query}`"
+            # Strip owner_id values from displayed query to avoid leaking internal IDs
+            import re as _re
+            display_cypher = _re.sub(r"\b\w+\.owner_id\s*=\s*'[^']*'\s*(AND\s*)?", "", cypher_query).strip()
+            display_cypher = _re.sub(r"\bAND\s+RETURN\b", "RETURN", display_cypher)
+            summary_text = f"**Generated Cypher:**\n`{display_cypher}`"
             
             # If specifically asked to summarize OR using a persona that implies it
-            if system_prompt_key != "default" or "summarize" in question.lower():
+            is_summary_request = system_prompt_key in ["storyteller", "data_analyst"] or "summarize" in question.lower()
+            if is_summary_request:
                  try:
                      generated_summary = await self._summarize_data(question, data, system_prompt_key)
-                     summary_text = f"{generated_summary}\n\n" + summary_text
+                     # For summary requests: show only the narrative text, no widget
+                     summary_text = generated_summary
+                     viz_type = "none"
+                     viz_data = []
                  except Exception as sum_err:
                      logger.error(f"Summarization failed: {sum_err}")
 
@@ -400,6 +438,8 @@ class Text2CypherService:
         # Or just use the existing one and ask for a JSON with a "summary" field.
         
         # Let's add a helper to CypherAgent for this.
+        if not self.cypher_agent:
+            return "LLM service not configured (MODAL_LLM_URL is unset)."
         return await self.cypher_agent.generate_summary(prompt)
 
     def _sanitize_id(self, raw_id: str) -> str:
@@ -643,6 +683,11 @@ class Text2CypherService:
                     val = f"'{val}'"
             
             # Handle list objects (if parsed from JSON as list)
+            # Special case: CONTAINS with a list → expand to OR conditions
+            if isinstance(val, list) and op.upper() == "CONTAINS":
+                or_clauses = " OR ".join(f"{prop} CONTAINS '{v}'" for v in val)
+                where_clauses.append(f"({or_clauses})")
+                continue
             if isinstance(val, list):
                 val = str(val) # Convert ['a'] to "['a']" for Cypher
 
@@ -850,6 +895,29 @@ class Text2CypherService:
                      order_by_str = f"{found_var}.{prop}{order_by_str[len(label)+1+len(prop):]}"
                      logger.warning(f"Auto-corrected ORDER BY Label: {label}.{prop} -> {found_var}.{prop}")
             
+            # FIX 3: "ORDER BY size((pattern))" is invalid in Neo4j 5+.
+            # Replace size((var)-[:REL]->(...)) with count(var) using the first variable in defined_vars,
+            # or drop the ORDER BY entirely if we can't safely rewrite it.
+            size_pattern_match = re.search(r'\bsize\s*\(\s*\(', order_by_str, re.IGNORECASE)
+            if size_pattern_match:
+                # Try to extract the sort direction (ASC/DESC)
+                direction_match = re.search(r'\b(ASC|DESC)\b', order_by_str, re.IGNORECASE)
+                direction = direction_match.group(1).upper() if direction_match else "DESC"
+                # Pick the most meaningful variable to count: prefer e (Emotion), then m, then first defined
+                count_var = None
+                for preferred in ["e", "m", "c", "u", "l"]:
+                    if preferred in defined_vars or preferred in used_nodes:
+                        count_var = preferred
+                        break
+                if count_var is None and defined_vars:
+                    count_var = next(iter(defined_vars))
+                if count_var:
+                    order_by_str = f"count({count_var}) {direction}"
+                    logger.warning(f"Rewrote invalid size(pattern) ORDER BY -> count({count_var}) {direction}")
+                else:
+                    order_by_str = ""
+                    logger.warning("Dropped invalid size(pattern) ORDER BY — no suitable variable found")
+
             # AUTO-CORRECT: "ORDER BY date" -> "ORDER BY m.date" if valid (Generic fallback)
             if "date" in order_by_str and "." not in order_by_str:
                  # Find main variable
@@ -873,6 +941,18 @@ class Text2CypherService:
              else:
                  limit_clause = f"LIMIT {limit_str}"
 
+        # FIX: If ORDER BY uses an aggregate (e.g. count(e)) that isn't in RETURN,
+        # Neo4j rejects it. Auto-add the aggregate expression to RETURN with an alias.
+        if order_by_clause:
+            agg_pattern = re.compile(r'\b(count|sum|avg|min|max|collect)\s*\([^)]+\)', re.IGNORECASE)
+            for agg_match in agg_pattern.finditer(order_by_clause):
+                agg_expr = agg_match.group(0)
+                # Only add if not already present in the return clause
+                if agg_expr.lower() not in full_return.lower():
+                    alias = re.sub(r'[^a-zA-Z0-9_]', '_', agg_expr)
+                    full_return = f"{full_return}, {agg_expr} AS {alias}"
+                    logger.info(f"Auto-added aggregate to RETURN: {agg_expr} AS {alias}")
+
         # Assemble
         parts_final = [full_match, full_where, full_return, order_by_clause, limit_clause]
         return " ".join([p for p in parts_final if p])
@@ -886,12 +966,12 @@ class Text2CypherService:
 
         # Define simplified property whitelist for each node type
         SIMPLIFIED_PROPERTIES = {
-            "Message": ["mid", "owner_id", "date", "text", "language", "media_type", "media_path",
-                       "emotions", "classifications", "location_names"],
+            "Message": ["mid", "owner_id", "date", "original_text", "language", "media_type", "media_path",
+                       "location_names"],
             "Channel": ["channel_id", "owner_id", "username", "title"],
             "User": ["user_id", "owner_id", "username", "first_name", "last_name"],
             "Location": ["canonical_name", "owner_id", "latitude", "longitude", "country", "mention_count"],
-            "Emotion": ["name", "score"],  
+            "Emotion": ["name", "label_id"],
             "Classification": ["label", "confidence"]
         }
 
@@ -922,9 +1002,8 @@ class Text2CypherService:
                         if not isinstance(details, dict): continue
                         if details.get("type") == "relationship": continue
 
-                        # Skip deprecated nodes
-                        if label in ["Emotion", "Classification"]:
-                            logger.info(f"Hiding deprecated node: {label}")
+                        # Skip nodes not useful for LLM queries
+                        if label in ["Classification"]:
                             continue
 
                         # Filter properties based on whitelist
@@ -946,25 +1025,33 @@ class Text2CypherService:
                          if details.get("type") == "node":
                              src_label = label
 
-                             # Skip relationships from deprecated nodes
-                             if src_label in ["Emotion", "Classification"]:
+                             if src_label in ["Classification"]:
                                  continue
 
                              for rel_name, rel_meta in details.get("relationships", {}).items():
-                                 # Skip deprecated relationships
                                  if rel_name in HIDDEN_RELATIONSHIPS:
-                                     logger.info(f"Hiding deprecated relationship: {rel_name}")
                                      continue
 
                                  direction = rel_meta.get("direction")
                                  target_labels = rel_meta.get("labels", [])
                                  for tgt_label in target_labels:
-                                     # Skip relationships to deprecated nodes
-                                     if tgt_label in ["Emotion", "Classification"]:
+                                     if tgt_label in ["Classification"]:
                                          continue
 
                                      if direction == "out":
                                          lines.append(f"- (:{src_label})-[:{rel_name}]->(:{tgt_label})")
+
+                    # Append known Emotion label values so LLM can filter correctly
+                    lines.append("\n## Known Emotion labels (use CONTAINS for partial match):")
+                    lines.append("Hass / Feindbild, Wut / Aggression, Angst / Bedrohungsempfinden,")
+                    lines.append("Verzweiflung / Hoffnungslosigkeit, Misstrauen / Paranoia,")
+                    lines.append("Neutral / Informationsorientiert, Ambivalent / Gemischt,")
+                    lines.append("Euphorie / Begeisterung, Mobilisierende Hoffnung,")
+                    lines.append("Stolz / Selbstermächtigung, Solidarität / Zusammenhalt")
+                    lines.append("## Emotion query pattern: MATCH (m:Message)-[:HAS_EMOTION]->(e:Emotion) WHERE e.name CONTAINS 'Wut'")
+                    lines.append("## Keyword search: always use m.original_text CONTAINS '...' — there is NO m.text property")
+                    lines.append("## NEVER use aggregate functions (count, sum, avg) inside WHERE clauses — aggregates only belong in RETURN or HAVING (use WITH for HAVING)")
+                    lines.append("## GRAPH queries: RETURN ALL matched node variables to make edges visible. Example: MATCH (u:User)-[:SENT]->(m:Message) RETURN u, m — never RETURN u alone when messages are matched")
 
                     simplified = "\n".join(lines)
                     logger.info(f"\n{'='*60}")
@@ -1041,7 +1128,7 @@ class Text2CypherService:
 
         # Known node variable aliases that carry owner_id
         # (Location uses owner_id too but queries tend to reach it via Message)
-        owner_id_nodes = {"m", "c", "u", "l"}  # Message, Channel, User, Location
+        owner_id_nodes = {"m", "c", "u"}  # Message, Channel, User (Location reached via Message)
         vars_to_filter = [v for v in dict.fromkeys(matches) if v in owner_id_nodes]
 
         if not vars_to_filter:
@@ -1072,6 +1159,23 @@ class Text2CypherService:
                 flags=re.IGNORECASE
             )
 
+        # Remove any aggregate comparisons that leaked into the WHERE clause.
+        # e.g. "WHERE ... AND count(*) = 2" is invalid — aggregates can't appear in WHERE.
+        cypher_query = re.sub(
+            r'\s*AND\s+\b(count|sum|avg|min|max|collect)\s*\([^)]*\)\s*[=<>!]+\s*\d+',
+            '',
+            cypher_query,
+            flags=re.IGNORECASE
+        )
+        cypher_query = re.sub(
+            r'\bWHERE\s+(count|sum|avg|min|max|collect)\s*\([^)]*\)\s*[=<>!]+\s*\d+\s*',
+            'WHERE ',
+            cypher_query,
+            flags=re.IGNORECASE
+        )
+        # Clean up stray "WHERE AND" left after removal
+        cypher_query = re.sub(r'\bWHERE\s+AND\b', 'WHERE', cypher_query, flags=re.IGNORECASE)
+
         return cypher_query
 
     def _validate_cypher_query(self, cypher_query: str) -> tuple[bool, str]:
@@ -1087,15 +1191,10 @@ class Text2CypherService:
             if kw in cypher_query.upper():
                 return False, f"Potentially dangerous keyword detected: {kw}"
         
-        forbidden_rels = ["HAS_EMOTION", "HAS_CLASSIFICATION", "CONTAINS_LOCATION", "POSTED_IN", "SENT_BY"]
+        forbidden_rels = ["CONTAINS_LOCATION", "POSTED_IN", "SENT_BY"]
         for rel in forbidden_rels:
             if f":{rel}" in cypher_query.upper():
-                return False, f"Invalid relationship type: {rel}. Use: HAS_MESSAGE, SENT, REPLY_TO, MENTIONS_LOCATION, PART_OF"
-        
-        forbidden_nodes = [":Emotion", ":Classification"]
-        for node in forbidden_nodes:
-            if node in cypher_query:
-                return False, f"Invalid node type: {node.replace(':', '')}. These are properties, not nodes!"
+                return False, f"Invalid relationship type: {rel}. Use: HAS_MESSAGE, SENT, REPLY_TO, MENTIONS_LOCATION, PART_OF, HAS_EMOTION"
         
         return True, ""
 
@@ -1187,7 +1286,8 @@ class Text2CypherService:
 
                         potential_id = (value.get("channel_id") or value.get("mid") or
                                         value.get("user_id") or value.get("canonical_name") or
-                                        value.get("id") or value.get("username"))
+                                        value.get("id") or value.get("username") or
+                                        value.get("label_id") or value.get("name"))
 
                         if potential_id:
                             add_node(potential_id, guessed_label, value)

@@ -11,6 +11,29 @@ import { PieChart, BarChart } from '@mantine/charts';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { motion, AnimatePresence } from 'framer-motion';
+import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
+import MarkerClusterGroup from 'react-leaflet-cluster';
+import 'leaflet/dist/leaflet.css';
+import L from 'leaflet';
+
+// Fix Leaflet default marker icons
+delete (L.Icon.Default.prototype as any)._getIconUrl;
+L.Icon.Default.mergeOptions({
+    iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
+    iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
+    shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
+});
+
+const FitMapBounds: React.FC<{ points: Array<{ lat: number; lng: number }> }> = ({ points }) => {
+    const map = useMap();
+    useEffect(() => {
+        if (points.length > 0) {
+            const bounds = L.latLngBounds(points.map(p => [p.lat, p.lng]));
+            map.fitBounds(bounds, { padding: [40, 40] });
+        }
+    }, [points, map]);
+    return null;
+};
 
 interface AgentChatProps {
   embedded?: boolean;
@@ -385,36 +408,47 @@ export const AgentChat: React.FC<AgentChatProps> = ({ embedded = false }) => {
                                             </Card>
                                         )}
 
-                                        {/* 🎯 Location Map Widget - Auto-detected for location queries */}
-                                        {msg.widgetType === 'location_map' && msg.widgetData && msg.widgetData.length > 0 && (
-                                            <Box mt="md">
-                                                <Text fw={500} size="sm" mb="xs" c="dimmed">📍 Location Analysis</Text>
-                                                <Card withBorder radius="md" p="sm">
-                                                    <ScrollArea h={300}>
-                                                        <Stack gap="xs">
-                                                            {msg.widgetData.slice(0, 10).map((item: any, idx: number) => (
-                                                                <Paper key={idx} p="xs" withBorder>
-                                                                    <Group justify="space-between">
-                                                                        <Group>
-                                                                            <Text fw={500}>📍 {item.canonical_name || item.location || item.name || 'Unknown'}</Text>
-                                                                            {item.country && <Badge size="xs">{item.country}</Badge>}
-                                                                        </Group>
-                                                                        <Group>
-                                                                            {(item.latitude || item.lat) && (item.longitude || item.lng) && (
-                                                                                <Text size="xs" c="dimmed">
-                                                                                    {(item.latitude ?? item.lat).toFixed(2)}, {(item.longitude ?? item.lng).toFixed(2)}
-                                                                                </Text>
-                                                                            )}
-                                                                            <Badge color="blue">{item.message_count || item.count || 1}</Badge>
-                                                                        </Group>
-                                                                    </Group>
-                                                                </Paper>
-                                                            ))}
-                                                        </Stack>
-                                                    </ScrollArea>
-                                                </Card>
-                                            </Box>
-                                        )}
+                                        {/* 🎯 Location Map Widget - Interactive Leaflet map */}
+                                        {msg.widgetType === 'location_map' && msg.widgetData && msg.widgetData.length > 0 && (() => {
+                                            const validPoints = msg.widgetData.filter((d: any) =>
+                                                (d.lat ?? d.latitude) != null && (d.lng ?? d.longitude) != null
+                                            );
+                                            return (
+                                                <Box mt="md">
+                                                    <Group justify="space-between" mb="xs">
+                                                        <Text fw={500} size="sm" c="dimmed">📍 {validPoints.length} locations</Text>
+                                                    </Group>
+                                                    <Box style={{ height: 420, borderRadius: 8, overflow: 'hidden', border: '1px solid #374151' }}>
+                                                        <MapContainer
+                                                            center={[51.1657, 10.4515]}
+                                                            zoom={5}
+                                                            style={{ height: '100%', width: '100%' }}
+                                                        >
+                                                            <TileLayer
+                                                                attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+                                                                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                                                            />
+                                                            <FitMapBounds points={validPoints.map((d: any) => ({ lat: d.lat ?? d.latitude, lng: d.lng ?? d.longitude }))} />
+                                                            <MarkerClusterGroup>
+                                                                {validPoints.map((item: any, idx: number) => {
+                                                                    const lat = item.lat ?? item.latitude;
+                                                                    const lng = item.lng ?? item.longitude;
+                                                                    return (
+                                                                        <Marker key={idx} position={[lat, lng]}>
+                                                                            <Popup>
+                                                                                <strong>{item.canonical_name || 'Unknown'}</strong>
+                                                                                {item.country && <div><small>{item.country}</small></div>}
+                                                                                {item.mention_count && <div><small>{item.mention_count} mentions</small></div>}
+                                                                            </Popup>
+                                                                        </Marker>
+                                                                    );
+                                                                })}
+                                                            </MarkerClusterGroup>
+                                                        </MapContainer>
+                                                    </Box>
+                                                </Box>
+                                            );
+                                        })()}
 
                                         {/* 🎯 Emotion Analysis Widget - Auto-detected for emotion queries */}
                                         {msg.widgetType === 'emotion_analysis' && msg.widgetData && msg.widgetData.length > 0 && (
@@ -484,7 +518,13 @@ export const AgentChat: React.FC<AgentChatProps> = ({ embedded = false }) => {
                                         {msg.metadata?.cypher && (
                                             <Box mt="xs">
                                                 <Text size="xs" c="dimmed" fw={500}>Generated Cypher:</Text>
-                                                <Code block style={{ fontSize: '0.75rem' }}>{msg.metadata.cypher}</Code>
+                                                <Code block style={{ fontSize: '0.75rem' }}>
+                                                    {msg.metadata.cypher
+                                                        ?.replace(/\b\w+\.owner_id\s*=\s*'[^']*'\s*(AND\s*)?/gi, '')
+                                                        .replace(/\bAND\s+RETURN\b/gi, 'RETURN')
+                                                        .replace(/WHERE\s+RETURN/gi, 'RETURN')
+                                                        .trim()}
+                                                </Code>
                                                 
                                                 {/* Feedback Buttons */}
                                                 <Group mt="xs" gap="xs">
