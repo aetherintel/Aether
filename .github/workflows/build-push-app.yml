@@ -45,16 +45,14 @@ jobs:
           - service: image-worker
             context: .
             dockerfile: ./workers/image_worker/Dockerfile
-          - service: classification-worker
-            context: .
-            dockerfile: ./workers/classification_worker/Dockerfile
           - service: geolocation-worker
             context: .
             dockerfile: ./workers/geolocation_worker/Dockerfile
-          # translation-worker and emotion-worker are NOT built here —
+          # translation-worker, emotion-worker, classification-worker are NOT built here —
           # they run on Modal.com (USE_MODAL=true in prod). Deploy with:
           #   modal deploy modal/translation_worker.py
           #   modal deploy modal/emotion_worker.py
+          #   modal deploy modal/classification_worker.py
           - service: photon
             context: .
             dockerfile: ./docker/photon/Dockerfile
@@ -102,10 +100,11 @@ jobs:
             GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }}
 
   # ============================================================
-  # GPU WORKERS NOTE: Translation, Emotion, and LLM run on Modal.com
+  # GPU WORKERS NOTE: Translation, Emotion, Classification, and LLM run on Modal.com
   # Deploy once manually: modal deploy modal/llm_service.py
   #                       modal deploy modal/translation_worker.py
   #                       modal deploy modal/emotion_worker.py
+  #                       modal deploy modal/classification_worker.py
   # Modal redeploys automatically when you push new code via modal deploy.
   # No CI step needed — Modal manages its own build/deploy pipeline.
   # ============================================================
@@ -119,7 +118,7 @@ jobs:
         uses: actions/checkout@v4
       
       - name: 📤 Upload compose file
-        uses: appleboy/scp-action@v0.1.7
+        uses: appleboy/scp-action@v1.0.0
         with:
           host: ${{ secrets.PROD_HOST }}
           port: ${{ secrets.PROD_PORT }}
@@ -129,7 +128,7 @@ jobs:
           target: "~/app/"
           overwrite: true
       - name: 🚀 Deploy to Production VM
-        uses: appleboy/ssh-action@v1.0.0
+        uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.PROD_HOST }}
           port: ${{ secrets.PROD_PORT }}
@@ -176,6 +175,7 @@ jobs:
             export USE_MODAL=true
             export MODAL_LLM_URL=${{ secrets.MODAL_LLM_URL }}
             export MODAL_EMOTION_URL=${{ secrets.MODAL_EMOTION_URL }}
+            export MODAL_CLASSIFICATION_URL=${{ secrets.MODAL_CLASSIFICATION_URL }}
             export MODAL_TOKEN_ID=${{ secrets.MODAL_TOKEN_ID }}
             export MODAL_TOKEN_SECRET=${{ secrets.MODAL_TOKEN_SECRET }}
 
@@ -203,12 +203,12 @@ jobs:
             # PHASE 1: Pull Latest Images (APP SERVICES ONLY)
             # ═══════════════════════════════════════════════════════════════
             echo "📦 Pulling latest images..."
-            # Note: translation-worker, emotion-worker, llm-service run on Modal.com (not pulled here)
+            # Note: translation-worker, emotion-worker, classification-worker, llm-service run on Modal.com (not pulled here)
             $COMPOSE_CMD -f docker-compose.prod.yml pull \
               backend frontend \
               telegram-worker report-worker \
               image-worker audio-worker \
-              classification-worker geolocation-worker \
+              geolocation-worker \
               photon mcp-neo4j-cypher-server
 
             # ═══════════════════════════════════════════════════════════════
@@ -326,13 +326,13 @@ jobs:
             docker stop $(docker ps -q --filter "name=worker") 2>/dev/null || true
             docker rm $(docker ps -aq --filter "name=worker") 2>/dev/null || true
 
-            # translation-worker and emotion-worker run on Modal.com — not started here
+            # translation-worker, emotion-worker, classification-worker run on Modal.com — not started here
             $COMPOSE_CMD -f docker-compose.prod.yml up -d \
               --scale telegram-worker=3 \
               --scale geolocation-worker=2 \
               --force-recreate --no-build \
               telegram-worker audio-worker \
-              image-worker classification-worker geolocation-worker report-worker
+              image-worker geolocation-worker report-worker
 
             # ═══════════════════════════════════════════════════════════════
             # PHASE 7: Cleanup

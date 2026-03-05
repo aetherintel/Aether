@@ -76,6 +76,7 @@ class QueueService:
         self.use_modal = os.getenv("USE_MODAL", "false").lower() == "true"
         self.modal_translation_url = os.getenv("MODAL_TRANSLATION_URL", "")
         self.modal_emotion_url = os.getenv("MODAL_EMOTION_URL", "")
+        self.modal_classification_url = os.getenv("MODAL_CLASSIFICATION_URL", "")
         modal_key = os.getenv("MODAL_TOKEN_ID", "")
         modal_secret = os.getenv("MODAL_TOKEN_SECRET", "")
         modal_headers = {}
@@ -83,7 +84,7 @@ class QueueService:
             modal_headers = {"Modal-Key": modal_key, "Modal-Secret": modal_secret}
         self._modal_client = httpx.AsyncClient(timeout=120.0, headers=modal_headers)
         if self.use_modal:
-            logger.info("✅ Modal GPU endpoints enabled (translation + emotion)")
+            logger.info("✅ Modal GPU endpoints enabled (translation + emotion + classification)")
     
     # ========================================================================
     # TELEGRAM SCRAPER JOBS
@@ -500,20 +501,22 @@ class QueueService:
     # ========================================================================
     # CLASSIFICATION JOBS
     # ========================================================================
-    
+
     def enqueue_classification(self, payload: ClassificationJobPayload) -> str:
-        """Enqueue a text classification job"""
+        """Enqueue a text classification job (Modal HTTP or RQ depending on USE_MODAL)."""
+        if self.use_modal:
+            return self._enqueue_classification_modal(payload)
+        return self._enqueue_classification_rq(payload)
+
+    def _enqueue_classification_rq(self, payload: ClassificationJobPayload) -> str:
+        """Enqueue classification via Redis queue (local/dev path)."""
         job_id = f"classification_{payload.message_id}_{uuid.uuid4().hex[:6]}"
-        
-        logger.info(f"📤 Enqueueing classification job: {job_id}")
-        
+        logger.info(f"📤 Enqueueing classification job (RQ): {job_id}")
+
         job = self.queues['classification'].enqueue(
-            'worker.classify_post_job',
+            'workers.classification_worker.worker.classify_post_job',
             message_id=payload.message_id,
             text=payload.text,
-            neo4j_uri=os.getenv('NEO4J_URI'),
-            neo4j_user=os.getenv('NEO4J_USER'),
-            neo4j_password=os.getenv('NEO4J_PASSWORD'),
             owner_id=payload.owner_id,
             case_id=payload.case_id,
             job_timeout='5m',
@@ -527,9 +530,103 @@ class QueueService:
                 'chained_from': payload.chained_from,
             }
         )
-        
-        logger.info(f"✅ Classification job enqueued: {job.id}")
+        logger.info(f"✅ Classification job enqueued (RQ): {job.id}")
         return job.id
+
+    def _enqueue_classification_modal(self, payload: ClassificationJobPayload) -> str:
+        """
+        Dispatch classification to Modal (production path).
+        Modal returns only the classification labels; this method then writes them to Neo4j.
+        Runs as a background asyncio task so the caller is not blocked.
+        """
+        import asyncio
+
+        job_id = f"modal_classification_{payload.message_id}_{uuid.uuid4().hex[:6]}"
+        logger.info(f"📤 Dispatching classification job (Modal): {job_id}")
+
+        async def _run():
+            try:
+                resp = await self._modal_client.post(
+                    f"{self.modal_classification_url}/classify",
+                    json={
+                        "text": payload.text,
+                        "threshold": payload.threshold if hasattr(payload, 'threshold') else 0.3,
+                        "top_k": payload.top_k if hasattr(payload, 'top_k') else 3,
+                    },
+                )
+                resp.raise_for_status()
+            except Exception as e:
+                logger.error(f"❌ Modal classification failed for {payload.message_id}: {e}")
+                return
+
+            classifications = resp.json().get("classifications", [])
+            logger.info(f"✅ Modal classification done for {payload.message_id}: {len(classifications)} labels")
+
+            await self._neo4j_store_classifications(
+                message_id=payload.message_id,
+                classifications=classifications,
+                owner_id=payload.owner_id,
+            )
+
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                loop.create_task(_run())
+            else:
+                loop.run_until_complete(_run())
+        except RuntimeError:
+            asyncio.run(_run())
+
+        return job_id
+
+    async def _neo4j_store_classifications(
+        self,
+        message_id: str,
+        classifications: list,
+        owner_id: Optional[str],
+    ):
+        """Write classification results to Neo4j (mirrors workers/classification_worker/neo4j_utils.py)."""
+        from neo4j import AsyncGraphDatabase
+
+        uri = os.getenv("NEO4J_URI")
+        user = os.getenv("NEO4J_USER")
+        password = os.getenv("NEO4J_PASSWORD")
+
+        cypher = """
+        MATCH (m:Message {mid: $message_id})
+        WHERE $owner_id IS NULL OR m.owner_id = $owner_id
+        MERGE (c:Classification {label_id: $label_id})
+        ON CREATE SET c.name = $label, c.label_id = $label_id,
+                      c.description = $description, c.created_at = datetime()
+        MERGE (m)-[r:HAS_CLASSIFICATION]->(c)
+        ON CREATE SET r.confidence = $confidence, r.method = $method,
+                      r.detected_at = datetime()
+        ON MATCH SET  r.confidence = CASE WHEN $confidence > r.confidence
+                          THEN $confidence ELSE r.confidence END,
+                      r.method = $method, r.updated_at = datetime()
+        SET m.classification_status = 'completed', m.classified_at = datetime()
+        RETURN m.mid AS mid
+        """
+
+        driver = AsyncGraphDatabase.driver(uri, auth=(user, password))
+        try:
+            async with driver.session() as session:
+                for cls in classifications:
+                    await session.run(
+                        cypher,
+                        message_id=message_id,
+                        owner_id=owner_id,
+                        label_id=cls["label_id"],
+                        label=cls["label"],
+                        description=cls.get("description", ""),
+                        confidence=cls["confidence"],
+                        method=cls.get("method", "zero-shot"),
+                    )
+            logger.info(f"✅ Neo4j classifications stored for {message_id}")
+        except Exception as e:
+            logger.error(f"❌ Neo4j classification store failed for {message_id}: {e}")
+        finally:
+            await driver.close()
     
     # ========================================================================
     # GEOLOCATION EXTRACTION JOBS
