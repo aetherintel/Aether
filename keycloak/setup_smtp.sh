@@ -19,7 +19,7 @@ done
   --password "$KEYCLOAK_ADMIN_PASSWORD"
 
 # SMTP konfigurieren
-/opt/keycloak/bin/kcadm.sh update realms/HotTopics -s "smtpServer.host=smtp.strato.de" \
+/opt/keycloak/bin/kcadm.sh update realms/HotTopics -s "smtpServer.host=smtp.ionos.de" \
   -s "smtpServer.port=587" \
   -s "smtpServer.from=$SMTP_USER" \
   -s "smtpServer.user=$SMTP_USER" \

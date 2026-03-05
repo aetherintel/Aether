@@ -14,6 +14,7 @@ import logging
 from typing import Dict, List, Optional
 from datetime import datetime
 
+import httpx
 from redis import Redis
 from rq import Queue, Retry
 from rq.job import Job
@@ -70,6 +71,19 @@ class QueueService:
         }
         
         logger.info(f"✅ QueueService initialized with {len(self.queues)} queues")
+
+        # Modal HTTP endpoints (used when USE_MODAL=true)
+        self.use_modal = os.getenv("USE_MODAL", "false").lower() == "true"
+        self.modal_translation_url = os.getenv("MODAL_TRANSLATION_URL", "")
+        self.modal_emotion_url = os.getenv("MODAL_EMOTION_URL", "")
+        modal_key = os.getenv("MODAL_TOKEN_ID", "")
+        modal_secret = os.getenv("MODAL_TOKEN_SECRET", "")
+        modal_headers = {}
+        if modal_key and modal_secret:
+            modal_headers = {"Modal-Key": modal_key, "Modal-Secret": modal_secret}
+        self._modal_client = httpx.AsyncClient(timeout=120.0, headers=modal_headers)
+        if self.use_modal:
+            logger.info("✅ Modal GPU endpoints enabled (translation + emotion)")
     
     # ========================================================================
     # TELEGRAM SCRAPER JOBS
@@ -134,11 +148,16 @@ class QueueService:
     # ========================================================================
     
     def enqueue_translation(self, payload: TranslationJobPayload) -> str:
-        """Enqueue a translation job"""
+        """Enqueue a translation job (Modal HTTP or RQ depending on USE_MODAL)."""
+        if self.use_modal:
+            return self._enqueue_translation_modal(payload)
+        return self._enqueue_translation_rq(payload)
+
+    def _enqueue_translation_rq(self, payload: TranslationJobPayload) -> str:
+        """Enqueue translation via Redis queue (local/dev path)."""
         job_id = f"translation_{payload.message_id}_{uuid.uuid4().hex[:6]}"
-        
-        logger.info(f"📤 Enqueueing translation job: {job_id}")
-        
+        logger.info(f"📤 Enqueueing translation job (RQ): {job_id}")
+
         job = self.queues['translation'].enqueue(
             'workers.translation_worker.worker.translate_and_update',
             message_id=payload.message_id,
@@ -164,9 +183,118 @@ class QueueService:
                 'audio_text': payload.audio_text,
             }
         )
-        
-        logger.info(f"✅ Translation job enqueued: {job.id}")
+        logger.info(f"✅ Translation job enqueued (RQ): {job.id}")
         return job.id
+
+    def _enqueue_translation_modal(self, payload: TranslationJobPayload) -> str:
+        """
+        Dispatch translation to Modal (production path).
+        Modal returns only the translated text; this method then:
+          1. Writes the result to Neo4j
+          2. Chains an emotion job for main-text translations
+        Runs as a background asyncio task so the caller is not blocked.
+        """
+        import asyncio
+
+        job_id = f"modal_translation_{payload.message_id}_{uuid.uuid4().hex[:6]}"
+        logger.info(f"📤 Dispatching translation job (Modal): {job_id}")
+
+        async def _run():
+            # 1. Call Modal inference endpoint
+            try:
+                resp = await self._modal_client.post(
+                    f"{self.modal_translation_url}/translate",
+                    json={
+                        "text": payload.original_text,
+                        "source_language": payload.source_language,
+                        "target_language": "de",
+                    },
+                )
+                resp.raise_for_status()
+            except Exception as e:
+                logger.error(f"❌ Modal translation failed for {payload.message_id}: {e}")
+                return
+
+            translated_text = resp.json().get("translated_text", "")
+            logger.info(f"✅ Modal translation done for {payload.message_id}")
+
+            # 2. Write result to Neo4j (same queries as the RQ worker)
+            await self._neo4j_update_translation(
+                message_id=payload.message_id,
+                translated_text=translated_text,
+                image_text=payload.image_text,
+                audio_text=payload.audio_text,
+            )
+
+            # 3. Chain emotion analysis for main-text translations
+            if not payload.image_text and not payload.audio_text and len(translated_text.strip()) > 10:
+                emotion_payload = EmotionJobPayload(
+                    message_id=payload.message_id,
+                    text=translated_text,
+                    owner_id=payload.owner_id,
+                    case_id=payload.case_id,
+                )
+                self.enqueue_emotion_analysis(emotion_payload)
+
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                loop.create_task(_run())
+            else:
+                loop.run_until_complete(_run())
+        except RuntimeError:
+            asyncio.run(_run())
+
+        return job_id
+
+    async def _neo4j_update_translation(
+        self,
+        message_id: str,
+        translated_text: str,
+        image_text: bool,
+        audio_text: bool,
+    ):
+        """Write translation result to Neo4j (mirrors aether_lib/neo4j_client/messages.py)."""
+        from neo4j import AsyncGraphDatabase
+
+        uri = os.getenv("NEO4J_URI")
+        user = os.getenv("NEO4J_USER")
+        password = os.getenv("NEO4J_PASSWORD")
+
+        if audio_text:
+            cypher = """
+            MATCH (m:Message {mid: $mid})
+            SET m.audio_text_translated = $text,
+                m.audio_translation_status = 'completed',
+                m.audio_translated_at = datetime()
+            RETURN m.mid AS mid
+            """
+        elif image_text:
+            cypher = """
+            MATCH (m:Message {mid: $mid})
+            SET m.image_text_translated = $text,
+                m.image_translation_status = 'completed',
+                m.image_translated_at = datetime()
+            RETURN m.mid AS mid
+            """
+        else:
+            cypher = """
+            MATCH (m:Message {mid: $mid})
+            SET m.translated_text = $text,
+                m.translation_status = 'completed',
+                m.translated_at = datetime()
+            RETURN m.mid AS mid
+            """
+
+        driver = AsyncGraphDatabase.driver(uri, auth=(user, password))
+        try:
+            async with driver.session() as session:
+                await session.run(cypher, mid=message_id, text=translated_text)
+            logger.info(f"✅ Neo4j translation updated for {message_id}")
+        except Exception as e:
+            logger.error(f"❌ Neo4j translation update failed for {message_id}: {e}")
+        finally:
+            await driver.close()
     
     # ========================================================================
     # IMAGE ANALYSIS JOBS
@@ -240,18 +368,20 @@ class QueueService:
     # ========================================================================
     
     def enqueue_emotion_analysis(self, payload: EmotionJobPayload) -> str:
-        """Enqueue an emotion analysis job"""
+        """Enqueue an emotion analysis job (Modal HTTP or RQ depending on USE_MODAL)."""
+        if self.use_modal:
+            return self._enqueue_emotion_modal(payload)
+        return self._enqueue_emotion_rq(payload)
+
+    def _enqueue_emotion_rq(self, payload: EmotionJobPayload) -> str:
+        """Enqueue emotion analysis via Redis queue (local/dev path)."""
         job_id = f"emotion_{payload.message_id}_{uuid.uuid4().hex[:6]}"
-        
-        logger.info(f"📤 Enqueueing emotion analysis job: {job_id}")
-        
+        logger.info(f"📤 Enqueueing emotion analysis job (RQ): {job_id}")
+
         job = self.queues['emotion'].enqueue(
-            'worker.classify_emotion_job',
+            'workers.emotion_worker.worker.classify_emotion_job',
             message_id=payload.message_id,
             text=payload.text,
-            neo4j_uri=os.getenv('NEO4J_URI'),
-            neo4j_user=os.getenv('NEO4J_USER'),
-            neo4j_password=os.getenv('NEO4J_PASSWORD'),
             threshold=payload.threshold,
             owner_id=payload.owner_id,
             case_id=payload.case_id,
@@ -267,9 +397,105 @@ class QueueService:
                 'chained_from': payload.chained_from,
             }
         )
-        
-        logger.info(f"✅ Emotion analysis job enqueued: {job.id}")
+        logger.info(f"✅ Emotion analysis job enqueued (RQ): {job.id}")
         return job.id
+
+    def _enqueue_emotion_modal(self, payload: EmotionJobPayload) -> str:
+        """
+        Dispatch emotion classification to Modal (production path).
+        Modal returns only the emotion labels; this method then writes them to Neo4j.
+        Runs as a background asyncio task so the caller is not blocked.
+        """
+        import asyncio
+
+        job_id = f"modal_emotion_{payload.message_id}_{uuid.uuid4().hex[:6]}"
+        logger.info(f"📤 Dispatching emotion analysis job (Modal): {job_id}")
+
+        async def _run():
+            # 1. Call Modal inference endpoint
+            try:
+                resp = await self._modal_client.post(
+                    f"{self.modal_emotion_url}/classify",
+                    json={
+                        "text": payload.text,
+                        "threshold": payload.threshold,
+                        "top_k": payload.top_k,
+                    },
+                )
+                resp.raise_for_status()
+            except Exception as e:
+                logger.error(f"❌ Modal emotion failed for {payload.message_id}: {e}")
+                return
+
+            emotions = resp.json().get("emotions", [])
+            logger.info(f"✅ Modal emotion done for {payload.message_id}: {len(emotions)} labels")
+
+            # 2. Write results to Neo4j
+            await self._neo4j_store_emotions(
+                message_id=payload.message_id,
+                emotions=emotions,
+                owner_id=payload.owner_id,
+            )
+
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                loop.create_task(_run())
+            else:
+                loop.run_until_complete(_run())
+        except RuntimeError:
+            asyncio.run(_run())
+
+        return job_id
+
+    async def _neo4j_store_emotions(
+        self,
+        message_id: str,
+        emotions: list,
+        owner_id: Optional[str],
+    ):
+        """Write emotion results to Neo4j (mirrors workers/emotion_worker/neo4j_utils.py)."""
+        from neo4j import AsyncGraphDatabase
+
+        uri = os.getenv("NEO4J_URI")
+        user = os.getenv("NEO4J_USER")
+        password = os.getenv("NEO4J_PASSWORD")
+
+        cypher = """
+        MATCH (m:Message {mid: $message_id})
+        WHERE $owner_id IS NULL OR m.owner_id = $owner_id
+        MERGE (e:Emotion {label_id: $label_id})
+        ON CREATE SET e.name = $label, e.label_id = $label_id, e.created_at = datetime()
+        MERGE (m)-[r:HAS_EMOTION]->(e)
+        ON CREATE SET r.confidence = $confidence, r.method = $method,
+                      r.source_emotions = $source_emotions, r.detected_at = datetime()
+        ON MATCH SET  r.confidence = CASE WHEN $confidence > r.confidence
+                          THEN $confidence ELSE r.confidence END,
+                      r.method = $method, r.source_emotions = $source_emotions,
+                      r.updated_at = datetime()
+        SET m.emotion_status = 'completed', m.emotion_analyzed_at = datetime()
+        RETURN m.mid AS mid
+        """
+
+        driver = AsyncGraphDatabase.driver(uri, auth=(user, password))
+        try:
+            async with driver.session() as session:
+                for emo in emotions:
+                    await session.run(
+                        cypher,
+                        message_id=message_id,
+                        owner_id=owner_id,
+                        label_id=emo["label_id"],
+                        label=emo["label"],
+                        confidence=emo["confidence"],
+                        method=emo.get("method", "unknown"),
+                        source_emotions=emo.get("source_emotions", []),
+                    )
+            logger.info(f"✅ Neo4j emotions stored for {message_id}")
+        except Exception as e:
+            logger.error(f"❌ Neo4j emotion store failed for {message_id}: {e}")
+        finally:
+            await driver.close()
     
     # ========================================================================
     # CLASSIFICATION JOBS

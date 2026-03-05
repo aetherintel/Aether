@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Body
+from fastapi import APIRouter, HTTPException, Body, Depends
 from pydantic import BaseModel
 from typing import List, Optional, Any, Dict
 import asyncio
@@ -6,6 +6,7 @@ import logging
 
 from services.agent_service import AgentService
 from services.task_registry import TaskRegistry
+from services.auth_ctx import user_ctx, UserCtx
 
 logger = logging.getLogger(__name__)
 
@@ -27,14 +28,16 @@ class AgentResponse(BaseModel):
     metadata: Optional[Dict[str, Any]] = {}
 
 @router.post("/query", response_model=AgentResponse)
-async def query_agent(request: AgentRequest):
+async def query_agent(request: AgentRequest, user: UserCtx = Depends(user_ctx)):
     service = AgentService()
-    
+    owner_id = user["id"]
+
     # Create the coroutine but don't await immediately
     coro = service.process_message(
-        request.message, 
-        request.history, 
-        request.system_prompt_key
+        request.message,
+        request.history,
+        request.system_prompt_key,
+        owner_id=owner_id
     )
     
     if request.request_id:
@@ -64,6 +67,28 @@ async def query_agent(request: AgentRequest):
         widget_data=result.widget_data,
         metadata=result.metadata
     )
+
+class FeedbackRequest(BaseModel):
+    question: str
+    cypher: str
+    rating: int # 1 for positive, -1 for negative
+
+@router.post("/feedback")
+async def submit_feedback(request: FeedbackRequest):
+    """
+    Receives user feedback (Thumbs Up/Down) for a generated query.
+    Positive feedback is saved to improve future generation (Few-Shot).
+    """
+    service = AgentService()
+    success = await service.save_feedback(
+        request.question,
+        request.cypher,
+        request.rating
+    )
+    if success:
+        return {"status": "success", "message": "Feedback received"}
+    else:
+         raise HTTPException(status_code=500, detail="Failed to save feedback")
 
 @router.post("/cancel/{request_id}")
 async def cancel_agent_request(request_id: str):

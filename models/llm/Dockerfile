@@ -1,22 +1,21 @@
-# Distroless model container
-FROM python:3.11-slim as builder
+# Optimized model container to save disk space
+FROM python:3.11-slim
 
-WORKDIR /build
+WORKDIR /models/llm
 
-RUN pip install --no-cache-dir huggingface_hub
+# Install dependencies
+RUN pip install --no-cache-dir huggingface_hub && \
+    apt-get update && apt-get install -y rsync && \
+    rm -rf /var/lib/apt/lists/*
 
 COPY llm_download.py .
 
-# Download specific model
-RUN python llm_download.py download --model qwen2.5-7b-instruct-q4
+# Download model DIRECTLY to the final location to avoid intermediate layer duplication
+RUN python llm_download.py download --model codestral-22b-v0.1-q4 && \
+    rm -rf /root/.cache/huggingface
 
-FROM alpine:latest
-WORKDIR /models/llm
-
-# Copy from builder
-COPY --from=builder /build/llm/qwen2.5-7b-instruct-q4_k_m.gguf .
-
-# Create a volume to share this directory
+# Create volume
 VOLUME /models/llm
 
-CMD ["tail", "-f", "/dev/null"]
+# Copy to volume on startup (if using named volume)
+CMD ["rsync", "-av", "--ignore-existing", "/models/llm/", "/models/llm_vol/"]

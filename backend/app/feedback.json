@@ -1,0 +1,14 @@
+[
+  {
+    "question": "Message Threads",
+    "cypher": "MATCH (m:Message)-[r:REPLY_TO]->(p:Message), (m:Message) RETURN m, p ORDER BY m.date DESC LIMIT 50",
+    "rating": 1,
+    "timestamp": "TODO_add_timestamp"
+  },
+  {
+    "question": "the connection between locations and messages",
+    "cypher": "MATCH (m:Message)-[r:MENTIONS_LOCATION]->(l:Location), (m:Message) WHERE m.owner_id = '6d483344-652b-4ccd-8c56-b9f5f2866306' AND l.owner_id = '6d483344-652b-4ccd-8c56-b9f5f2866306' RETURN m, l ORDER BY m.date DESC LIMIT 50",
+    "rating": 1,
+    "timestamp": "TODO_add_timestamp"
+  }
+]

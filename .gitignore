@@ -54,6 +54,7 @@ models/translation/*
 !models/translation/*.py
 
 models/emotion/*
+models/emotion/german-emotion/*
 !models/emotion/Dockerfile
 !models/emotion/*.py
 
@@ -81,4 +82,4 @@ models/image/*
 
 *.gguf
 *.bin
-*.safetensors
+*.safetensorsgerman-emotions.tar.gz

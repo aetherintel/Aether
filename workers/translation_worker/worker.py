@@ -3,6 +3,7 @@ import asyncio
 import os
 import logging
 from aether_lib.queue_client import queue_client
+from aether_lib.schemas.jobs import EmotionJobPayload
 from redis import Redis
 from rq import Queue
 import torch
@@ -245,21 +246,13 @@ def translate_and_update(
             # Step 3: Trigger emotion analysis
             logger.info("🎭 Step 3: Triggering emotion analysis...")
             try:
-                emotion_job_id = queue_client.QueueClient.EmotionJobPayload(message_id=message_id, text=translated_text, owner_id=owner_id, case_id=case_id)
+                emotion_job_id = queue_client.enqueue_emotion(EmotionJobPayload(message_id=message_id, text=translated_text, owner_id=owner_id, case_id=case_id))
                 if emotion_job_id:
                     logger.info(f"✅ Step 3: Emotion analysis queued: {emotion_job_id}")
                 else:
                     logger.warning("⚠️ Step 3: Emotion analysis not queued")
             except Exception as e:
                 logger.error(f"❌ Step 3: Failed to trigger emotion analysis: {e}")
-            try:
-                classification_job_id = queue_client.QueueClient.ClassificationJobPayload(message_id=message_id, text=translated_text, owner_id=owner_id, case_id=case_id)
-                if classification_job_id:
-                    logger.info(f"✅ Step 4: Classification queued: {classification_job_id}")
-                else:
-                    logger.warning("⚠️ Step 4: Classification not queued")
-            except Exception as e:
-                logger.error(f"❌ Step 4: Failed to trigger classification: {e}")
         
         return result
         

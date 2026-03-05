@@ -39,6 +39,7 @@ interface LocationPoint {
   country?: string;
   mention_count?: number;
   text?: string;
+  sample_messages?: Array<{ text: string; date?: string }>;
 }
 
 const fetchLocationPoints = async (config: any): Promise<LocationPoint[]> => {
@@ -160,25 +161,62 @@ export const LocationMapWidget: React.FC<WidgetComponentProps> = ({
         <FitBounds points={points} />
 
         <MarkerClusterGroup>
-          {points.map((point, idx) => (
-            <Marker
-              key={`${point.message_id}-${idx}`}
-              position={[point.location.lat, point.location.lng]}
-            >
-              <Popup>
-                <div>
-                  <strong>{point.canonical_name || 'Unknown Location'}</strong>
-                  {point.country && <div><small>{point.country}</small></div>}
-                  {point.mention_count && <div><Badge size="xs">{point.mention_count} mentions</Badge></div>}
-                  {point.text && (
-                    <div style={{ marginTop: '8px', maxWidth: '200px' }}>
-                      <small>{point.text.substring(0, 100)}...</small>
+          {points.map((point, idx) => {
+            const mentions = point.mention_count ?? 1;
+            const radius = Math.min(Math.max(8 + Math.sqrt(mentions) * 2, 10), 36);
+            const hue = Math.max(0, 120 - mentions * 4); // green → yellow → red as mentions grow
+            const circleIcon = L.divIcon({
+              className: '',
+              html: `<div style="width:${radius*2}px;height:${radius*2}px;border-radius:50%;background:hsl(${hue},80%,50%);border:2px solid white;opacity:0.85;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:bold;color:white;box-shadow:0 1px 4px rgba(0,0,0,0.4)">${mentions > 1 ? mentions : ''}</div>`,
+              iconSize: [radius * 2, radius * 2],
+              iconAnchor: [radius, radius],
+            });
+            const sampleMsgs = point.sample_messages || (point.text ? [{ text: point.text }] : []);
+            return (
+              <Marker
+                key={`${point.message_id}-${idx}`}
+                position={[point.location.lat, point.location.lng]}
+                icon={circleIcon}
+              >
+                <Popup minWidth={260} maxWidth={320}>
+                  <div style={{ fontFamily: 'system-ui, sans-serif' }}>
+                    <div style={{ fontWeight: 700, fontSize: '0.95rem', marginBottom: 2 }}>
+                      📍 {point.canonical_name || 'Unknown Location'}
                     </div>
-                  )}
-                </div>
-              </Popup>
-            </Marker>
-          ))}
+                    {point.country && (
+                      <div style={{ fontSize: '0.75rem', color: '#888', marginBottom: 6 }}>
+                        🌍 {point.country}
+                      </div>
+                    )}
+                    <div style={{ display: 'inline-block', background: `hsl(${hue},80%,45%)`, color: 'white', borderRadius: 10, padding: '2px 10px', fontSize: '0.72rem', fontWeight: 700, marginBottom: sampleMsgs.length ? 8 : 0 }}>
+                      {mentions} {mentions === 1 ? 'mention' : 'mentions'}
+                    </div>
+                    {sampleMsgs.length > 0 && (
+                      <div style={{ borderTop: '1px solid #e9ecef', paddingTop: 6 }}>
+                        <div style={{ fontSize: '0.68rem', color: '#aaa', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 5 }}>
+                          Recent messages
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 180, overflowY: 'auto' }}>
+                          {sampleMsgs.map((msg, mi) => (
+                            <div key={mi} style={{ background: '#f8f9fa', borderRadius: 6, padding: '5px 8px', borderLeft: '3px solid #4dabf7' }}>
+                              <div style={{ fontSize: '0.76rem', color: '#333', lineHeight: 1.4 }}>
+                                {msg.text && msg.text.length > 140 ? msg.text.substring(0, 140) + '…' : (msg.text || '—')}
+                              </div>
+                              {msg.date && (
+                                <div style={{ fontSize: '0.65rem', color: '#bbb', marginTop: 3 }}>
+                                  {new Date(msg.date).toLocaleDateString('de-DE', { day: '2-digit', month: 'short', year: 'numeric' })}
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </Popup>
+              </Marker>
+            );
+          })}
         </MarkerClusterGroup>
       </MapContainer>
     </Box>

@@ -12,6 +12,8 @@ services:
       - ./docker/db-init:/docker-entrypoint-initdb.d
     networks:
       - aether-network
+    ports:
+      - "5432:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${DB_USER}"]
       interval: 10s
@@ -108,6 +110,14 @@ services:
       PYTHONPATH: /app
       REDIS_HOST: redis
       REDIS_PORT: 6379
+      # Modal GPU endpoints (set USE_MODAL=true + MODAL_* URLs for production)
+      LLM_SERVICE_URL: ${MODAL_LLM_URL:-}
+      MODAL_LLM_URL: ${MODAL_LLM_URL:-}
+      MODAL_TRANSLATION_URL: ${MODAL_TRANSLATION_URL:-}
+      MODAL_EMOTION_URL: ${MODAL_EMOTION_URL:-}
+      MODAL_TOKEN_ID: ${MODAL_TOKEN_ID:-}
+      MODAL_TOKEN_SECRET: ${MODAL_TOKEN_SECRET:-}
+      USE_MODAL: ${USE_MODAL:-false}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - tg_sessions:/app/sessions
@@ -186,6 +196,9 @@ services:
       REDIS_PORT: 6379
       OWNER_ID: ${OWNER_ID:-unknown}
       PYTHONPATH: /app
+      USE_MODAL: ${USE_MODAL:-false}
+      MODAL_EMOTION_URL: ${MODAL_EMOTION_URL:-}
+      MODAL_TRANSLATION_URL: ${MODAL_TRANSLATION_URL:-}
     volumes:
       - tg_sessions:/app/sessions
       - ${MEDIA_PATH}:/shared/media
@@ -240,6 +253,7 @@ services:
       - aether-network
 
   translation-worker:
+    profiles: ["gpu-local"]
     build:
       context: .
       dockerfile: workers/translation_worker/Dockerfile
@@ -260,15 +274,12 @@ services:
       NEO4J_PASSWORD: ${NEO4J_PASSWORD}
     volumes:
       - ./aether_lib:/app/aether_lib:ro
-      - app_translation_models:/app/models
     depends_on:
       redis:
         condition: service_started
       neo4j:
         condition: service_healthy
       postgres:
-        condition: service_started
-      translation-models:
         condition: service_started
     networks:
       - aether-network
@@ -281,6 +292,7 @@ services:
           memory: 3G
 
   image-worker:
+    # profiles: ["gpu-local"]  <-- Enabled locally for file access
     build:
       context: .
       dockerfile: workers/image_worker/Dockerfile
@@ -300,14 +312,11 @@ services:
     volumes:
       - ${MEDIA_PATH}:/shared/media:ro
       - ./aether_lib:/app/aether_lib:ro
-      - app_image_models:/app/models/image
     depends_on:
       redis:
         condition: service_started
       neo4j:
         condition: service_healthy
-      image-models:
-        condition: service_started
     networks:
       - aether-network
     deploy:
@@ -318,6 +327,7 @@ services:
           memory: 2G
 
   audio-worker:
+    # profiles: ["gpu-local"]  <-- Enabled locally for file access
     build:
       context: .
       dockerfile: workers/audio_worker/Dockerfile
@@ -335,15 +345,12 @@ services:
       USE_QUANTIZATION: "true"
     volumes:
       - ./aether_lib:/app/aether_lib:ro
-      - app_audio_models:/app/models/audio
       - ${MEDIA_PATH}:/shared/media:ro
     depends_on:
       redis:
         condition: service_started
       neo4j:
         condition: service_healthy
-      audio-models:
-        condition: service_started
     networks:
       - aether-network
     deploy:
@@ -354,6 +361,7 @@ services:
           memory: 2G
 
   emotion-worker:
+    profiles: ["gpu-local"]
     build:
       context: .
       dockerfile: workers/emotion_worker/Dockerfile
@@ -371,14 +379,11 @@ services:
       USE_QUANTIZATION: "true"
     volumes:
       - ./aether_lib:/app/aether_lib:ro
-      - app_emotion_models:/app/models
     depends_on:
       redis:
         condition: service_started
       neo4j:
         condition: service_healthy
-      emotion-models:
-        condition: service_started
     networks:
       - aether-network
     deploy:
@@ -389,6 +394,7 @@ services:
           memory: 1G
 
   classification-worker:
+    profiles: ["gpu-local"]
     build:
       context: .
       dockerfile: workers/classification_worker/Dockerfile
@@ -406,15 +412,12 @@ services:
       USE_QUANTIZATION: "true"
     volumes:
       - ./aether_lib:/app/aether_lib:ro
-      - app_classifier_models:/app/models/classifier
       - ${MEDIA_PATH}:/shared/media:ro
     depends_on:
       redis:
         condition: service_started
       neo4j:
         condition: service_healthy
-      classifier-models:
-        condition: service_started
     networks:
       - aether-network
     deploy:
@@ -446,21 +449,15 @@ services:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       JOB_SECRET_TOKEN: ${JOB_SECRET_TOKEN}
-      PHOTON_URL: http://photon:2322
+
     volumes:
       - ./aether_lib:/app/aether_lib:ro
-      - app_geolocation_models:/app/models/geolocation
-      - app_photon_data:/app/photon_data
     depends_on:
       redis:
         condition: service_started
       neo4j:
         condition: service_healthy
       postgres:
-        condition: service_started
-      photon:
-        condition: service_started
-      geolocation-models:
         condition: service_started
     networks:
       - aether-network
@@ -471,98 +468,8 @@ services:
           memory: 2G
         reservations:
           memory: 512M
-  llm-service:
-      build: ./workers/llm-service
-      container_name: aether-llm-service
-      ports:
-        - "8001:8001"
-      volumes:
-        - ./models/llm:/models/llm    # Bind mount local models directory
-        - ./workers/llm-service:/app
-      environment:
-        - MODEL_PATH=/models/llm/qwen2.5-7b-instruct-q4_k_m.gguf
-        - N_THREADS=8
-        - N_CTX=8192
-      restart: unless-stopped
-      healthcheck:
-        test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
-        interval: 30s
-        timeout: 10s
-        retries: 3
-      networks:
-        - aether-network
-
-  photon:
-    build:
-      context: .
-      dockerfile: docker/photon/Dockerfile
-    container_name: aether-photon
-    ports:
-      - "2322:2322"
-    volumes:
-      - ./models/geocoding/photon/photon_data:/photon/photon_data
-    environment:
-      JAVA_OPTS: -Xmx2g
-    networks:
-      - aether-network
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:2322/api?q=Berlin"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 60s
-    depends_on:
-      - postgres
-
-  translation-models:
-    build:
-      context: ./models
-      dockerfile: translation/Dockerfile
-    volumes:
-      - app_translation_models:/models
-
-  audio-models:
-    build:
-      context: ./models
-      dockerfile: audio/Dockerfile
-    volumes:
-      - app_audio_models:/models
-
-  emotion-models:
-    build:
-      context: ./models
-      dockerfile: emotion/Dockerfile
-    volumes:
-      - app_emotion_models:/models
-
-  classifier-models:
-    build:
-      context: ./models
-      dockerfile: classifier/Dockerfile
-    volumes:
-      - app_classifier_models:/models
-
-  image-models:
-    build:
-      context: ./models
-      dockerfile: image/Dockerfile
-    volumes:
-      - app_image_models:/models
-
-  geolocation-models:
-    build:
-      context: ./models
-      dockerfile: geolocation/Dockerfile
-    volumes:
-      - app_geolocation_models:/models
-  
-  llm-models:
-    build:
-      context: ./models
-      dockerfile: llm/Dockerfile
-    volumes:
-      - app_llm_models:/models
+  # llm-service removed — now runs as Modal.com web endpoint (modal deploy modal/llm_service.py)
+  # For local GPU dev: docker compose --profile gpu-local up (not currently configured)
 
 volumes:
   pgdata:
@@ -571,14 +478,6 @@ volumes:
   keycloak_data:
   tg_sessions:
   redis-data:
-  app_translation_models:
-  app_audio_models:
-  app_emotion_models:
-  app_classifier_models:
-  app_image_models:
-  app_geolocation_models:
-  app_photon_data:
-  app_llm_models:
 
 networks:
   aether-network:

@@ -7,6 +7,10 @@ Wird von Backend UND Workern verwendet
 from redis import Redis
 from rq import Queue
 import os
+import logging
+
+logger = logging.getLogger(__name__)
+
 from aether_lib.schemas.jobs import (
     TelegramScrapePayload,
     TranslationJobPayload,
@@ -20,7 +24,10 @@ class QueueClient:
     def __init__(self):
         redis_host = os.getenv("REDIS_HOST", "redis")
         redis_port = int(os.getenv("REDIS_PORT", "6379"))
-        
+        self.use_modal = os.getenv("USE_MODAL", "false").lower() == "true"
+        self.modal_emotion_url = os.getenv("MODAL_EMOTION_URL", "")
+        self.modal_translation_url = os.getenv("MODAL_TRANSLATION_URL", "")
+
         self.queues = {
             'telegram': Queue('telegram-jobs', 
                 connection=Redis(host=redis_host, port=redis_port, db=0)),
@@ -62,7 +69,10 @@ class QueueClient:
         )
         return job.id
     def enqueue_translation(self, translation_payload: TranslationJobPayload):
-        """Translation Job"""
+        """Translation Job — uses Modal HTTP endpoint when USE_MODAL=true, otherwise RQ."""
+        if self.use_modal and self.modal_translation_url:
+            self._enqueue_translation_modal(translation_payload)
+            return None
         job = self.queues['translation'].enqueue(
             'workers.translation_worker.worker.translate_and_update',
             kwargs={
@@ -79,8 +89,50 @@ class QueueClient:
         )
         return job.id
 
+    def _enqueue_translation_modal(self, translation_payload: TranslationJobPayload):
+        """Fire-and-forget Modal translation call in a background thread."""
+        import threading
+        import httpx
+
+        def _call():
+            try:
+                resp = httpx.post(
+                    self.modal_translation_url,
+                    json={
+                        "text": translation_payload.original_text,
+                        "source_language": translation_payload.source_language,
+                        "target_language": "de",
+                    },
+                    timeout=300.0,
+                )
+                resp.raise_for_status()
+                translated = resp.json().get("translated_text", "")
+                if translated:
+                    self._neo4j_update_translation(
+                        translation_payload.message_id,
+                        translation_payload.owner_id,
+                        translated,
+                        translation_payload.image_text,
+                        translation_payload.audio_text,
+                    )
+                    # Chain emotion analysis on the translated text
+                    if len(translated.strip()) > 10 and self.modal_emotion_url:
+                        self._enqueue_emotion_modal_sync(
+                            translation_payload.message_id,
+                            translated,
+                            translation_payload.owner_id,
+                            translation_payload.case_id,
+                        )
+            except Exception as e:
+                logger.error(f"Modal translation failed for {translation_payload.message_id}: {e}")
+
+        threading.Thread(target=_call, daemon=True).start()
+
     def enqueue_emotion(self, emotion_payload: EmotionJobPayload):
-        """Emotion Analysis"""
+        """Emotion Analysis — uses Modal HTTP endpoint when USE_MODAL=true, otherwise RQ."""
+        if self.use_modal and self.modal_emotion_url:
+            self._enqueue_emotion_modal(emotion_payload)
+            return None
         job = self.queues['emotion'].enqueue(
             'workers.emotion_worker.worker.classify_emotion_job',
             kwargs={
@@ -92,6 +144,89 @@ class QueueClient:
             meta={'owner_id': emotion_payload.owner_id, 'case_id': emotion_payload.case_id}
         )
         return job.id
+
+    def _enqueue_emotion_modal(self, emotion_payload: EmotionJobPayload):
+        """Fire-and-forget Modal emotion call in a background thread."""
+        import threading
+        threading.Thread(
+            target=self._enqueue_emotion_modal_sync,
+            args=(emotion_payload.message_id, emotion_payload.text,
+                  emotion_payload.owner_id, emotion_payload.case_id),
+            daemon=True,
+        ).start()
+
+    def _enqueue_emotion_modal_sync(self, message_id: str, text: str, owner_id: str, case_id: str):
+        """Synchronous Modal emotion call — runs inside a background thread."""
+        import httpx
+        try:
+            resp = httpx.post(
+                self.modal_emotion_url,
+                json={"text": text, "threshold": 0.3, "top_k": 3},
+                timeout=300.0,
+            )
+            resp.raise_for_status()
+            emotions = resp.json().get("emotions", [])
+            if emotions:
+                self._neo4j_store_emotions(message_id, owner_id, emotions)
+        except Exception as e:
+            logger.error(f"Modal emotion failed for {message_id}: {e}")
+
+    def _neo4j_update_translation(self, message_id: str, owner_id: str,
+                                   translated_text: str, image_text: bool, audio_text: bool):
+        """Write translated text back to Neo4j."""
+        from neo4j import GraphDatabase
+        uri = os.getenv("NEO4J_URI", "bolt://neo4j:7687")
+        user = os.getenv("NEO4J_USER", "neo4j")
+        password = os.getenv("NEO4J_PASSWORD", "")
+        driver = GraphDatabase.driver(uri, auth=(user, password))
+        try:
+            with driver.session() as session:
+                if image_text:
+                    cypher = "MATCH (m:Message {mid: $mid, owner_id: $owner_id}) SET m.image_text_translated = $text"
+                elif audio_text:
+                    cypher = "MATCH (m:Message {mid: $mid, owner_id: $owner_id}) SET m.audio_text_translated = $text"
+                else:
+                    cypher = "MATCH (m:Message {mid: $mid, owner_id: $owner_id}) SET m.translated_text = $text, m.translation_status = 'completed'"
+                session.run(cypher, mid=message_id, owner_id=owner_id, text=translated_text)
+        finally:
+            driver.close()
+
+    def _neo4j_store_emotions(self, message_id: str, owner_id: str, emotions: list):
+        """Write emotion results to Neo4j as Emotion nodes with HAS_EMOTION relationships."""
+        from neo4j import GraphDatabase
+        uri = os.getenv("NEO4J_URI", "bolt://neo4j:7687")
+        user = os.getenv("NEO4J_USER", "neo4j")
+        password = os.getenv("NEO4J_PASSWORD", "")
+        cypher = """
+        MATCH (m:Message {mid: $message_id})
+        WHERE $owner_id IS NULL OR m.owner_id = $owner_id
+        MERGE (e:Emotion {label_id: $label_id})
+        ON CREATE SET e.name = $label, e.label_id = $label_id, e.created_at = datetime()
+        MERGE (m)-[r:HAS_EMOTION]->(e)
+        ON CREATE SET r.confidence = $confidence, r.method = $method,
+                      r.source_emotions = $source_emotions, r.detected_at = datetime()
+        ON MATCH SET  r.confidence = CASE WHEN $confidence > r.confidence
+                          THEN $confidence ELSE r.confidence END,
+                      r.method = $method, r.source_emotions = $source_emotions,
+                      r.updated_at = datetime()
+        SET m.emotion_status = 'completed', m.emotion_analyzed_at = datetime()
+        """
+        driver = GraphDatabase.driver(uri, auth=(user, password))
+        try:
+            with driver.session() as session:
+                for emo in emotions:
+                    session.run(
+                        cypher,
+                        message_id=message_id,
+                        owner_id=owner_id,
+                        label_id=emo["label_id"],
+                        label=emo["label"],
+                        confidence=emo["confidence"],
+                        method=emo.get("method", "unknown"),
+                        source_emotions=emo.get("source_emotions", []),
+                    )
+        finally:
+            driver.close()
 
     def enqueue_classification(self, classification_payload: ClassificationJobPayload):
         """Label Classification"""

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { IconInfoCircle } from '@tabler/icons-react';
-import { Alert, Card, Group, Loader, Slider, Stack, Text } from '@mantine/core';
+import { Alert, Box, Card, Group, Loader, Slider, Stack, Text } from '@mantine/core';
 import { authFetch } from '@/utils/authFetch';
 
 interface GraphVisualizationProps {
@@ -91,7 +91,7 @@ const GraphVisualization: React.FC<GraphVisualizationProps> = ({
       id: node.id,
       label: node.label,
       group: node.type,
-      title: `${node.type}: ${node.label}`,
+      title: node.name || node.label,
       color: getNodeColor(node.type),
       size: Math.max((node.properties?.message_count || 1) * 2, 15),
       font: { size: 12, color: '#000000' },
@@ -331,6 +331,22 @@ const GraphVisualization: React.FC<GraphVisualizationProps> = ({
             Select channels to view graph visualization
           </Text>
         )}
+
+        {/* Legend */}
+        <Group gap="lg" wrap="wrap">
+          {[
+            { label: 'Channel', color: '#ff6b6b' },
+            { label: 'User', color: '#4ecdc4' },
+            { label: 'Message', color: '#ffd93d' },
+            { label: 'Other', color: '#95a5a6' },
+          ].map(({ label, color }) => (
+            <Group key={label} gap={6}>
+              <Box style={{ width: 12, height: 12, borderRadius: '50%', backgroundColor: color, flexShrink: 0 }} />
+              <Text size="xs" c="dimmed">{label}</Text>
+            </Group>
+          ))}
+          <Text size="xs" c="dimmed" ml="auto">Edge label = relationship type</Text>
+        </Group>
       </Stack>
     </Card>
   );

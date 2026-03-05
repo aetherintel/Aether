@@ -237,6 +237,92 @@ def enqueue_geolocation(
 
 
 # ============================================================================
+# MODAL WORKER TEST ENDPOINTS
+# ============================================================================
+
+@router.post("/modal/test-translation")
+async def test_modal_translation(
+    user: UserCtx = Depends(user_ctx),
+):
+    """
+    Test the Modal translation worker with a sample text.
+    Requires USE_MODAL=true and MODAL_TRANSLATION_URL to be set.
+    """
+    from services.queue_service import queue_service
+    import httpx
+
+    if not queue_service.use_modal or not queue_service.modal_translation_url:
+        raise HTTPException(status_code=503, detail="Modal is not enabled. Set USE_MODAL=true and MODAL_TRANSLATION_URL.")
+
+    try:
+        resp = await queue_service._modal_client.post(
+            f"{queue_service.modal_translation_url}/translate",
+            json={"text": "This is a test message.", "source_language": "en", "target_language": "de"},
+        )
+        resp.raise_for_status()
+        return {"status": "ok", "result": resp.json()}
+    except httpx.HTTPStatusError as e:
+        raise HTTPException(status_code=502, detail=f"Modal translation error: {e.response.status_code} {e.response.text}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/modal/test-emotion")
+async def test_modal_emotion(
+    user: UserCtx = Depends(user_ctx),
+):
+    """
+    Test the Modal emotion worker with a sample text.
+    Requires USE_MODAL=true and MODAL_EMOTION_URL to be set.
+    """
+    from services.queue_service import queue_service
+    import httpx
+
+    if not queue_service.use_modal or not queue_service.modal_emotion_url:
+        raise HTTPException(status_code=503, detail="Modal is not enabled. Set USE_MODAL=true and MODAL_EMOTION_URL.")
+
+    try:
+        resp = await queue_service._modal_client.post(
+            f"{queue_service.modal_emotion_url}/classify",
+            json={"text": "Das ist eine sehr wütende Nachricht!", "threshold": 0.3, "top_k": 3},
+        )
+        resp.raise_for_status()
+        return {"status": "ok", "result": resp.json()}
+    except httpx.HTTPStatusError as e:
+        raise HTTPException(status_code=502, detail=f"Modal emotion error: {e.response.status_code} {e.response.text}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/modal/health")
+async def modal_health():
+    """Check reachability of all configured Modal workers."""
+    from services.queue_service import queue_service
+    import httpx
+
+    result = {
+        "use_modal": queue_service.use_modal,
+        "translation": {"configured": bool(queue_service.modal_translation_url), "status": "not_checked"},
+        "emotion": {"configured": bool(queue_service.modal_emotion_url), "status": "not_checked"},
+    }
+
+    async def _ping(base_url: str, endpoint: str = "/health") -> dict:
+        try:
+            resp = await queue_service._modal_client.get(f"{base_url}{endpoint}", timeout=10.0)
+            resp.raise_for_status()
+            return {"status": "ok", "response": resp.json()}
+        except Exception as e:
+            return {"status": "unreachable", "error": str(e)}
+
+    if queue_service.modal_translation_url:
+        result["translation"] = {**result["translation"], **(await _ping(queue_service.modal_translation_url))}
+    if queue_service.modal_emotion_url:
+        result["emotion"] = {**result["emotion"], **(await _ping(queue_service.modal_emotion_url))}
+
+    return result
+
+
+# ============================================================================
 # QUEUE HEALTH CHECK
 # ============================================================================
 

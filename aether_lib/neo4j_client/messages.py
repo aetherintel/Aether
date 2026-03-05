@@ -69,18 +69,17 @@ async def _save_message_tx(
     MERGE (m:Message {mid:$mid, owner_id:$owner})
     ON CREATE SET 
         m.date = datetime($date),
-        m.original_text = $original_text,
+        m.original_text = $original_text, // Keep for backward compat temporarily or remove? User wants removal of redundancy.
         m.original_language = $original_language,
         m.media_type = $media_type,
         m.media_path = $media_path,
-        m.translated_text = $translated_text,
         m.translation_status = $translation_status,
         m.image_analysis_status = $image_analysis_status,
-        m.image_text = null,
-        m.image_labels = null,
         m.audio_transcription_status = $audio_transcription_status,
-        m.audio_transcript = null,
         m.geolocation_status = $geolocation_status
+    
+    // Update content if node exists (optional, but good for consistency)
+    // ON MATCH SET ... (no longer setting content map due to Neo4j primitive type constraint)
     
     MERGE (ch)-[:HAS_MESSAGE]->(m)
     
@@ -213,6 +212,7 @@ async def update_message_audio_transcription(
                 SET 
                     m.audio_text = coalesce($audio_text, m.audio_text),
                     m.audio_text_translated = coalesce($audio_text_translated, m.audio_text_translated),
+                    
                     m.audio_language = coalesce($detected_language, m.audio_language),
                     m.transcribed_media_type = coalesce($media_type, m.transcribed_media_type),
                     m.audio_transcribed = true,

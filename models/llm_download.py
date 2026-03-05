@@ -60,6 +60,30 @@ MODEL_REGISTRY = {
         "filename": "qwen2.5-7b-instruct-q4_k_m.gguf",
         "output_name": "qwen2.5-7b-instruct-q4_k_m.gguf",
         "size_gb": 4.4
+    },
+    "qwen2.5-14b-instruct-q4": {
+        "repo_id": "bartowski/Qwen2.5-14B-Instruct-GGUF",
+        "filename": "Qwen2.5-14B-Instruct-Q4_K_M.gguf",
+        "output_name": "qwen2.5-14b-instruct-q4_k_m.gguf",
+        "size_gb": 9.0
+    },
+    "qwen2.5-32b-instruct-q4": {
+        "repo_id": "bartowski/Qwen2.5-32B-Instruct-GGUF",
+        "filename": "Qwen2.5-32B-Instruct-Q4_K_M.gguf",
+        "output_name": "qwen2.5-32b-instruct-q4_k_m.gguf",
+        "size_gb": 19.9
+    },
+    "mistral-small-24b-instruct-q4": {
+        "repo_id": "bartowski/Mistral-Small-24B-Instruct-2501-GGUF",
+        "filename": "Mistral-Small-24B-Instruct-2501-Q4_K_M.gguf",
+        "output_name": "mistral-small-24b-instruct-2501-q4_k_m.gguf",
+        "size_gb": 15.0
+    },
+    "codestral-22b-v0.1-q4": {
+        "repo_id": "bartowski/Codestral-22B-v0.1-GGUF",
+        "filename": "Codestral-22B-v0.1-Q4_K_M.gguf",
+        "output_name": "codestral-22b-v0.1-q4_k_m.gguf",
+        "size_gb": 13.3
     }
 }
 

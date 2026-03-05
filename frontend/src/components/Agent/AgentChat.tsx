@@ -1,13 +1,39 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { 
-    Autocomplete, ActionIcon, Stack, Paper, Text, Loader, Button, 
-    Group, Box, ScrollArea, Table, Avatar, Select, Modal, Code, Card, SimpleGrid
+import {
+    Autocomplete, ActionIcon, Stack, Paper, Text, Loader, Button,
+    Group, Box, ScrollArea, Table, Avatar, Select, Modal, Code, Card, SimpleGrid, Badge, Collapse
 } from '@mantine/core';
-import { IconSend, IconDatabaseImport, IconRobot, IconUser, IconSettings, IconX } from '@tabler/icons-react';
+import { IconSend, IconDatabaseImport, IconRobot, IconUser, IconSettings, IconX, IconThumbUp, IconThumbDown, IconCode, IconChevronDown, IconChevronRight } from '@tabler/icons-react';
 import { agentService, AgentResponse, CommandSuggestion } from '../../services/agentService';
 import { GraphRAGWidget } from '../Dashboard/GraphRAGWidget';
 import { notifications } from '@mantine/notifications';
 import { PieChart, BarChart } from '@mantine/charts';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import { motion, AnimatePresence } from 'framer-motion';
+import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
+import MarkerClusterGroup from 'react-leaflet-cluster';
+import 'leaflet/dist/leaflet.css';
+import L from 'leaflet';
+
+// Fix Leaflet default marker icons
+delete (L.Icon.Default.prototype as any)._getIconUrl;
+L.Icon.Default.mergeOptions({
+    iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
+    iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
+    shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
+});
+
+const FitMapBounds: React.FC<{ points: Array<{ lat: number; lng: number }> }> = ({ points }) => {
+    const map = useMap();
+    useEffect(() => {
+        if (points.length > 0) {
+            const bounds = L.latLngBounds(points.map(p => [p.lat, p.lng]));
+            map.fitBounds(bounds, { padding: [40, 40] });
+        }
+    }, [points, map]);
+    return null;
+};
 
 interface AgentChatProps {
   embedded?: boolean;
@@ -17,34 +43,64 @@ interface ChatMessage {
     id: string;
     sender: 'user' | 'agent';
     text: string;
-    widgetType?: 'graph' | 'table' | 'pie' | 'bar' | 'kpi';
+    widgetType?: 'graph' | 'table' | 'pie' | 'bar' | 'kpi' | 'location_map' | 'emotion_analysis' | 'top_influencers';
     widgetData?: any;
     metadata?: any;
     timestamp: Date;
 }
 
+const CHAT_STORAGE_KEY = 'aether_agent_chat_history';
+
+function loadMessagesFromStorage(): ChatMessage[] {
+    try {
+        const raw = sessionStorage.getItem(CHAT_STORAGE_KEY);
+        if (!raw) return [];
+        const parsed: ChatMessage[] = JSON.parse(raw);
+        // Re-hydrate Date objects
+        return parsed.map(m => ({ ...m, timestamp: new Date(m.timestamp) }));
+    } catch {
+        return [];
+    }
+}
+
+function saveMessagesToStorage(msgs: ChatMessage[]) {
+    try {
+        sessionStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(msgs));
+    } catch {
+        // sessionStorage full or unavailable — silently ignore
+    }
+}
+
 export const AgentChat: React.FC<AgentChatProps> = ({ embedded = false }) => {
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(false);
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [systemPrompts, setSystemPrompts] = useState<Record<string, string>>({});
-  const [activePromptKey, setActivePromptKey] = useState<string>("default");
+  const [messages, setMessages] = useState<ChatMessage[]>(() => {
+      const stored = loadMessagesFromStorage();
+      if (stored.length > 0) return stored;
+      return [{
+          id: 'init',
+          sender: 'agent',
+          text: '👋 **Hello!** I am your **Aether Agent**. \n\nYou can ask me to `visualize data`, `summarize cases`, or run analysis.\n\nType `/help` for commands.',
+          timestamp: new Date()
+      }];
+  });
+
   const [suggestions, setSuggestions] = useState<CommandSuggestion[]>([]);
   const [activeRequestId, setActiveRequestId] = useState<string | null>(null);
-  
+  const [expandedCypher, setExpandedCypher] = useState<Set<string>>(new Set());
+  const [slowQuery, setSlowQuery] = useState(false);
+  const slowQueryTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const scrollViewport = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-      loadSystemPrompts();
       loadSuggestions();
-      // Add initial greeting
-      setMessages([{
-          id: 'init',
-          sender: 'agent',
-          text: 'Hello! I am your Aether Agent. You can ask me to visualize data, summarize cases, or run analysis. Type `/help` for commands.',
-          timestamp: new Date()
-      }]);
   }, []);
+
+  // Persist chat history to sessionStorage whenever messages change
+  useEffect(() => {
+      saveMessagesToStorage(messages);
+  }, [messages]);
 
   useEffect(() => {
       scrollToBottom();
@@ -52,18 +108,13 @@ export const AgentChat: React.FC<AgentChatProps> = ({ embedded = false }) => {
 
   const scrollToBottom = () => {
       if (scrollViewport.current) {
-          scrollViewport.current.scrollTo({ top: scrollViewport.current.scrollHeight, behavior: 'smooth' });
+          setTimeout(() => {
+              scrollViewport.current?.scrollTo({ top: scrollViewport.current.scrollHeight, behavior: 'smooth' });
+          }, 100);
       }
   };
 
-  const loadSystemPrompts = async () => {
-      try {
-          const prompts = await agentService.getSystemPrompts();
-          setSystemPrompts(prompts);
-      } catch (e) {
-          console.error("Failed to load prompts", e);
-      }
-  };
+
 
   const loadSuggestions = async () => {
       try {
@@ -91,6 +142,8 @@ export const AgentChat: React.FC<AgentChatProps> = ({ embedded = false }) => {
     setMessages(prev => [...prev, userMsg]);
     setQuery('');
     setLoading(true);
+    setSlowQuery(false);
+    slowQueryTimer.current = setTimeout(() => setSlowQuery(true), 8000);
 
     try {
         // Collect history (last 10 messages)
@@ -99,7 +152,7 @@ export const AgentChat: React.FC<AgentChatProps> = ({ embedded = false }) => {
         const response: AgentResponse = await agentService.queryAgent(
             userMsg.text, 
             history, 
-            activePromptKey,
+            "default",
             requestId
         );
         
@@ -137,6 +190,11 @@ export const AgentChat: React.FC<AgentChatProps> = ({ embedded = false }) => {
     } finally {
       setLoading(false);
       setActiveRequestId(null);
+      setSlowQuery(false);
+      if (slowQueryTimer.current) {
+          clearTimeout(slowQueryTimer.current);
+          slowQueryTimer.current = null;
+      }
     }
   };
 
@@ -162,24 +220,69 @@ export const AgentChat: React.FC<AgentChatProps> = ({ embedded = false }) => {
 
   const renderTable = (data: any[]) => {
       if (!data || data.length === 0) return <Text size="sm">No data to display</Text>;
-      const keys = Object.keys(data[0]);
       
+      // Fields we don't want to show the user in a raw table view
+      const ignoredKeys = ['owner_id', 'mid', '_id', 'geolocation_status', 'image_analysis_status', 'audio_transcription_status', 'translation_status'];
+      const keys = Object.keys(data[0]).filter(k => !ignoredKeys.includes(k));
+      
+      if (keys.length === 0) return <Text size="sm">No displayable data</Text>;
+
       return (
-          <ScrollArea h={300}>
+          <ScrollArea h={350}>
             <Table stickyHeader striped highlightOnHover>
                 <Table.Thead>
                     <Table.Tr>
-                        {keys.map(k => <Table.Th key={k}>{k}</Table.Th>)}
+                        {keys.map(k => <Table.Th key={k}>{k.replace(/_/g, ' ')}</Table.Th>)}
                     </Table.Tr>
                 </Table.Thead>
                 <Table.Tbody>
                     {data.map((row, i) => (
                         <Table.Tr key={i}>
-                            {keys.map(k => (
-                                <Table.Td key={k}>
-                                    {typeof row[k] === 'object' ? JSON.stringify(row[k]) : String(row[k])}
-                                </Table.Td>
-                            ))}
+                            {keys.map(k => {
+                                const val = row[k];
+                                let displayVal: React.ReactNode = String(val);
+                                
+                                if (val === null || val === undefined) {
+                                    displayVal = <Text c="dimmed" fs="italic" size="sm">null</Text>;
+                                } else if (typeof val === 'boolean') {
+                                    displayVal = <Badge color={val ? 'green' : 'gray'}>{val ? 'Yes' : 'No'}</Badge>;
+                                } else if (typeof val === 'object' && val !== null) {
+                                    if (Array.isArray(val)) {
+                                        displayVal = <Text size="sm">{val.join(', ')}</Text>;
+                                    } else {
+                                        const objKeys = Object.keys(val);
+                                        if (objKeys.length === 0) {
+                                            displayVal = <Text size="sm" c="dimmed" fs="italic">Empty</Text>;
+                                        } else {
+                                            displayVal = (
+                                                <Table withTableBorder withColumnBorders>
+                                                    <Table.Tbody>
+                                                        {objKeys.map(ok => (
+                                                            <Table.Tr key={ok}>
+                                                                <Table.Td fw={500} style={{ padding: '2px 4px', fontSize: '0.75rem' }}>{ok}</Table.Td>
+                                                                <Table.Td style={{ padding: '2px 4px', fontSize: '0.75rem' }}>
+                                                                    {typeof val[ok] === 'object' ? JSON.stringify(val[ok]) : String(val[ok])}
+                                                                </Table.Td>
+                                                            </Table.Tr>
+                                                        ))}
+                                                    </Table.Tbody>
+                                                </Table>
+                                            );
+                                        }
+                                    }
+                                } else if (typeof val === 'string' && val.length > 100) {
+                                    // Truncate long strings for better table UX
+                                    displayVal = <Text size="sm" lineClamp={3} title={val}>{val}</Text>;
+                                } else {
+                                    displayVal = <Text size="sm">{String(val)}</Text>;
+                                }
+                                
+                                return (
+                                    <Table.Td key={k} style={{ maxWidth: 300, verticalAlign: 'top' }}>
+                                        {displayVal}
+                                    </Table.Td>
+                                );
+                            })}
                         </Table.Tr>
                     ))}
                 </Table.Tbody>
@@ -232,14 +335,7 @@ export const AgentChat: React.FC<AgentChatProps> = ({ embedded = false }) => {
                     <Text fw={600}>Agent Chat</Text>
                 </Group>
                 <Group>
-                    <Select 
-                        data={Object.keys(systemPrompts).map(k => ({ value: k, label: k }))}
-                        value={activePromptKey}
-                        onChange={(v) => setActivePromptKey(v || 'default')}
-                        size="xs"
-                        placeholder="System Prompt"
-                        w={150}
-                    />
+
                     <Button variant="light" size="xs" onClick={handleInitialize} leftSection={<IconDatabaseImport size={14}/>}>
                         Re-Index
                     </Button>
@@ -248,93 +344,332 @@ export const AgentChat: React.FC<AgentChatProps> = ({ embedded = false }) => {
         </Paper>
 
         {/* Chat Area */}
-        <Paper flex={1} p="md" radius="md" withBorder bg="var(--mantine-color-body)" style={{ overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+        <Paper flex={1} p="md" radius="md" withBorder bg="var(--mantine-color-gray-0)" style={{ overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
             <ScrollArea viewportRef={scrollViewport} style={{ flex: 1 }}>
                 <Stack gap="lg" pb="xl">
-                    {messages.map((msg) => (
-                        <Box key={msg.id} style={{ alignSelf: msg.sender === 'user' ? 'flex-end' : 'flex-start', maxWidth: '90%' }}>
-                            <Group align="flex-start" gap="xs" style={{flexDirection: msg.sender === 'user' ? 'row-reverse' : 'row'}}>
-                                <Avatar color={msg.sender === 'user' ? 'blue' : 'green'} radius="xl">
-                                    {msg.sender === 'user' ? <IconUser size={18} /> : <IconRobot size={18} />}
-                                </Avatar>
-                                <Paper withBorder p="sm" radius="md" bg={msg.sender === 'user' ? 'var(--mantine-color-blue-light)' : undefined}>
-                                    {/* Text Content */}
-                                    <Text size="sm" style={{ whiteSpace: 'pre-wrap' }}>{msg.text}</Text>
+                    <AnimatePresence initial={false}>
+                        {messages.map((msg) => (
+                            <motion.div
+                                key={msg.id}
+                                initial={{ opacity: 0, y: 20, scale: 0.95 }}
+                                animate={{ opacity: 1, y: 0, scale: 1 }}
+                                transition={{ duration: 0.3 }}
+                                style={{ 
+                                    alignSelf: msg.sender === 'user' ? 'flex-end' : 'flex-start', 
+                                    maxWidth: '92%',
+                                    width: 'fit-content' // Important for alignment
+                                }}
+                                onLayoutAnimationComplete={() => console.log("MSG DEBUG:", msg)}
+                            >
+                                <Group align="flex-start" gap="xs" style={{flexDirection: msg.sender === 'user' ? 'row-reverse' : 'row'}}>
+                                    <Avatar color={msg.sender === 'user' ? 'blue' : 'green'} radius="xl" size="md">
+                                        {msg.sender === 'user' ? <IconUser size={20} /> : <IconRobot size={20} />}
+                                    </Avatar>
                                     
-                                    {/* Widgets */}
-                                    {msg.widgetType === 'graph' && (
-                                        <Box mt="sm" h={400} w={600} style={{ border: '1px solid var(--mantine-color-default-border)', borderRadius: 'var(--mantine-radius-sm)', position: 'relative' }}>
-                                            <GraphRAGWidget data={msg.widgetData} />
-                                        </Box>
-                                    )}
-                                    {msg.widgetType === 'table' && (
-                                        <Box mt="sm" w="100%">
-                                            {renderTable(msg.widgetData)}
-                                        </Box>
-                                    )}
-                                    
-                                    {msg.widgetType === 'pie' && (
-                                        <Box mt="sm" h={300} w={400}>
-                                            <Text fw={500} size="sm" mb="xs">Distribution</Text>
-                                            <PieChart 
-                                                data={transformPieData(msg.widgetData)} 
-                                                withTooltip 
-                                                withLabelsLine 
-                                                labelsPosition="outside" 
-                                                withLabels 
-                                                size={200}
-                                            />
-                                        </Box>
-                                    )}
+                                    <Paper 
+                                        withBorder 
+                                        p="md" 
+                                        radius="lg" 
+                                        bg={msg.sender === 'user' ? 'blue.0' : 'white'}
+                                        shadow="sm"
+                                        style={{ minWidth: 200 }}
+                                    >
+                                        {/* Markdown Text Content */}
+                                        <div className="markdown-body" style={{ fontSize: '0.95rem', lineHeight: 1.6 }}>
+                                            <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                                                {msg.text}
+                                            </ReactMarkdown>
+                                        </div>
+                                        
+                                        {/* Widgets */}
+                                        {msg.widgetType === 'graph' && (
+                                            <Box mt="md" h={500} w={700} style={{ border: '1px solid #374151', borderRadius: '8px', overflow: 'hidden' }}>
+                                                <GraphRAGWidget data={msg.widgetData} />
+                                            </Box>
+                                        )}
+                                        {msg.widgetType === 'table' && (
+                                            <Box mt="sm" w="100%">
+                                                {renderTable(msg.widgetData)}
+                                            </Box>
+                                        )}
+                                        
+                                        {msg.widgetType === 'pie' && (
+                                            <Box mt="sm" h={300} w={400}>
+                                                <Text fw={500} size="sm" mb="xs">Distribution</Text>
+                                                <PieChart 
+                                                    data={transformPieData(msg.widgetData)} 
+                                                    withTooltip 
+                                                    withLabelsLine 
+                                                    labelsPosition="outside" 
+                                                    withLabels 
+                                                    size={200}
+                                                />
+                                            </Box>
+                                        )}
 
-                                    {msg.widgetType === 'bar' && (
-                                        <Box mt="sm" h={300} w={500}>
-                                             <Text fw={500} size="sm" mb="xs">Trend Analysis</Text>
-                                             {(() => {
-                                                 const { data, dataKey, series } = transformBarData(msg.widgetData);
-                                                 return (
-                                                    <BarChart
-                                                        h={250}
-                                                        data={data}
-                                                        dataKey={dataKey}
-                                                        series={series}
-                                                        tickLine="y"
-                                                    />
-                                                 );
-                                             })()}
-                                        </Box>
-                                    )}
-                                    
-                                    {msg.widgetType === 'kpi' && msg.widgetData && msg.widgetData.length > 0 && (
-                                        <Card withBorder radius="md" mt="sm">
-                                            <Group justify="space-between">
-                                                <Text size="xs" c="dimmed" fw={700} tt="uppercase">
-                                                    {Object.keys(msg.widgetData[0])[0]}
-                                                </Text>
-                                            </Group>
-                                            <Group align="flex-end" gap="xs" mt={25}>
-                                                <Text style={{ fontSize: '2rem', fontWeight: 700, lineHeight: 1 }}>
-                                                    {Object.values(msg.widgetData[0])[0] as React.ReactNode}
-                                                </Text>
-                                            </Group>
-                                        </Card>
-                                    )}
+                                        {msg.widgetType === 'bar' && (
+                                            <Box mt="sm" h={300} w={500}>
+                                                 {(() => {
+                                                     const { data, dataKey, series } = transformBarData(msg.widgetData);
+                                                     const valueKey = series[0]?.name || '';
+                                                     const title = valueKey
+                                                         ? `${valueKey.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())} by ${dataKey.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}`
+                                                         : 'Results';
+                                                     return (
+                                                         <>
+                                                             <Text fw={500} size="sm" mb="xs">{title}</Text>
+                                                             <BarChart
+                                                                 h={250}
+                                                                 data={data}
+                                                                 dataKey={dataKey}
+                                                                 series={series}
+                                                                 tickLine="y"
+                                                             />
+                                                         </>
+                                                     );
+                                                 })()}
+                                            </Box>
+                                        )}
+                                        
+                                        {msg.widgetType === 'kpi' && msg.widgetData && msg.widgetData.length > 0 && (
+                                            <Card withBorder radius="md" mt="sm">
+                                                <Group justify="space-between">
+                                                    <Text size="xs" c="dimmed" fw={700} tt="uppercase">
+                                                        {Object.keys(msg.widgetData[0])[0]}
+                                                    </Text>
+                                                </Group>
+                                                <Group align="flex-end" gap="xs" mt={25}>
+                                                    <Text style={{ fontSize: '2rem', fontWeight: 700, lineHeight: 1 }}>
+                                                        {String(Object.values(msg.widgetData[0])[0])}
+                                                    </Text>
+                                                </Group>
+                                            </Card>
+                                        )}
 
-                                    {/* Metadata / Cypher Debug */}
-                                    {msg.metadata?.cypher && (
-                                        <Box mt="xs">
-                                            <Text size="xs" c="dimmed" fw={500}>Generated Cypher:</Text>
-                                            <Code block>{msg.metadata.cypher}</Code>
-                                        </Box>
-                                    )}
-                                </Paper>
-                            </Group>
-                        </Box>
-                    ))}
+                                        {/* 🎯 Location Map Widget - Interactive Leaflet map */}
+                                        {msg.widgetType === 'location_map' && msg.widgetData && msg.widgetData.length > 0 && (() => {
+                                            const validPoints = msg.widgetData.filter((d: any) =>
+                                                (d.lat ?? d.latitude) != null && (d.lng ?? d.longitude) != null
+                                            );
+                                            return (
+                                                <Box mt="md">
+                                                    <Group justify="space-between" mb="xs">
+                                                        <Text fw={500} size="sm" c="dimmed">📍 {validPoints.length} locations</Text>
+                                                    </Group>
+                                                    <Box style={{ height: 420, borderRadius: 8, overflow: 'hidden', border: '1px solid #374151' }}>
+                                                        <MapContainer
+                                                            center={[51.1657, 10.4515]}
+                                                            zoom={5}
+                                                            style={{ height: '100%', width: '100%' }}
+                                                        >
+                                                            <TileLayer
+                                                                attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+                                                                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                                                            />
+                                                            <FitMapBounds points={validPoints.map((d: any) => ({ lat: d.lat ?? d.latitude, lng: d.lng ?? d.longitude }))} />
+                                                            <MarkerClusterGroup>
+                                                                {validPoints.map((item: any, idx: number) => {
+                                                                    const lat = item.lat ?? item.latitude;
+                                                                    const lng = item.lng ?? item.longitude;
+                                                                    const mentions = item.mention_count ?? 1;
+                                                                    const radius = Math.min(Math.max(8 + Math.sqrt(mentions) * 2, 10), 36);
+                                                                    const hue = Math.max(0, 120 - mentions * 4);
+                                                                    const circleIcon = L.divIcon({
+                                                                        className: '',
+                                                                        html: `<div style="width:${radius*2}px;height:${radius*2}px;border-radius:50%;background:hsl(${hue},80%,50%);border:2px solid white;opacity:0.85;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:bold;color:white;box-shadow:0 1px 4px rgba(0,0,0,0.4)">${mentions > 1 ? mentions : ''}</div>`,
+                                                                        iconSize: [radius * 2, radius * 2],
+                                                                        iconAnchor: [radius, radius],
+                                                                    });
+                                                                    const sampleMsgs: Array<{text: string; date?: string}> = item.sample_messages || [];
+                                                                    return (
+                                                                        <Marker key={idx} position={[lat, lng]} icon={circleIcon}>
+                                                                            <Popup minWidth={260} maxWidth={320}>
+                                                                                <div style={{ fontFamily: 'system-ui, sans-serif' }}>
+                                                                                    <div style={{ fontWeight: 700, fontSize: '0.95rem', marginBottom: 2 }}>
+                                                                                        📍 {item.canonical_name || 'Unknown'}
+                                                                                    </div>
+                                                                                    {item.country && (
+                                                                                        <div style={{ fontSize: '0.75rem', color: '#888', marginBottom: 6 }}>
+                                                                                            🌍 {item.country}
+                                                                                        </div>
+                                                                                    )}
+                                                                                    <div style={{ display: 'inline-block', background: `hsl(${hue},80%,45%)`, color: 'white', borderRadius: 10, padding: '2px 10px', fontSize: '0.72rem', fontWeight: 700, marginBottom: sampleMsgs.length ? 8 : 0 }}>
+                                                                                        {mentions} {mentions === 1 ? 'mention' : 'mentions'}
+                                                                                    </div>
+                                                                                    {sampleMsgs.length > 0 && (
+                                                                                        <div style={{ borderTop: '1px solid #e9ecef', paddingTop: 6 }}>
+                                                                                            <div style={{ fontSize: '0.68rem', color: '#aaa', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 5 }}>
+                                                                                                Recent messages
+                                                                                            </div>
+                                                                                            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 180, overflowY: 'auto' }}>
+                                                                                                {sampleMsgs.map((msg, mi) => (
+                                                                                                    <div key={mi} style={{ background: '#f8f9fa', borderRadius: 6, padding: '5px 8px', borderLeft: '3px solid #4dabf7' }}>
+                                                                                                        <div style={{ fontSize: '0.76rem', color: '#333', lineHeight: 1.4 }}>
+                                                                                                            {msg.text && msg.text.length > 140 ? msg.text.substring(0, 140) + '…' : (msg.text || '—')}
+                                                                                                        </div>
+                                                                                                        {msg.date && (
+                                                                                                            <div style={{ fontSize: '0.65rem', color: '#bbb', marginTop: 3 }}>
+                                                                                                                {new Date(msg.date).toLocaleDateString('de-DE', { day: '2-digit', month: 'short', year: 'numeric' })}
+                                                                                                            </div>
+                                                                                                        )}
+                                                                                                    </div>
+                                                                                                ))}
+                                                                                            </div>
+                                                                                        </div>
+                                                                                    )}
+                                                                                </div>
+                                                                            </Popup>
+                                                                        </Marker>
+                                                                    );
+                                                                })}
+                                                            </MarkerClusterGroup>
+                                                        </MapContainer>
+                                                    </Box>
+                                                </Box>
+                                            );
+                                        })()}
+
+                                        {/* 🎯 Emotion Analysis Widget - Auto-detected for emotion queries */}
+                                        {msg.widgetType === 'emotion_analysis' && msg.widgetData && msg.widgetData.length > 0 && (
+                                            <Box mt="md">
+                                                <Text fw={500} size="sm" mb="xs" c="dimmed">💭 Emotion Analysis</Text>
+                                                <Card withBorder radius="md" p="sm">
+                                                    <SimpleGrid cols={2} spacing="xs">
+                                                        {msg.widgetData.slice(0, 6).map((item: any, idx: number) => {
+                                                            const emotion = Object.keys(item)[0];
+                                                            const score = Object.values(item)[0];
+                                                            const emoji = emotion === 'anger' ? '😠' : 
+                                                                          emotion === 'joy' ? '😊' : 
+                                                                          emotion === 'fear' ? '😨' : 
+                                                                          emotion === 'sadness' ? '😢' : 
+                                                                          emotion === 'surprise' ? '😲' : 
+                                                                          emotion === 'disgust' ? '🤢' : 
+                                                                          emotion === 'love' ? '❤️' : '😐';
+                                                            return (
+                                                                <Paper key={idx} p="xs" withBorder>
+                                                                    <Group>
+                                                                        <Text size="xl">{emoji}</Text>
+                                                                        <Box>
+                                                                            <Text size="sm" fw={500} tt="capitalize">{emotion}</Text>
+                                                                            <Text size="xs" c="dimmed">{String(score)}</Text>
+                                                                        </Box>
+                                                                    </Group>
+                                                                </Paper>
+                                                            );
+                                                        })}
+                                                    </SimpleGrid>
+                                                </Card>
+                                            </Box>
+                                        )}
+
+                                        {/* 🎯 Top Influencers Widget - Auto-detected for user activity queries */}
+                                        {msg.widgetType === 'top_influencers' && msg.widgetData && msg.widgetData.length > 0 && (
+                                            <Box mt="md">
+                                                <Text fw={500} size="sm" mb="xs" c="dimmed">🏆 Top Contributors</Text>
+                                                <Card withBorder radius="md" p="sm">
+                                                    <Stack gap="xs">
+                                                        {msg.widgetData.slice(0, 10).map((item: any, idx: number) => (
+                                                            <Paper key={idx} p="xs" withBorder>
+                                                                <Group justify="space-between">
+                                                                    <Group>
+                                                                        <Avatar size="sm" color="blue">
+                                                                            {idx + 1}
+                                                                        </Avatar>
+                                                                        <Box>
+                                                                            <Text size="sm" fw={500}>
+                                                                                {item.username || item.user || item.author || item.name || 'Unknown'}
+                                                                            </Text>
+                                                                            {item.channel && <Text size="xs" c="dimmed">#{item.channel}</Text>}
+                                                                        </Box>
+                                                                    </Group>
+                                                                    <Badge color="grape">
+                                                                        {item.message_count || item.count || item.messages || 0} msgs
+                                                                    </Badge>
+                                                                </Group>
+                                                            </Paper>
+                                                        ))}
+                                                    </Stack>
+                                                </Card>
+                                            </Box>
+                                        )}
+
+                                        {/* Feedback + collapsible Cypher debug */}
+                                        {msg.metadata?.cypher && (
+                                            <Box mt="xs">
+                                                <Group gap="xs" align="center">
+                                                    <Text size="xs" c="dimmed">Rate this result:</Text>
+                                                    <ActionIcon
+                                                        variant="subtle"
+                                                        color="green"
+                                                        size="sm"
+                                                        onClick={() => {
+                                                            agentService.submitFeedback(
+                                                                msg.metadata.question || "Unknown",
+                                                                msg.metadata.cypher,
+                                                                1
+                                                            );
+                                                            notifications.show({ message: 'Thanks for the feedback!', color: 'green' });
+                                                        }}
+                                                        title="Good result"
+                                                    >
+                                                        <IconThumbUp size={14} />
+                                                    </ActionIcon>
+                                                    <ActionIcon
+                                                        variant="subtle"
+                                                        color="red"
+                                                        size="sm"
+                                                        onClick={() => {
+                                                            agentService.submitFeedback(
+                                                                msg.metadata.question || "Unknown",
+                                                                msg.metadata.cypher,
+                                                                -1
+                                                            );
+                                                            notifications.show({ message: 'Feedback recorded', color: 'gray' });
+                                                        }}
+                                                        title="Bad result"
+                                                    >
+                                                        <IconThumbDown size={14} />
+                                                    </ActionIcon>
+                                                    <ActionIcon
+                                                        variant="subtle"
+                                                        color="gray"
+                                                        size="sm"
+                                                        onClick={() => setExpandedCypher(prev => {
+                                                            const next = new Set(prev);
+                                                            next.has(msg.id) ? next.delete(msg.id) : next.add(msg.id);
+                                                            return next;
+                                                        })}
+                                                        title="Show generated query"
+                                                    >
+                                                        {expandedCypher.has(msg.id) ? <IconChevronDown size={14} /> : <IconCode size={14} />}
+                                                    </ActionIcon>
+                                                </Group>
+                                                <Collapse in={expandedCypher.has(msg.id)}>
+                                                    <Box mt="xs">
+                                                        <Text size="xs" c="dimmed" fw={500} mb={4}>Generated Query:</Text>
+                                                        <Code block style={{ fontSize: '0.72rem' }}>
+                                                            {msg.metadata.cypher
+                                                                ?.replace(/\b\w+\.owner_id\s*=\s*'[^']*'\s*(AND\s*)?/gi, '')
+                                                                .replace(/\bAND\s+RETURN\b/gi, 'RETURN')
+                                                                .replace(/WHERE\s+RETURN/gi, 'RETURN')
+                                                                .trim()}
+                                                        </Code>
+                                                    </Box>
+                                                </Collapse>
+                                            </Box>
+                                        )}
+                                    </Paper>
+                                </Group>
+                            </motion.div>
+                        ))}
+                    </AnimatePresence>
+                    
                     {loading && (
-                        <Group>
-                            <Avatar color="green" radius="xl"><IconRobot size={18} /></Avatar>
-                            <Loader size="sm" type="dots" />
+                        <Group ml={50} align="center">
+                            <Loader size="sm" type="dots" color={slowQuery ? "orange" : "gray"} />
+                            <Text size="xs" c={slowQuery ? "orange" : "dimmed"} fs="italic">
+                                {slowQuery ? "Still working — complex query, almost there..." : "Analyzing..."}
+                            </Text>
                         </Group>
                     )}
                 </Stack>

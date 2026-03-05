@@ -1,0 +1,42 @@
+
+# Valid for root context builds (App Services)
+
+# Version control
+.git
+.github
+.gitignore
+
+# Docker config (Changing these should NOT trigger a code rebuild)
+docker-compose.yml
+docker-compose.prod.yml
+Dockerfile
+
+# Documentation & Brain
+README.md
+task.md
+walkthrough.md
+implementation_plan.md
+.gemini/
+
+# Environments
+.env
+.env.*
+venv/
+node_modules/
+
+# Python Cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Large Model Data (Built separately in build-push-models.yml)
+models/
+
+# Certs
+certbot/
+
+# Shared Data (Mounted at runtime)
+shared/
+docker/db-init/
+keycloak/exports/

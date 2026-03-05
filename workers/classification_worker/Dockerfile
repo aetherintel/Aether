@@ -1,27 +1,32 @@
 FROM python:3.11-slim
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y \
-    gcc \
-    g++ \
+RUN apt-get update && apt-get install -y --no-install-recommends gcc g++ \
     && rm -rf /var/lib/apt/lists/*
 
-# Set working directory
 WORKDIR /app
-COPY aether_lib /app/aether_lib
-# Copy requirements and install
+
 COPY workers/classification_worker/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy worker module files directly to /app (flat structure)
+COPY aether_lib /app/aether_lib
 COPY workers/classification_worker/*.py ./workers/classification_worker/
 
-# Copy shared library
-COPY aether_lib/ /app/aether_lib/
-
-RUN mkdir -p /app/models/classifier
 RUN touch /app/workers/__init__.py && \
     touch /app/workers/classification_worker/__init__.py
-# Set environment variables
-ENV PYTHONUNBUFFERED=1
-ENV PYTHONPATH=/app:/app/shared_libs
+
+# Bake mDeBERTa-v3 multilingual NLI model into the image
+RUN python - <<'EOF'
+from transformers import AutoModelForSequenceClassification, AutoTokenizer
+import os
+repo = "MoritzLaurer/mDeBERTa-v3-base-xnli-multilingual-nli-2mil7"
+out = "/app/models/classifier/mDeBERTa-v3-base-xnli-multilingual-nli-2mil7"
+os.makedirs(out, exist_ok=True)
+print(f"Downloading {repo} ...")
+AutoTokenizer.from_pretrained(repo).save_pretrained(out)
+AutoModelForSequenceClassification.from_pretrained(repo).save_pretrained(out)
+print(f"Model saved to {out}")
+EOF
+
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONPATH=/app:/app/shared_libs \
+    MODELS_PATH=/app/models
