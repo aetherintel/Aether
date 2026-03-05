@@ -9,14 +9,12 @@ import logging
 from services.keycloak_service import get_current_user, has_role
 from controller.telegram_controller import remove_container, restart_container, run_similarity, start_container, start_scraper, launch_full_scrape_job, launch_live_scrape_job, stop_container
 from pydantic import BaseModel
-import docker
 from services.auth_ctx import user_ctx, is_admin, UserCtx
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/auth", tags=["auth"])
 router = APIRouter(prefix="/auth", tags=["auth"])
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
-docker_client = docker.from_env()
 KEYCLOAK_BASE_URL = os.getenv("KEYCLOAK_BASE_URL", "http://keycloak:8080/keycloak")
 
 
