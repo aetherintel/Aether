@@ -1,13 +1,12 @@
 # ============================================================================
 # workers/emotion_worker/Dockerfile
 # Self-contained emotion analysis worker — model weights are baked in.
-# Build arg GITHUB_TOKEN is required to download the custom german-emotions
-# model from the GitHub Release (models-v1 tag).
+# GITHUB_TOKEN is injected via BuildKit secret (--secret id=GITHUB_TOKEN)
+# so it is never stored in the image layers.
 # ============================================================================
 
 FROM python:3.11-slim
 
-ARG GITHUB_TOKEN
 ARG GITHUB_REPOSITORY=aetherintel/aether
 ARG MODEL_RELEASE_TAG=models-v1
 
@@ -26,8 +25,7 @@ RUN touch /app/workers/__init__.py && \
     touch /app/workers/emotion_worker/__init__.py
 
 # Download custom german-emotions model weights from GitHub Release
-RUN --mount=type=secret,id=github_token \
-    GITHUB_TOKEN=${GITHUB_TOKEN} \
+RUN --mount=type=secret,id=GITHUB_TOKEN \
     GITHUB_REPOSITORY=${GITHUB_REPOSITORY} \
     MODEL_RELEASE_TAG=${MODEL_RELEASE_TAG} \
     python - <<'EOF'
@@ -35,7 +33,14 @@ import os, sys, tarfile, urllib.request, json
 
 repo = os.environ["GITHUB_REPOSITORY"]
 tag = os.environ["MODEL_RELEASE_TAG"]
-token = os.environ.get("GITHUB_TOKEN", "")
+
+# Read token from BuildKit secret file (never leaks into image layers)
+secret_path = "/run/secrets/GITHUB_TOKEN"
+if os.path.exists(secret_path):
+    with open(secret_path) as f:
+        token = f.read().strip()
+else:
+    token = ""
 asset_name = "german-emotions.tar.gz"
 output_dir = "/app/models/emotion/german-emotions"
 
