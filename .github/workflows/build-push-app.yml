@@ -59,7 +59,6 @@ jobs:
             context: .
             dockerfile: ./workers/emotion_worker/Dockerfile
             build-args: |
-              GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }}
               GITHUB_REPOSITORY=${{ github.repository }}
               MODEL_RELEASE_TAG=models-v1
           - service: photon
@@ -105,6 +104,8 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
           build-args: ${{ matrix.build-args }}
+          secrets: |
+            GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }}
 
   # ============================================================
   # GPU WORKERS NOTE: Translation, Emotion, and LLM run on Modal.com
