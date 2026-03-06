@@ -351,21 +351,15 @@ jobs:
             docker exec -i postgres createdb -U $DB_USER aether 2>/dev/null || true
 
             # ═══════════════════════════════════════════════════════════════
-            # PHASE 3: Keycloak (smart rebuild)
+            # PHASE 3: Keycloak (force rebuild to import realm)
             # ═══════════════════════════════════════════════════════════════
-            echo "🔐 Checking Keycloak..."
+            echo "🔐 Rebuilding Keycloak..."
+            docker rm -f $(docker ps -aq --filter "name=keycloak") 2>/dev/null || true
+            docker network disconnect -f app_aether-network keycloak 2>/dev/null || true
 
-            if docker ps --format '{{.Names}}' | grep -q "^keycloak$"; then
-              echo "✅ Keycloak is running - skipping rebuild"
-            else
-              echo "🔄 Rebuilding Keycloak..."
-              docker rm -f $(docker ps -aq --filter "name=keycloak") 2>/dev/null || true
-              docker network disconnect -f app_aether-network keycloak 2>/dev/null || true
-
-              $COMPOSE_CMD -f docker-compose.prod.yml up -d keycloak --force-recreate
-              echo "⏳ Waiting for Keycloak to initialize..."
-              sleep 30
-            fi
+            $COMPOSE_CMD -f docker-compose.prod.yml up -d keycloak --force-recreate
+            echo "⏳ Waiting for Keycloak to initialize..."
+            sleep 30
 
             # ═══════════════════════════════════════════════════════════════
             # PHASE 4: SSL Certificate
