@@ -235,6 +235,8 @@ jobs:
             export KEYCLOAK_URL="https://${PROD_DOMAIN}/keycloak/realms/Aether"
             export KEYCLOAK_HOSTNAME=keycloak
             export KEYCLOAK_CLIENT_ID=Aether
+            export KEYCLOAK_ADMIN_CLIENT_ID=backend-admin-client
+            export SWAGGER_TOKEN_URL="https://${PROD_DOMAIN}/keycloak/realms/Aether/protocol/openid-connect/token"
             export FRONTEND_URL="https://${PROD_DOMAIN}/"
             export MEDIA_PATH=/shared/media
             export USE_MODAL=true
@@ -281,6 +283,8 @@ jobs:
               echo "KEYCLOAK_URL=${KEYCLOAK_URL}"
               echo "KEYCLOAK_HOSTNAME=${KEYCLOAK_HOSTNAME}"
               echo "KEYCLOAK_CLIENT_ID=${KEYCLOAK_CLIENT_ID}"
+              echo "KEYCLOAK_ADMIN_CLIENT_ID=${KEYCLOAK_ADMIN_CLIENT_ID}"
+              echo "SWAGGER_TOKEN_URL=${SWAGGER_TOKEN_URL}"
               echo "FRONTEND_URL=${FRONTEND_URL}"
               echo "MEDIA_PATH=${MEDIA_PATH}"
               echo "USE_MODAL=${USE_MODAL}"
