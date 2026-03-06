@@ -4,6 +4,7 @@ import {
   ActionIcon,
   Anchor,
   Box,
+  Button,
   Checkbox,
   Group,
   Input,
@@ -14,7 +15,9 @@ import {
   Tooltip,
   Switch,
 } from '@mantine/core';
+import { notifications } from '@mantine/notifications';
 import { authFetch } from '@/utils/authFetch';
+import { useAuthStore } from '@/store/client/authStore';
 import classes from './MessagesTab.module.css';
 
 import { formatRelativeTime, isVideoFile, isAudioFile } from './utils';
@@ -22,6 +25,7 @@ import { MessageContent } from './components/MessageContent';
 import { ImageWithTranscript } from './components/ImageWithTranscript';
 import { AudioPlayer } from './components/AudioPlayer';
 import { VideoPlayer } from './components/VideoPlayer';
+import { MessageActions } from './components/MessageActions';
 
 const apiUrl = import.meta.env.VITE_API_URL;
 
@@ -30,6 +34,16 @@ interface MessagesTabProps {
   searchQuery: string;
   setSearchQuery: React.Dispatch<React.SetStateAction<string>>;
   onUpdateGraph: (type: string, name: string) => void;
+  caseId: number;
+}
+
+function decodeOwnerId(token: string | null): string {
+  if (!token) return '';
+  try {
+    return JSON.parse(atob(token.split('.')[1])).sub ?? '';
+  } catch {
+    return '';
+  }
 }
 
 const MessagesTab: React.FC<MessagesTabProps> = ({
@@ -37,9 +51,13 @@ const MessagesTab: React.FC<MessagesTabProps> = ({
   searchQuery,
   setSearchQuery,
   onUpdateGraph,
+  caseId,
 }) => {
   const LIMIT = 10;
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  const token = useAuthStore((s) => s.token);
+  const ownerId = decodeOwnerId(token);
 
   const [selectedRows, setSelectedRows] = useState<string[]>([]);
   const [expandedMessages, setExpandedMessages] = useState<Set<string>>(new Set());
@@ -58,22 +76,26 @@ const MessagesTab: React.FC<MessagesTabProps> = ({
   const toggleMessageExpansion = (messageId: string) => {
     setExpandedMessages((prev) => {
       const newSet = new Set(prev);
-      if (newSet.has(messageId)) {
-        newSet.delete(messageId);
-      } else {
-        newSet.add(messageId);
-      }
+      if (newSet.has(messageId)) newSet.delete(messageId);
+      else newSet.add(messageId);
       return newSet;
     });
   };
 
-  const deduplicateMessages = useCallback((messages: any[]) => {
+  const deduplicateMessages = useCallback((msgs: any[]) => {
     const seen = new Set();
-    return messages.filter((msg) => {
+    return msgs.filter((msg) => {
       if (seen.has(msg.message_id)) return false;
       seen.add(msg.message_id);
       return true;
     });
+  }, []);
+
+  /** Optimistically update status fields on a single message in local state */
+  const handleStatusChange = useCallback((messageId: string, updates: Record<string, string>) => {
+    setMessages((prev) =>
+      prev.map((m) => (m.message_id === messageId ? { ...m, ...updates } : m))
+    );
   }, []);
 
   const loadMessages = useCallback(
@@ -108,8 +130,8 @@ const MessagesTab: React.FC<MessagesTabProps> = ({
         });
 
         const newDates = { ...currentLastDates };
-        results.forEach(({ channelId, messages }) => {
-          const last = messages[messages.length - 1];
+        results.forEach(({ channelId, messages: msgs }) => {
+          const last = msgs[msgs.length - 1];
           if (last) newDates[channelId] = last.date;
         });
         setChannelLastDates(newDates);
@@ -148,19 +170,136 @@ const MessagesTab: React.FC<MessagesTabProps> = ({
     loadMessages(true);
   };
 
+  // ─── Bulk actions ───────────────────────────────────────────────────────────
+
+  const bulkEnqueue = async (
+    endpoint: string,
+    buildPayload: (msg: any) => object | null,
+    label: string,
+    statusKey: string,
+  ) => {
+    const targets = messages.filter(
+      (m) => selectedRows.includes(m.message_id) && buildPayload(m) !== null
+    );
+    if (targets.length === 0) {
+      notifications.show({ title: 'Nothing to do', message: `All selected messages already have ${label}`, color: 'yellow' });
+      return;
+    }
+
+    const results = await Promise.allSettled(
+      targets.map((m) =>
+        authFetch(`${apiUrl}/${endpoint}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(buildPayload(m)),
+        })
+      )
+    );
+
+    const succeeded = results.filter((r) => r.status === 'fulfilled').length;
+    const failed = results.length - succeeded;
+
+    // Optimistic update for succeeded jobs
+    targets.forEach((m, i) => {
+      if (results[i].status === 'fulfilled') {
+        handleStatusChange(m.message_id, { [statusKey]: 'pending' });
+      }
+    });
+
+    notifications.show({
+      title: `${label} queued`,
+      message: `${succeeded} job(s) queued${failed > 0 ? `, ${failed} failed` : ''}`,
+      color: succeeded > 0 ? 'green' : 'red',
+    });
+  };
+
+  const bulkTranslate = () =>
+    bulkEnqueue(
+      'queue/translation',
+      (m) =>
+        m.original_text?.trim() &&
+        m.original_language !== 'de' &&
+        m.translation_status !== 'completed' &&
+        m.translation_status !== 'pending'
+          ? { message_id: m.message_id, original_text: m.original_text, source_language: m.original_language || 'en', owner_id: ownerId, case_id: caseId }
+          : null,
+      'Translation',
+      'translation_status',
+    );
+
+  const bulkOcr = () =>
+    bulkEnqueue(
+      'queue/image',
+      (m) =>
+        m.media_path && !isAudioFile(m.media_path) && !isVideoFile(m.media_path) &&
+        m.image_analysis_status !== 'completed' &&
+        m.image_analysis_status !== 'pending'
+          ? { message_id: m.message_id, image_path: m.media_path, extract_text: true, detect_objects: false, translate_extracted_text: true, owner_id: ownerId, case_id: caseId }
+          : null,
+      'OCR',
+      'image_analysis_status',
+    );
+
+  const bulkClassify = () =>
+    bulkEnqueue(
+      'queue/classification',
+      (m) => {
+        const text = m.translated_text?.trim() || m.original_text?.trim();
+        return text &&
+          m.classification_status !== 'completed' &&
+          m.classification_status !== 'pending'
+          ? { message_id: m.message_id, text, owner_id: ownerId, case_id: caseId }
+          : null;
+      },
+      'Classification',
+      'classification_status',
+    );
+
+  const bulkEmotion = () =>
+    bulkEnqueue(
+      'queue/emotion',
+      (m) => {
+        const text = m.translated_text?.trim() || m.original_text?.trim();
+        return text &&
+          m.emotion_status !== 'completed' &&
+          m.emotion_status !== 'pending'
+          ? { message_id: m.message_id, text, owner_id: ownerId, case_id: caseId }
+          : null;
+      },
+      'Emotion',
+      'emotion_status',
+    );
+
+  const bulkGeo = () =>
+    bulkEnqueue(
+      'queue/geolocation',
+      (m) => {
+        const text = m.translated_text?.trim() || m.original_text?.trim();
+        return text &&
+          m.geolocation_status !== 'completed' &&
+          m.geolocation_status !== 'pending'
+          ? { message_id: m.message_id, text, owner_id: ownerId, case_id: caseId }
+          : null;
+      },
+      'Geolocation',
+      'geolocation_status',
+    );
+
+  // ─── Render ─────────────────────────────────────────────────────────────────
+
   const messageRows = messages.map((message) => {
     const isExpanded = expandedMessages.has(message.message_id);
 
     const renderMedia = () => {
       if (!message.media_path) return null;
       if (isVideoFile(message.media_path)) {
-        return <VideoPlayer mediaPath={message.media_path} audioText={message.audio_text} 
+        return <VideoPlayer mediaPath={message.media_path} audioText={message.audio_text}
                             audioTextTranslated={message.audio_text_translated}
                             audioTranscriptionStatus={message.audio_transcription_status} messageId={message.message_id}
                             showAudioTranscripts={showAudioTranscripts} apiUrl={apiUrl} />;
       } else if (isAudioFile(message.media_path)) {
         return <AudioPlayer mediaPath={message.media_path} audioText={message.audio_text}
-                            audioTextTranslated={message.audio_text_translated} 
+                            audioTextTranslated={message.audio_text_translated}
                             audioTranscriptionStatus={message.audio_transcription_status} messageId={message.message_id}
                             mediaType={message.media_type} showAudioTranscripts={showAudioTranscripts} apiUrl={apiUrl} />;
       } else {
@@ -188,7 +327,15 @@ const MessagesTab: React.FC<MessagesTabProps> = ({
                   [<Anchor onClick={() => message.channel?.username && onUpdateGraph('channel', message.channel.username)} className={classes.channelName}>{message.channel?.username || 'Unknown Channel'}</Anchor>]
                 </span>
               </Text>
-              <Text size="xs" className={classes.timestamp}>{formatRelativeTime(message.date)}</Text>
+              <Group gap="xs">
+                <MessageActions
+                  message={message}
+                  caseId={caseId}
+                  ownerId={ownerId}
+                  onStatusChange={handleStatusChange}
+                />
+                <Text size="xs" className={classes.timestamp}>{formatRelativeTime(message.date)}</Text>
+              </Group>
             </div>
             <Group wrap="nowrap" align="flex-start" justify="space-between">
               <MessageContent message={message} isExpanded={isExpanded} onToggleExpand={() => toggleMessageExpansion(message.message_id)} searchQuery={searchQuery} />
@@ -213,6 +360,17 @@ const MessagesTab: React.FC<MessagesTabProps> = ({
           </Tooltip>
         </Group>
       </Group>
+
+      {selectedRows.length > 0 && (
+        <Group mb="sm" gap="xs">
+          <Text size="sm" c="dimmed">{selectedRows.length} selected:</Text>
+          <Button size="xs" variant="light" color="blue" onClick={bulkTranslate}>Translate</Button>
+          <Button size="xs" variant="light" color="orange" onClick={bulkOcr}>OCR</Button>
+          <Button size="xs" variant="light" color="violet" onClick={bulkClassify}>Classify</Button>
+          <Button size="xs" variant="light" color="pink" onClick={bulkEmotion}>Emotions</Button>
+          <Button size="xs" variant="light" color="teal" onClick={bulkGeo}>Geolocate</Button>
+        </Group>
+      )}
 
       <ScrollArea h={475} viewportRef={scrollRef} onScrollPositionChange={({ y }) => {
         const el = scrollRef.current;

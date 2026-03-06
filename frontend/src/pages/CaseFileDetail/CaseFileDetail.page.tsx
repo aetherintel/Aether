@@ -223,6 +223,7 @@ export function CaseFileDetail() {
                     searchQuery={searchQuery}
                     setSearchQuery={setSearchQuery}
                     onUpdateGraph={updateGraph}
+                    caseId={Number(id)}
                   />
                 </Tabs.Panel>
 

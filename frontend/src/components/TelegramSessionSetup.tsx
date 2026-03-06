@@ -360,7 +360,7 @@ export const TelegramSessionSetup: React.FC = () => {
               />
 
               <Group justify="space-between">
-                <Button variant="subtle" onClick={cancelSetup}>
+                <Button type="button" variant="subtle" onClick={cancelSetup}>
                   Cancel
                 </Button>
                 <Button type="submit" disabled={!code.trim()}>
@@ -390,7 +390,7 @@ export const TelegramSessionSetup: React.FC = () => {
               />
 
               <Group justify="space-between">
-                <Button variant="subtle" onClick={cancelSetup}>
+                <Button type="button" variant="subtle" onClick={cancelSetup}>
                   Cancel
                 </Button>
                 <Button type="submit" disabled={!password.trim()}>
