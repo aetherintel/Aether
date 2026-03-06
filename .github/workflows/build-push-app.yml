@@ -251,7 +251,54 @@ jobs:
             COMPOSE_CMD="docker compose"
 
             # ═══════════════════════════════════════════════════════════════
-            # PHASE 0: Update compose file
+            # PHASE 0a: Write .env file so vars persist for manual restarts
+            # ═══════════════════════════════════════════════════════════════
+            {
+              echo "REGISTRY=ghcr.io"
+              echo "GITHUB_REPOSITORY_OWNER=${GITHUB_REPOSITORY_OWNER}"
+              echo "PROD_DOMAIN=${PROD_DOMAIN}"
+              echo "PROD_MAIL=${PROD_MAIL}"
+              echo "DB_USER=${DB_USER}"
+              echo "DB_PASSWORD=${DB_PASSWORD}"
+              echo "KEYCLOAK_ADMIN=${KEYCLOAK_ADMIN}"
+              echo "KEYCLOAK_ADMIN_PASSWORD=${KEYCLOAK_ADMIN_PASSWORD}"
+              echo "KEYCLOAK_CLIENT_SECRET=${KEYCLOAK_CLIENT_SECRET}"
+              echo "KEYCLOAK_ADMIN_CLIENT_SECRET=${KEYCLOAK_ADMIN_CLIENT_SECRET}"
+              echo "TG_API_ID=${TG_API_ID}"
+              echo "TG_API_HASH=${TG_API_HASH}"
+              echo "TG_PHONE=${TG_PHONE}"
+              echo "POSTGRES_PASSWORD=${POSTGRES_PASSWORD}"
+              echo "NEO4J_URI=${NEO4J_URI}"
+              echo "NEO4J_PASSWORD=${NEO4J_PASSWORD}"
+              echo "NEO4J_USER=${NEO4J_USER}"
+              echo "POSTGRES_HOST=${POSTGRES_HOST}"
+              echo "POSTGRES_PORT=${POSTGRES_PORT}"
+              echo "POSTGRES_DB=${POSTGRES_DB}"
+              echo "POSTGRES_USER=${POSTGRES_USER}"
+              echo "ENVIRONMENT=${ENVIRONMENT}"
+              echo "KEYCLOAK_BASE_URL=${KEYCLOAK_BASE_URL}"
+              echo "KEYCLOAK_INTERNAL_URL=${KEYCLOAK_INTERNAL_URL}"
+              echo "KEYCLOAK_URL=${KEYCLOAK_URL}"
+              echo "KEYCLOAK_HOSTNAME=${KEYCLOAK_HOSTNAME}"
+              echo "KEYCLOAK_CLIENT_ID=${KEYCLOAK_CLIENT_ID}"
+              echo "FRONTEND_URL=${FRONTEND_URL}"
+              echo "MEDIA_PATH=${MEDIA_PATH}"
+              echo "USE_MODAL=${USE_MODAL}"
+              echo "MODAL_LLM_URL=${MODAL_LLM_URL}"
+              echo "MODAL_EMOTION_URL=${MODAL_EMOTION_URL}"
+              echo "MODAL_CLASSIFICATION_URL=${MODAL_CLASSIFICATION_URL}"
+              echo "MODAL_TOKEN_ID=${MODAL_TOKEN_ID}"
+              echo "MODAL_TOKEN_SECRET=${MODAL_TOKEN_SECRET}"
+              echo "SMTP_USER=${SMTP_USER}"
+              echo "SMTP_PASSWORD=${SMTP_PASSWORD}"
+              echo "GITHUB_USER=${GITHUB_USER}"
+              echo "GITHUB_TOKEN=${GITHUB_TOKEN}"
+            } > ~/app/.env
+            chmod 600 ~/app/.env
+            echo "✅ .env file written"
+
+            # ═══════════════════════════════════════════════════════════════
+            # PHASE 0b: Update compose file
             # ═══════════════════════════════════════════════════════════════
             echo "📄 Updating docker-compose.prod.yml..."
             cp docker-compose.prod.yml docker-compose.prod.yml.backup 2>/dev/null || true
