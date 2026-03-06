@@ -182,14 +182,14 @@ jobs:
           chmod 600 /tmp/deploy_key
           head -1 /tmp/deploy_key
 
-      - name: 📤 Upload compose file
+      - name: 📤 Upload compose and configs
         uses: appleboy/scp-action@v1.0.0
         with:
           host: ${{ secrets.PROD_HOST }}
           port: ${{ secrets.PROD_PORT }}
           username: ${{ secrets.PROD_USER }}
           key_path: /tmp/deploy_key
-          source: "docker-compose.prod.yml"
+          source: "docker-compose.prod.yml,keycloak/exports/"
           target: "~/app/"
           overwrite: true
 
