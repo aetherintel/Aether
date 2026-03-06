@@ -92,8 +92,6 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
       - tg_sessions:/app/sessions
       - ./shared/media:/shared/media
-      - ./backend/app:/app
-      - ./aether_lib:/app/aether_lib:ro
     depends_on:
       - postgres
       - keycloak
@@ -107,8 +105,8 @@ services:
     image: ghcr.io/${GITHUB_REPOSITORY_OWNER:-aetherintel}/aether-frontend:latest
     container_name: frontend
     ports:
-      - "${VAST_HTTP_PORT:-8080}:80"
-      - "${VAST_HTTPS_PORT:-8443}:443"
+      - "${HTTP_PORT:-80}:80"
+      - "${HTTPS_PORT:-443}:443"
     environment:
       PROD_DOMAIN: ${PROD_DOMAIN}
     volumes:
