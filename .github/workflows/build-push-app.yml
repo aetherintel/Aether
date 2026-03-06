@@ -182,7 +182,18 @@ jobs:
           chmod 600 /tmp/deploy_key
           head -1 /tmp/deploy_key
 
-      - name: 📤 Upload compose and configs
+      - name: � Fix permissions on VM
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.PROD_HOST }}
+          port: ${{ secrets.PROD_PORT }}
+          username: ${{ secrets.PROD_USER }}
+          key_path: /tmp/deploy_key
+          script: |
+            mkdir -p ~/app/keycloak/exports
+            sudo chown -R $USER:$USER ~/app/keycloak || true
+
+      - name: �📤 Upload compose and configs
         uses: appleboy/scp-action@v1.0.0
         with:
           host: ${{ secrets.PROD_HOST }}
