@@ -164,8 +164,12 @@ async def start_setup(request: SetupRequest, current_user = Depends(user_ctx)):
         sent_code = await client.send_code_request(request.phone)
         
         # Setup-Session speichern
+        # Keep the client alive in the background
+        bg_task = asyncio.create_task(client.run_until_disconnected())
+        
         setup_sessions[setup_id] = {
             "client": client,
+            "bg_task": bg_task,
             "phone": request.phone,
             "session_name": request.session_name,
             "phone_code_hash": sent_code.phone_code_hash,
@@ -224,6 +228,8 @@ async def verify_code(request: CodeRequest, current_user = Depends(user_ctx)):
         save_string_session(session["session_name"], session_string, user_info, user_id)
         
         # Client disconnecten
+        if "bg_task" in session:
+            session["bg_task"].cancel()
         await client.disconnect()
         
         # Setup-Session entfernen
@@ -246,6 +252,8 @@ async def verify_code(request: CodeRequest, current_user = Depends(user_ctx)):
     except PhoneCodeInvalidError:
         raise HTTPException(status_code=400, detail="Invalid verification code")
     except Exception as e:
+        if "bg_task" in session:
+            session["bg_task"].cancel()
         await client.disconnect()
         if request.setup_id in setup_sessions:
             del setup_sessions[request.setup_id]
@@ -284,6 +292,8 @@ async def verify_password(request: PasswordRequest, current_user = Depends(user_
         save_string_session(session["session_name"], session_string, user_info, user_id)
         
         # Client disconnecten
+        if "bg_task" in session:
+            session["bg_task"].cancel()
         await client.disconnect()
         
         # Setup-Session entfernen
@@ -297,6 +307,8 @@ async def verify_password(request: PasswordRequest, current_user = Depends(user_
         }
         
     except Exception as e:
+        if "bg_task" in session:
+            session["bg_task"].cancel()
         await client.disconnect()
         if request.setup_id in setup_sessions:
             del setup_sessions[request.setup_id]
@@ -343,6 +355,8 @@ async def cancel_setup(setup_id: str, current_user = Depends(user_ctx)):
             raise HTTPException(status_code=403, detail="Access denied")
         
         client = session["client"]
+        if "bg_task" in session:
+            session["bg_task"].cancel()
         await client.disconnect()
         del setup_sessions[setup_id]
     
