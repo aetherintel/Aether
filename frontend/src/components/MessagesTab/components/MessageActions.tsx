@@ -68,28 +68,23 @@ export const MessageActions: React.FC<MessageActionsProps> = ({
   const showTranslate =
     hasText &&
     message.original_language !== 'de' &&
-    message.translation_status !== 'completed' &&
-    message.translation_status !== 'pending';
+    message.translation_status !== 'completed';
 
   const showOcr =
     isImage &&
-    message.image_analysis_status !== 'completed' &&
-    message.image_analysis_status !== 'pending';
+    message.image_analysis_status !== 'completed';
 
   const showClassify =
     hasAnalysisText &&
-    message.classification_status !== 'completed' &&
-    message.classification_status !== 'pending';
+    message.classification_status !== 'completed';
 
   const showEmotion =
     hasAnalysisText &&
-    message.emotion_status !== 'completed' &&
-    message.emotion_status !== 'pending';
+    message.emotion_status !== 'completed';
 
   const showGeo =
     hasAnalysisText &&
-    message.geolocation_status !== 'completed' &&
-    message.geolocation_status !== 'pending';
+    message.geolocation_status !== 'completed';
 
   if (!showTranslate && !showOcr && !showClassify && !showEmotion && !showGeo) return null;
 

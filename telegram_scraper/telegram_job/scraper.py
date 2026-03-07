@@ -5,6 +5,7 @@ from .telegram_client import get_client, login
 from .telegram_client import get_client, login
 from aether_lib.neo4j_client.channels import is_scraped, mark_scraped, get_latest_message_id
 from .message_processor import process_message
+from aether_lib.utils.event_publisher import publish_event
 
 # Configuration
 RATE_LIMIT_DELAY = float(os.getenv("RATE_LIMIT_DELAY", "1.0"))
@@ -89,7 +90,8 @@ async def scrape_channel_complete(channel_name, recursive=False, case_id=None, o
             # Actually we probably want to track "last scraped" timestamp regardless
             if min_id == 0:
                 await mark_scraped(clean_name)
-                
+                publish_event("new_channel", {"owner_id": owner_id, "channel_username": clean_name})
+
             print(f"[SCRAPE] ✅ {clean_name}: Completed scrape with {message_count} messages", flush=True)
             return found_channels
         except Exception as e:

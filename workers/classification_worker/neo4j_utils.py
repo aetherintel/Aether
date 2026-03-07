@@ -8,6 +8,11 @@ from neo4j import AsyncGraphDatabase
 
 logger = logging.getLogger(__name__)
 
+try:
+    from aether_lib.utils.event_publisher import publish_event as _publish_event
+except Exception:
+    def _publish_event(event_type, payload): pass
+
 
 async def store_classifications_in_neo4j(
     driver,
@@ -77,8 +82,13 @@ async def store_classifications_in_neo4j(
                 )
         
         logger.info(f"✅ [STORE] Successfully stored {len(classifications)} classifications")
+        _publish_event("message_status_changed", {
+            "message_id": message_id,
+            "owner_id": owner_id,
+            "updates": {"classification_status": "completed"},
+        })
         return True
-        
+
     except Exception as e:
         logger.error(f"❌ [STORE] Failed to store classifications: {e}")
         logger.exception("Full traceback:")

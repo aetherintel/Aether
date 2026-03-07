@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { useSSE } from '@/hooks/useSSE';
 import { IconEye, IconInfoCircle, IconMessage, IconUsersGroup, IconFileAnalytics } from '@tabler/icons-react';
 import { useLocation, useParams } from 'react-router-dom';
 import { Badge, Card, Grid, Group, Loader, Stack, Tabs, Text, Title } from '@mantine/core';
@@ -37,75 +38,78 @@ export function CaseFileDetail() {
 
   const [tgChannels, setTgChannels] = useState<any>([]);
   const [selectedTgChannelIds, setSelectedTgChannelIds] = useState<string[]>([]);
+  const caseChannelsRef = useRef<string[]>([]);
+
+  const refreshChannels = useCallback(async (initialChannels: string[]) => {
+    if (initialChannels.length === 0) {
+      setTgChannels([]);
+      setSelectedTgChannelIds([]);
+      return;
+    }
+    const base = apiUrl ?? 'http://localhost:8000/api';
+    try {
+      const expandUrl = new URL(`${base}/messages/channels/expand`);
+      expandUrl.searchParams.set('channel_usernames', initialChannels.join(','));
+      const expandRes = await authFetch(expandUrl.toString());
+      const expandedChannels: ExpandedChannels = await expandRes.json();
+
+      const uniqueChannels = [
+        ...new Set(
+          Object.entries(expandedChannels)
+            .flatMap(([key, recommendations]) => {
+              const cleanKey = key.replace(/^"+|"+$/g, '').replace(/"/g, '');
+              const cleanRecs = (recommendations || []).map((r) =>
+                r.replace(/^"+|"+$/g, '').replace(/"/g, '')
+              );
+              return [cleanKey, ...cleanRecs];
+            })
+            .map((item) => item.toLowerCase())
+        ),
+      ];
+
+      const channelsUrl = new URL(`${base}/messages/channels`);
+      channelsUrl.searchParams.set('usernames', uniqueChannels.join(','));
+      const channelsRes = await authFetch(channelsUrl.toString());
+      const tgChannelsData = await channelsRes.json();
+
+      const mergedChannelsData = transformChannelData(tgChannelsData, expandedChannels);
+      setTgChannels(mergedChannelsData);
+      setSelectedTgChannelIds((prev) => {
+        // Keep existing selections; add newly discovered channels
+        const newIds = tgChannelsData.map((c: any) => c.channel_id);
+        const combined = [...new Set([...prev, ...newIds])];
+        return combined;
+      });
+    } catch (e) {
+      console.warn('Failed to refresh channels:', e);
+    }
+  }, []);
+
+  useSSE(useCallback((event) => {
+    if (event.type === 'new_channel') {
+      refreshChannels(caseChannelsRef.current);
+    }
+  }, [refreshChannels]));
 
   useEffect(() => {
     const fetchData = async () => {
-      setLoading(true); // Start loading
+      setLoading(true);
       try {
         const base = apiUrl ?? 'http://localhost:8000/api';
         const resCaseFile = await authFetch(`${base}/casefiles/${id}`);
         const caseFileData = await resCaseFile.json();
         setCaseFile(caseFileData);
 
-        console.log(caseFileData);
-
         const initialChannels = caseFileData.tgchannels || [];
+        caseChannelsRef.current = initialChannels;
 
-
-        if (initialChannels.length > 0) {
-          try {
-            const expandUrl = new URL(`${base}/messages/channels/expand`);
-            expandUrl.searchParams.set('channel_usernames', initialChannels.join(','));
-            const expandRes = await authFetch(expandUrl.toString());
-            const expandedChannels: ExpandedChannels = await expandRes.json();
-
-            console.log('initial channels:', initialChannels);
-            const uniqueChannels = [
-            ...new Set(
-              Object.entries(expandedChannels)
-                .flatMap(([key, recommendations]) => {
-                  const cleanKey = key.replace(/^"+|"+$/g, '').replace(/"/g, '');
-                  const cleanRecs = (recommendations || []).map((r) =>
-                    r.replace(/^"+|"+$/g, '').replace(/"/g, '')
-                  );
-                  return [cleanKey, ...cleanRecs];
-                })
-                .map((item) => item.toLowerCase())
-            ),
-          ];
-
-
-
-
-            console.log(
-              `[DEBUG] Expanded ${initialChannels.length} to ${Object.keys(expandedChannels || {}).length} channels and ${uniqueChannels.length} unique usernames`
-            );
-
-            const channelsUrl = new URL(`${base}/messages/channels`);
-            channelsUrl.searchParams.set('usernames', uniqueChannels.join(','));
-            const channelsRes = await authFetch(channelsUrl.toString());
-            const tgChannelsData = await channelsRes.json();
-
-            const mergedChannelsData = transformChannelData(tgChannelsData, expandedChannels);
-
-            setTgChannels(mergedChannelsData);
-            setSelectedTgChannelIds(tgChannelsData.map((c: any) => c.channel_id));
-
-          } catch (expandError) {
-            console.warn('Failed to expand channels, using initial list:', expandError);
-          }
-        } else {
-          // No channels in case
-          setTgChannels([]);
-          setSelectedTgChannelIds([]);
-        }
+        await refreshChannels(initialChannels);
 
         document.title = `${caseFileData.title} - Æther`;
       } catch (error) {
         console.error('Error fetching case data:', error);
-        // Handle error appropriately
       } finally {
-        setLoading(false); // Always stop loading
+        setLoading(false);
       }
     };
 

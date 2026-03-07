@@ -12,6 +12,11 @@ from functools import lru_cache
 
 logger = logging.getLogger(__name__)
 
+try:
+    from aether_lib.utils.event_publisher import publish_event as _publish_event
+except Exception:
+    def _publish_event(event_type, payload): pass
+
 # Configuration
 NEO4J_URI = os.getenv("NEO4J_URI", "bolt://neo4j:7687")
 NEO4J_USER = os.getenv("NEO4J_USER", "neo4j")
@@ -345,3 +350,9 @@ async def update_message_geolocation_status(mid: str, status: str, owner: str):
             "SET m.geolocation_status = $status, m.geolocation_processed_at = datetime()",
             mid=mid, owner=owner, status=status
         )
+    if status == "completed":
+        _publish_event("message_status_changed", {
+            "message_id": mid,
+            "owner_id": owner,
+            "updates": {"geolocation_status": "completed"},
+        })

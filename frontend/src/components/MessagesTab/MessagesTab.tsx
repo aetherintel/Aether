@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useSSE } from '@/hooks/useSSE';
 import { IconRefresh, IconSearch } from '@tabler/icons-react';
 import {
   ActionIcon,
@@ -61,17 +62,16 @@ const MessagesTab: React.FC<MessagesTabProps> = ({
 
   const [selectedRows, setSelectedRows] = useState<string[]>([]);
   const [expandedMessages, setExpandedMessages] = useState<Set<string>>(new Set());
-  const [showImageTranscripts, setShowImageTranscripts] = useState(false);
-  const [showAudioTranscripts, setShowAudioTranscripts] = useState(false);
+  const [showImageTranscripts, setShowImageTranscripts] = useState(true);
+  const [showAudioTranscripts, setShowAudioTranscripts] = useState(true);
 
   const [messages, setMessages] = useState<any[]>([]);
   const [hasMore, setHasMore] = useState(true);
 
   const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const isLoadingMoreRef = useRef(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [channelLastDates, setChannelLastDates] = useState<{ [channelId: string]: string | null }>(
-    {}
-  );
+  const channelLastDatesRef = useRef<{ [channelId: string]: string | null }>({});
 
   const toggleMessageExpansion = (messageId: string) => {
     setExpandedMessages((prev) => {
@@ -98,15 +98,23 @@ const MessagesTab: React.FC<MessagesTabProps> = ({
     );
   }, []);
 
+  /** Live updates from workers via SSE */
+  useSSE(useCallback((event) => {
+    if (event.type === 'message_status_changed') {
+      handleStatusChange(event.message_id, event.updates as Record<string, string>);
+    }
+  }, [handleStatusChange]));
+
   const loadMessages = useCallback(
     async (reset: boolean = false) => {
-      if (isLoadingMore && !reset) return;
+      if (isLoadingMoreRef.current && !reset) return;
+      isLoadingMoreRef.current = true;
       setIsLoadingMore(true);
       try {
         const base = apiUrl ?? 'http://localhost:8000/api';
         const currentLastDates = reset
           ? Object.fromEntries(selectedTgChannelIds.map((id) => [id, null]))
-          : channelLastDates;
+          : channelLastDatesRef.current;
 
         const results = await Promise.all(
           selectedTgChannelIds.map(async (channelId) => {
@@ -134,15 +142,17 @@ const MessagesTab: React.FC<MessagesTabProps> = ({
           const last = msgs[msgs.length - 1];
           if (last) newDates[channelId] = last.date;
         });
-        setChannelLastDates(newDates);
+        channelLastDatesRef.current = newDates;
+        channelLastDatesRef.current =(newDates);
         setHasMore(results.some((r) => r.messages.length === LIMIT));
       } catch (error) {
         console.error('Error loading messages:', error);
       } finally {
+        isLoadingMoreRef.current = false;
         setIsLoadingMore(false);
       }
     },
-    [selectedTgChannelIds, searchQuery, channelLastDates, isLoadingMore, deduplicateMessages]
+    [selectedTgChannelIds, searchQuery, deduplicateMessages]
   );
 
   const handleRefresh = useCallback(() => {
@@ -150,7 +160,7 @@ const MessagesTab: React.FC<MessagesTabProps> = ({
     setIsRefreshing(true);
     setMessages([]);
     setHasMore(true);
-    setChannelLastDates(Object.fromEntries(selectedTgChannelIds.map((id) => [id, null])));
+    channelLastDatesRef.current =(Object.fromEntries(selectedTgChannelIds.map((id) => [id, null])));
     loadMessages(true).finally(() => setIsRefreshing(false));
   }, [selectedTgChannelIds, loadMessages, isRefreshing]);
 
@@ -158,7 +168,7 @@ const MessagesTab: React.FC<MessagesTabProps> = ({
     if (selectedTgChannelIds.length > 0) {
       setMessages([]);
       setHasMore(true);
-      setChannelLastDates(Object.fromEntries(selectedTgChannelIds.map((id) => [id, null])));
+      channelLastDatesRef.current =(Object.fromEntries(selectedTgChannelIds.map((id) => [id, null])));
       loadMessages(true);
     }
   }, [selectedTgChannelIds, searchQuery]);
@@ -166,7 +176,7 @@ const MessagesTab: React.FC<MessagesTabProps> = ({
   const handleSearchSubmit = () => {
     setMessages([]);
     setHasMore(true);
-    setChannelLastDates(Object.fromEntries(selectedTgChannelIds.map((id) => [id, null])));
+    channelLastDatesRef.current =(Object.fromEntries(selectedTgChannelIds.map((id) => [id, null])));
     loadMessages(true);
   };
 
@@ -219,8 +229,7 @@ const MessagesTab: React.FC<MessagesTabProps> = ({
       (m) =>
         m.original_text?.trim() &&
         m.original_language !== 'de' &&
-        m.translation_status !== 'completed' &&
-        m.translation_status !== 'pending'
+        m.translation_status !== 'completed'
           ? { message_id: m.message_id, original_text: m.original_text, source_language: m.original_language || 'en', owner_id: ownerId, case_id: caseId }
           : null,
       'Translation',
@@ -232,8 +241,7 @@ const MessagesTab: React.FC<MessagesTabProps> = ({
       'queue/image',
       (m) =>
         m.media_path && !isAudioFile(m.media_path) && !isVideoFile(m.media_path) &&
-        m.image_analysis_status !== 'completed' &&
-        m.image_analysis_status !== 'pending'
+        m.image_analysis_status !== 'completed'
           ? { message_id: m.message_id, image_path: m.media_path, extract_text: true, detect_objects: false, translate_extracted_text: true, owner_id: ownerId, case_id: caseId }
           : null,
       'OCR',
@@ -246,8 +254,7 @@ const MessagesTab: React.FC<MessagesTabProps> = ({
       (m) => {
         const text = m.translated_text?.trim() || m.original_text?.trim();
         return text &&
-          m.classification_status !== 'completed' &&
-          m.classification_status !== 'pending'
+          m.classification_status !== 'completed'
           ? { message_id: m.message_id, text, owner_id: ownerId, case_id: caseId }
           : null;
       },
@@ -261,8 +268,7 @@ const MessagesTab: React.FC<MessagesTabProps> = ({
       (m) => {
         const text = m.translated_text?.trim() || m.original_text?.trim();
         return text &&
-          m.emotion_status !== 'completed' &&
-          m.emotion_status !== 'pending'
+          m.emotion_status !== 'completed'
           ? { message_id: m.message_id, text, owner_id: ownerId, case_id: caseId }
           : null;
       },
@@ -276,8 +282,7 @@ const MessagesTab: React.FC<MessagesTabProps> = ({
       (m) => {
         const text = m.translated_text?.trim() || m.original_text?.trim();
         return text &&
-          m.geolocation_status !== 'completed' &&
-          m.geolocation_status !== 'pending'
+          m.geolocation_status !== 'completed'
           ? { message_id: m.message_id, text, owner_id: ownerId, case_id: caseId }
           : null;
       },

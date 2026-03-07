@@ -29,6 +29,11 @@ class Message(BaseModel):
     audio_text: Optional[str] = None
     audio_text_translated: Optional[str] = None
     emotion: Optional[str] = None
+    image_analysis_status: Optional[str] = None
+    audio_transcription_status: Optional[str] = None
+    classification_status: Optional[str] = None
+    emotion_status: Optional[str] = None
+    geolocation_status: Optional[str] = None
 
 
     @root_validator(pre=True)

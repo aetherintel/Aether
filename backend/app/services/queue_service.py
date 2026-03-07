@@ -836,6 +836,51 @@ class QueueService:
         logger.warning(f"❌ Job {job_id} not found in any queue")
         return False
 
+    # ========================================================================
+    # RECONCILIATION SUPPORT
+    # ========================================================================
+
+    def get_active_message_ids(self, queue_name: str) -> set[str]:
+        """
+        Return the set of message_ids that are currently queued or started
+        in the given queue. Used by the reconciliation job to detect orphaned
+        'pending' statuses in Neo4j.
+        """
+        queue = self.queues.get(queue_name)
+        if not queue:
+            return set()
+
+        active: set[str] = set()
+
+        def _extract(job: Job | None):
+            if not job:
+                return
+            mid = None
+            if hasattr(job, 'meta') and job.meta:
+                mid = job.meta.get('message_id')
+            if not mid and hasattr(job, 'kwargs') and job.kwargs:
+                mid = job.kwargs.get('message_id')
+            if mid:
+                active.add(str(mid))
+
+        try:
+            for job in queue.jobs:
+                _extract(job)
+        except Exception as e:
+            logger.warning(f"Error reading queued jobs for {queue_name}: {e}")
+
+        try:
+            started_registry = StartedJobRegistry(queue=queue)
+            for job_id in started_registry.get_job_ids():
+                try:
+                    _extract(queue.fetch_job(job_id))
+                except Exception:
+                    pass
+        except Exception as e:
+            logger.warning(f"Error reading started jobs for {queue_name}: {e}")
+
+        return active
+
 
 # ============================================================================
 # SINGLETON INSTANCE

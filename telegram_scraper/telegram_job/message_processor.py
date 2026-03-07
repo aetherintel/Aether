@@ -5,6 +5,7 @@ from .telegram_client import get_client
 from langdetect import detect, LangDetectException
 from aether_lib.neo4j_client.messages import save_message_with_processing_status
 from aether_lib.queue_client.queue_client import queue_client
+from aether_lib.utils.event_publisher import publish_event
 from aether_lib.schemas.jobs import (
     TranslationJobPayload,
     ImageJobPayload,
@@ -123,6 +124,8 @@ async def process_message(msg, username, found_channels, all_seen_channels, foun
             translation_status=translation_status, image_analysis_status=image_analysis_status,
             audio_transcription_status=audio_transcription_status, geolocation_status=geolocation_status
         )
+
+        publish_event("new_message", {"owner_id": owner_id, "channel_id": str(msg.chat_id), "channel_username": username})
 
         full_id = f"{msg.chat_id}-{msg.id}"
         if needs_trans and config.get('ENABLE_TRANSLATION'):

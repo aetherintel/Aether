@@ -6,6 +6,12 @@ from .connection import get_driver, _with_constraints, get_owner_id
 import logging
 logger = logging.getLogger(__name__)
 
+try:
+    from aether_lib.utils.event_publisher import publish_event as _publish_event
+except Exception:
+    def _publish_event(event_type, payload):
+        pass
+
 @_with_constraints
 async def save_message_with_processing_status(
     owner_id,
@@ -209,16 +215,16 @@ async def update_message_audio_transcription(
             result = await session.run(
                 """
                 MATCH (m:Message {mid: $mid})
-                SET 
+                SET
                     m.audio_text = coalesce($audio_text, m.audio_text),
                     m.audio_text_translated = coalesce($audio_text_translated, m.audio_text_translated),
-                    
+
                     m.audio_language = coalesce($detected_language, m.audio_language),
                     m.transcribed_media_type = coalesce($media_type, m.transcribed_media_type),
                     m.audio_transcribed = true,
                     m.audio_transcribed_at = datetime(),
                     m.audio_transcription_status = 'completed'
-                RETURN m.mid AS mid
+                RETURN m.mid AS mid, m.owner_id AS owner_id
                 """,
                 mid=message_id,
                 audio_text=audio_text,
@@ -236,6 +242,11 @@ async def update_message_audio_transcription(
                     logger.info(f"   Language: {detected_language}")
                 if media_type:
                     logger.info(f"   Media type: {media_type}")
+                _publish_event("message_status_changed", {
+                    "message_id": message_id,
+                    "owner_id": record.get("owner_id"),
+                    "updates": {"audio_transcription_status": "completed", "audio_text": audio_text},
+                })
                 return True
             else:
                 logger.warning(f"⚠️ [UPDATE] Message {message_id} not found")
@@ -268,54 +279,57 @@ async def update_message_translation(
     logger.info(f"🔍 [UPDATE] message_id={message_id}, image_text={image_text}, audio_text={audio_text}")
 
     try:
-        if audio_text:
-            field_name = "audio_text_translated"
-        elif image_text:
-            field_name = "image_text_translated"
-        else:
-            field_name = "translated_text"
         async with driver.session() as session:
             if image_text:
-                # Update image text translation
                 result = await session.run(
                     """
                     MATCH (m:Message {mid: $mid})
                     SET m.image_text_translated = $translated_text,
                         m.image_translation_status = 'completed',
                         m.image_translated_at = datetime()
-                    RETURN m.mid as mid
+                    RETURN m.mid as mid, m.owner_id AS owner_id
                     """,
                     mid=message_id,
                     translated_text=translated_text
                 )
             elif audio_text:
-                # Update audio text translation
                 result = await session.run(
                     """
                     MATCH (m:Message {mid: $mid})
                     SET m.audio_text_translated = $translated_text,
                         m.audio_translation_status = 'completed',
                         m.audio_translated_at = datetime()
-                    RETURN m.mid as mid
+                    RETURN m.mid as mid, m.owner_id AS owner_id
                     """,
                     mid=message_id,
                     translated_text=translated_text
                 )
             else:
-                # Update regular message text translation
                 result = await session.run(
                     """
                     MATCH (m:Message {mid: $mid})
                     SET m.translated_text = $translated_text,
                         m.translation_status = 'completed',
                         m.translated_at = datetime()
-                    RETURN m.mid as mid
+                    RETURN m.mid as mid, m.owner_id AS owner_id
                     """,
                     mid=message_id,
                     translated_text=translated_text
                 )
-            
+
             record = await result.single()
+            if record:
+                if image_text:
+                    status_updates = {"image_text_translated": translated_text, "image_translation_status": "completed"}
+                elif audio_text:
+                    status_updates = {"audio_text_translated": translated_text, "audio_translation_status": "completed"}
+                else:
+                    status_updates = {"translated_text": translated_text, "translation_status": "completed"}
+                _publish_event("message_status_changed", {
+                    "message_id": message_id,
+                    "owner_id": record.get("owner_id"),
+                    "updates": status_updates,
+                })
             return bool(record)
             
     except Exception as e:
@@ -365,7 +379,7 @@ async def update_message_image_analysis(driver, message_id: str, image_text: str
                     m.image_labels = null,
                     m.image_analysis_status = 'completed',
                     m.image_detected_language = $detected_language
-                RETURN m.mid AS mid
+                RETURN m.mid AS mid, m.owner_id AS owner_id
                 """,
                 mid=message_id,
                 image_text=image_text,
@@ -375,11 +389,16 @@ async def update_message_image_analysis(driver, message_id: str, image_text: str
             record = await result.single()
             if record:
                 logger.info(f"✅ [UPDATE] Updated message {record['mid']}")
+                _publish_event("message_status_changed", {
+                    "message_id": message_id,
+                    "owner_id": record.get("owner_id"),
+                    "updates": {"image_analysis_status": "completed", "image_text": image_text},
+                })
                 return True
             else:
                 logger.warning(f"⚠️ [UPDATE] Message {message_id} not found")
                 return False
-                
+
     except Exception as e:
         logger.error(f"❌ [UPDATE] Failed to update image analysis: {e}")
         logger.exception("Full traceback:")
