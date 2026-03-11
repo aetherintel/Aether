@@ -8,6 +8,7 @@ from gliner import GLiNER  # Replaces spaCy
 from rq import get_current_job
 from neo4j import AsyncGraphDatabase
 import requests
+import httpx
 from functools import lru_cache
 
 logger = logging.getLogger(__name__)
@@ -24,6 +25,13 @@ NEO4J_PASSWORD = os.getenv("NEO4J_PASSWORD")
 
 GEONAMES_DATA_DIR = os.getenv("GEONAMES_DATA_DIR", "/app/models/geolocation/geonames")
 GLINER_MODEL_PATH = os.getenv("GLINER_MODEL_PATH", "/app/models/geolocation/gliner_model")
+
+# ArcGIS / ESRI
+ESRI_API_KEY = os.getenv("ESRI_API_KEY")
+ARCGIS_GEOCODE_URL = (
+    "https://geocode-api.arcgis.com/arcgis/rest/services"
+    "/World/GeocodeServer/findAddressCandidates"
+)
 
 driver = AsyncGraphDatabase.driver(NEO4J_URI, auth=(NEO4J_USER, NEO4J_PASSWORD))
 
@@ -243,15 +251,72 @@ async def geocode_location(location_name: str, geonames_data: Optional[Dict]) ->
 
 
 # ============================================================================
+# ArcGIS Entity Geocoding (replaces GeoNames per-entity lookup)
+# ============================================================================
+
+async def geocode_entity_with_arcgis(entity_name: str) -> Optional[Dict]:
+    """Geocode a single location name (extracted by GLiNER) via ArcGIS.
+
+    ArcGIS is excellent at resolving clean location names like "Lyon", "Berlin",
+    "Alexanderplatz" — much better than sending a full paragraph.
+    Score threshold: 75. Returns None if no confident match.
+    """
+    if not ESRI_API_KEY:
+        return None
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.get(ARCGIS_GEOCODE_URL, params={
+                "singleLine": entity_name,
+                "f": "pjson",
+                "token": ESRI_API_KEY,
+                "outFields": "Match_addr,LongLabel,City,Region,Country,Type",
+                "maxLocations": 1,
+            })
+            resp.raise_for_status()
+        data = resp.json()
+    except Exception as e:
+        logger.error(f"ArcGIS geocode request failed for '{entity_name}': {e}")
+        return None
+
+    candidates = data.get("candidates", [])
+    if not candidates:
+        return None
+
+    best = candidates[0]
+    score = best.get("score", 0)
+    if score < 75:
+        print(f"DEBUG: ArcGIS score {score} < 75 for '{entity_name}', discarding", flush=True)
+        return None
+
+    loc = best.get("location", {})
+    lat = loc.get("y")
+    lng = loc.get("x")
+    if lat is None or lng is None:
+        return None
+
+    attrs = best.get("attributes", {})
+    display_name = attrs.get("LongLabel") or best.get("address", entity_name)
+    print(f"DEBUG: ArcGIS geocoded '{entity_name}' → {display_name} ({lat}, {lng}) score={score}", flush=True)
+    return {
+        "lat": lat,
+        "lng": lng,
+        "display_name": display_name,
+        "country": attrs.get("Country", ""),
+        "city": attrs.get("City", ""),
+        "source": "arcgis",
+    }
+
+
+# ============================================================================
 # Main Worker
 # ============================================================================
 
 def extract_and_update_location(message_id: str, text: str, owner_id: str, case_id: int):
     """RQ worker entry point"""
-    print("DEBUG: Starting geolocation extraction...")
+    print(f"DEBUG: Starting geolocation extraction... ESRI_API_KEY set={bool(ESRI_API_KEY)}", flush=True)
     job = get_current_job()
     job_id = job.id if job else 'unknown'
-    
+
     return asyncio.run(_extract_and_update_location_async(
         message_id, text, owner_id, case_id, job_id
     ))
@@ -264,25 +329,46 @@ async def _extract_and_update_location_async(
     try:
         
         logger.info(f"Processing: {text[:100]}...")
-        
-        # Extract entities
+
+        locations = []
+
+        # Step 1: always extract entities with GLiNER
         entities = extract_location_entities(text)
-        
+
         if not entities:
-            logger.info(f"No entities in {message_id}")
+            print(f"DEBUG: GLiNER found no entities in {message_id}", flush=True)
             await update_message_geolocation_status(message_id, 'no_location', owner_id)
             return {"status": "no_location", "message_id": message_id}
-        
-        logger.info(f"Found entities: {[e[0] for e in entities]}")
-        
-        # Resolve and geocode
-        locations = []
+
+        print(f"DEBUG: GLiNER found entities: {[e[0] for e in entities]}", flush=True)
+
+        # Step 2: geocode each entity — ArcGIS primary, GeoNames fallback
         for entity_text, start, end in entities:
+            coords = None
+
+            if ESRI_API_KEY:
+                # Primary: ArcGIS (precise, global coverage)
+                arcgis_result = await geocode_entity_with_arcgis(entity_text)
+                if arcgis_result:
+                    coords = arcgis_result
+                    locations.append({
+                        'raw': entity_text,
+                        'canonical_name': arcgis_result['display_name'],
+                        'latitude': arcgis_result['lat'],
+                        'longitude': arcgis_result['lng'],
+                        'display_name': arcgis_result['display_name'],
+                        'source': 'arcgis',
+                        'country': arcgis_result.get('country', ''),
+                        'city': arcgis_result.get('city', ''),
+                        'confidence': 'high',
+                    })
+                    continue
+
+            # Fallback: GeoNames local index
             context = text[max(0, start-50):min(len(text), end+50)]
-            
             geonames_data = resolve_toponym(entity_text, context)
             coords = await geocode_location(entity_text, geonames_data)
-            
+
             if coords:
                 locations.append({
                     'raw': entity_text,
@@ -292,12 +378,12 @@ async def _extract_and_update_location_async(
                     'display_name': coords['display_name'],
                     'geonameid': coords.get('geonameid'),
                     'source': coords['source'],
-                    'country': coords.get('country', 'Deutschland'),
-                    'city': coords.get('city'),
-                    'confidence': 'high' if geonames_data else 'medium'
+                    'country': coords.get('country', ''),
+                    'city': coords.get('city', ''),
+                    'confidence': 'high' if geonames_data else 'medium',
                 })
             else:
-                logger.warning(f"❌ Could not geocode: {entity_text}")
+                print(f"DEBUG: Could not geocode '{entity_text}' via ArcGIS or GeoNames", flush=True)
         
         if locations:
             await store_locations_neo4j(message_id, locations, owner_id)
@@ -350,9 +436,10 @@ async def update_message_geolocation_status(mid: str, status: str, owner: str):
             "SET m.geolocation_status = $status, m.geolocation_processed_at = datetime()",
             mid=mid, owner=owner, status=status
         )
-    if status == "completed":
+    # Publish for all terminal statuses so the frontend clears the pending state
+    if status in ("completed", "no_location", "no_coordinates", "failed"):
         _publish_event("message_status_changed", {
             "message_id": mid,
             "owner_id": owner,
-            "updates": {"geolocation_status": "completed"},
+            "updates": {"geolocation_status": status},
         })

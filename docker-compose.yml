@@ -144,6 +144,7 @@ services:
       context: ./frontend
       args:
         VITE_API_URL: http://localhost:8000/api
+        VITE_ESRI_API_KEY: ${ESRI_API_KEY}
     ports:
       - "80:80"
       - "443:443"
@@ -449,6 +450,8 @@ services:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       JOB_SECRET_TOKEN: ${JOB_SECRET_TOKEN}
+      ESRI_API_KEY: ${ESRI_API_KEY}
+      OVERPASS_API_URL: ${OVERPASS_API_URL:-https://overpass-api.de/api/interpreter}
 
     volumes:
       - ./aether_lib:/app/aether_lib:ro

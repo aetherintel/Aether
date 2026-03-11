@@ -266,48 +266,50 @@ jobs:
             # ═══════════════════════════════════════════════════════════════
             # PHASE 0a: Write .env file so vars persist for manual restarts
             # ═══════════════════════════════════════════════════════════════
+            # Use printf with %s to safely write values that may contain
+            # special shell characters ($, (, ), !, etc.) without interpretation
             {
-              echo "REGISTRY=ghcr.io"
-              echo "GITHUB_REPOSITORY_OWNER=${GITHUB_REPOSITORY_OWNER}"
-              echo "PROD_DOMAIN=${PROD_DOMAIN}"
-              echo "PROD_MAIL=${PROD_MAIL}"
-              echo "DB_USER=${DB_USER}"
-              echo "DB_PASSWORD=${DB_PASSWORD}"
-              echo "KEYCLOAK_ADMIN=${KEYCLOAK_ADMIN}"
-              echo "KEYCLOAK_ADMIN_PASSWORD=${KEYCLOAK_ADMIN_PASSWORD}"
-              echo "KEYCLOAK_CLIENT_SECRET=${KEYCLOAK_CLIENT_SECRET}"
-              echo "KEYCLOAK_ADMIN_CLIENT_SECRET=${KEYCLOAK_ADMIN_CLIENT_SECRET}"
-              echo "TG_API_ID=${TG_API_ID}"
-              echo "TG_API_HASH=${TG_API_HASH}"
-              echo "TG_PHONE=${TG_PHONE}"
-              echo "POSTGRES_PASSWORD=${POSTGRES_PASSWORD}"
-              echo "NEO4J_URI=${NEO4J_URI}"
-              echo "NEO4J_PASSWORD=${NEO4J_PASSWORD}"
-              echo "NEO4J_USER=${NEO4J_USER}"
-              echo "POSTGRES_HOST=${POSTGRES_HOST}"
-              echo "POSTGRES_PORT=${POSTGRES_PORT}"
-              echo "POSTGRES_DB=${POSTGRES_DB}"
-              echo "POSTGRES_USER=${POSTGRES_USER}"
-              echo "ENVIRONMENT=${ENVIRONMENT}"
-              echo "KEYCLOAK_BASE_URL=${KEYCLOAK_BASE_URL}"
-              echo "KEYCLOAK_INTERNAL_URL=${KEYCLOAK_INTERNAL_URL}"
-              echo "KEYCLOAK_URL=${KEYCLOAK_URL}"
-              echo "KEYCLOAK_HOSTNAME=${KEYCLOAK_HOSTNAME}"
-              echo "KEYCLOAK_CLIENT_ID=${KEYCLOAK_CLIENT_ID}"
-              echo "KEYCLOAK_ADMIN_CLIENT_ID=${KEYCLOAK_ADMIN_CLIENT_ID}"
-              echo "SWAGGER_TOKEN_URL=${SWAGGER_TOKEN_URL}"
-              echo "FRONTEND_URL=${FRONTEND_URL}"
-              echo "MEDIA_PATH=${MEDIA_PATH}"
-              echo "USE_MODAL=${USE_MODAL}"
-              echo "MODAL_LLM_URL=${MODAL_LLM_URL}"
-              echo "MODAL_EMOTION_URL=${MODAL_EMOTION_URL}"
-              echo "MODAL_CLASSIFICATION_URL=${MODAL_CLASSIFICATION_URL}"
-              echo "MODAL_TOKEN_ID=${MODAL_TOKEN_ID}"
-              echo "MODAL_TOKEN_SECRET=${MODAL_TOKEN_SECRET}"
-              echo "SMTP_USER=${SMTP_USER}"
-              echo "SMTP_PASSWORD=${SMTP_PASSWORD}"
-              echo "GITHUB_USER=${GITHUB_USER}"
-              echo "GITHUB_TOKEN=${GITHUB_TOKEN}"
+              printf 'REGISTRY=%s\n'                     "ghcr.io"
+              printf 'GITHUB_REPOSITORY_OWNER=%s\n'     "${GITHUB_REPOSITORY_OWNER}"
+              printf 'PROD_DOMAIN=%s\n'                 "${PROD_DOMAIN}"
+              printf 'PROD_MAIL=%s\n'                   "${PROD_MAIL}"
+              printf 'DB_USER=%s\n'                     "${DB_USER}"
+              printf 'DB_PASSWORD=%s\n'                 "${DB_PASSWORD}"
+              printf 'KEYCLOAK_ADMIN=%s\n'              "${KEYCLOAK_ADMIN}"
+              printf 'KEYCLOAK_ADMIN_PASSWORD=%s\n'     "${KEYCLOAK_ADMIN_PASSWORD}"
+              printf 'KEYCLOAK_CLIENT_SECRET=%s\n'      "${KEYCLOAK_CLIENT_SECRET}"
+              printf 'KEYCLOAK_ADMIN_CLIENT_SECRET=%s\n' "${KEYCLOAK_ADMIN_CLIENT_SECRET}"
+              printf 'TG_API_ID=%s\n'                   "${TG_API_ID}"
+              printf 'TG_API_HASH=%s\n'                 "${TG_API_HASH}"
+              printf 'TG_PHONE=%s\n'                    "${TG_PHONE}"
+              printf 'POSTGRES_PASSWORD=%s\n'           "${POSTGRES_PASSWORD}"
+              printf 'NEO4J_URI=%s\n'                   "${NEO4J_URI}"
+              printf 'NEO4J_PASSWORD=%s\n'              "${NEO4J_PASSWORD}"
+              printf 'NEO4J_USER=%s\n'                  "${NEO4J_USER}"
+              printf 'POSTGRES_HOST=%s\n'               "${POSTGRES_HOST}"
+              printf 'POSTGRES_PORT=%s\n'               "${POSTGRES_PORT}"
+              printf 'POSTGRES_DB=%s\n'                 "${POSTGRES_DB}"
+              printf 'POSTGRES_USER=%s\n'               "${POSTGRES_USER}"
+              printf 'ENVIRONMENT=%s\n'                 "${ENVIRONMENT}"
+              printf 'KEYCLOAK_BASE_URL=%s\n'           "${KEYCLOAK_BASE_URL}"
+              printf 'KEYCLOAK_INTERNAL_URL=%s\n'       "${KEYCLOAK_INTERNAL_URL}"
+              printf 'KEYCLOAK_URL=%s\n'                "${KEYCLOAK_URL}"
+              printf 'KEYCLOAK_HOSTNAME=%s\n'           "${KEYCLOAK_HOSTNAME}"
+              printf 'KEYCLOAK_CLIENT_ID=%s\n'          "${KEYCLOAK_CLIENT_ID}"
+              printf 'KEYCLOAK_ADMIN_CLIENT_ID=%s\n'    "${KEYCLOAK_ADMIN_CLIENT_ID}"
+              printf 'SWAGGER_TOKEN_URL=%s\n'           "${SWAGGER_TOKEN_URL}"
+              printf 'FRONTEND_URL=%s\n'                "${FRONTEND_URL}"
+              printf 'MEDIA_PATH=%s\n'                  "${MEDIA_PATH}"
+              printf 'USE_MODAL=%s\n'                   "${USE_MODAL}"
+              printf 'MODAL_LLM_URL=%s\n'               "${MODAL_LLM_URL}"
+              printf 'MODAL_EMOTION_URL=%s\n'           "${MODAL_EMOTION_URL}"
+              printf 'MODAL_CLASSIFICATION_URL=%s\n'    "${MODAL_CLASSIFICATION_URL}"
+              printf 'MODAL_TOKEN_ID=%s\n'              "${MODAL_TOKEN_ID}"
+              printf 'MODAL_TOKEN_SECRET=%s\n'          "${MODAL_TOKEN_SECRET}"
+              printf 'SMTP_USER=%s\n'                   "${SMTP_USER}"
+              printf 'SMTP_PASSWORD=%s\n'               "${SMTP_PASSWORD}"
+              printf 'GITHUB_USER=%s\n'                 "${GITHUB_USER}"
+              printf 'GITHUB_TOKEN=%s\n'                "${GITHUB_TOKEN}"
             } > ~/app/.env
             chmod 600 ~/app/.env
             echo "✅ .env file written"
@@ -433,19 +435,32 @@ jobs:
             echo "✅ Backend configured correctly"
 
             # ═══════════════════════════════════════════════════════════════
-            # PHASE 6: Workers (complete rebuild)
+            # PHASE 6: Workers
+            # --no-recreate: start if not running, leave alone if already up.
+            # Workers are only force-recreated when their images were rebuilt
+            # (i.e. when build-workers ran). translation/emotion/classification
+            # run on Modal.com and are NOT started here.
             # ═══════════════════════════════════════════════════════════════
-            echo "👷 Updating workers..."
-            docker stop $(docker ps -q --filter "name=worker") 2>/dev/null || true
-            docker rm $(docker ps -aq --filter "name=worker") 2>/dev/null || true
-
-            # translation-worker, emotion-worker, classification-worker run on Modal.com — not started here
-            $COMPOSE_CMD -f docker-compose.prod.yml up -d \
-              --scale telegram-worker=3 \
-              --scale geolocation-worker=2 \
-              --force-recreate --no-build \
-              telegram-worker audio-worker \
-              image-worker geolocation-worker report-worker
+            echo "👷 Ensuring workers are running..."
+            if [ "${{ needs.build-workers.result }}" = "success" ]; then
+              echo "  Workers were rebuilt — force-recreating..."
+              docker stop $(docker ps -q --filter "name=worker") 2>/dev/null || true
+              docker rm $(docker ps -aq --filter "name=worker") 2>/dev/null || true
+              $COMPOSE_CMD -f docker-compose.prod.yml up -d \
+                --scale telegram-worker=3 \
+                --scale geolocation-worker=2 \
+                --force-recreate --no-build \
+                telegram-worker audio-worker \
+                image-worker geolocation-worker report-worker
+            else
+              echo "  Workers unchanged — starting any that are not yet running..."
+              $COMPOSE_CMD -f docker-compose.prod.yml up -d \
+                --scale telegram-worker=3 \
+                --scale geolocation-worker=2 \
+                --no-recreate --no-build \
+                telegram-worker audio-worker \
+                image-worker geolocation-worker report-worker
+            fi
 
             echo "🔌 Ensuring MCP server is running..."
             $COMPOSE_CMD -f docker-compose.prod.yml up -d --no-recreate mcp-neo4j-cypher-server
