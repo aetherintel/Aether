@@ -204,10 +204,6 @@ async def geocode_location(location_name: str, geonames_data: Optional[Dict]) ->
     return None
 
 
-# ============================================================================
-# Main Worker
-# ============================================================================
-
 def extract_and_update_location(message_id: str, text: str, owner_id: str, case_id: int):
     """RQ worker entry point"""
     print("DEBUG: Starting geolocation extraction...")

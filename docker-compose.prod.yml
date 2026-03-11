@@ -453,13 +453,11 @@ services:
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      PHOTON_URL: http://photon:2322
     volumes:
       - app_geolocation_models:/app/models
     depends_on:
       - redis
       - neo4j
-      - photon
       - backend
       - geolocation-models
     networks:
@@ -502,30 +500,6 @@ services:
           devices:
             - driver: nvidia
               capabilities: [gpu]
-
-  # ============================================================================
-  # PHOTON GEOCODING SERVICE
-  # ============================================================================
-  photon:
-    image: ghcr.io/${GITHUB_REPOSITORY_OWNER:-aetherintel}/aether-photon:latest
-    container_name: photon
-    restart: unless-stopped
-    ports:
-      - "127.0.0.1:2322:2322"
-    volumes:
-      - app_photon_data:/photon/photon_data
-    environment:
-      - JAVA_OPTS=-Xmx2g
-    networks:
-      - aether-network
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:2322/api?q=Berlin"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 60s
-    depends_on:
-       - photon-data
 
   # ============================================================================
   # MODEL CONTAINERS
@@ -573,14 +547,6 @@ services:
     volumes:
       - app_geolocation_models:/models
 
-  photon-data:
-    build:
-      context: ./models
-      dockerfile: photon/Dockerfile
-    image: ghcr.io/${GITHUB_REPOSITORY_OWNER:-aetherintel}/aether-photon-data:latest
-    volumes:
-      - app_photon_data:/photon/photon_data
-
   llm-models:
     build:
       context: ./models
@@ -607,4 +573,3 @@ volumes:
     name: app_image_models
   app_geolocation_models:
   app_llm_models:
-  app_photon_data:
