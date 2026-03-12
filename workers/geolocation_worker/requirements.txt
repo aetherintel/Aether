@@ -2,6 +2,7 @@ rq==1.16.2
 redis==5.0.1
 neo4j==5.14.1
 requests==2.31.0
+httpx==0.27.2
 # spacy==3.7.2  <-- Removing Spacy as we use GLiNER
 # https://github.com/explosion/spacy-models/releases/download/de_core_news_sm-3.7.0/de_core_news_sm-3.7.0-py3-none-any.whl
 pydantic

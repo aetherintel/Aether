@@ -249,6 +249,7 @@ jobs:
             export MEDIA_PATH=/shared/media
             export USE_MODAL=true
             export MODAL_LLM_URL="${{ secrets.MODAL_LLM_URL }}"
+            export MODAL_TRANSLATION_URL="${{ secrets.MODAL_TRANSLATION_URL }}"
             export MODAL_EMOTION_URL="${{ secrets.MODAL_EMOTION_URL }}"
             export MODAL_CLASSIFICATION_URL="${{ secrets.MODAL_CLASSIFICATION_URL }}"
             export MODAL_TOKEN_ID="${{ secrets.MODAL_TOKEN_ID }}"
@@ -299,6 +300,7 @@ jobs:
               printf 'MEDIA_PATH=%s\n'                  "${MEDIA_PATH}"
               printf 'USE_MODAL=%s\n'                   "${USE_MODAL}"
               printf 'MODAL_LLM_URL=%s\n'               "${MODAL_LLM_URL}"
+              printf 'MODAL_TRANSLATION_URL=%s\n'       "${MODAL_TRANSLATION_URL}"
               printf 'MODAL_EMOTION_URL=%s\n'           "${MODAL_EMOTION_URL}"
               printf 'MODAL_CLASSIFICATION_URL=%s\n'    "${MODAL_CLASSIFICATION_URL}"
               printf 'MODAL_TOKEN_ID=%s\n'              "${MODAL_TOKEN_ID}"
