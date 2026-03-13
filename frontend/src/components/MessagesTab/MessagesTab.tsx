@@ -281,8 +281,8 @@ const MessagesTab: React.FC<MessagesTabProps> = ({
       'queue/geolocation',
       (m) => {
         const text = m.translated_text?.trim() || m.original_text?.trim();
-        return text &&
-          m.geolocation_status !== 'completed'
+        const done = ['completed', 'no_location', 'no_coordinates', 'failed'].includes(m.geolocation_status);
+        return text && !done
           ? { message_id: m.message_id, text, owner_id: ownerId, case_id: caseId }
           : null;
       },

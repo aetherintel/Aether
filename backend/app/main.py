@@ -15,6 +15,7 @@ from controller import dashboard_controller
 from controller import dashboard_controller
 from controller import agent_controller
 from controller import events_controller
+from controller import geo_controller
 from services.scheduler_service import start_scheduler
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -39,6 +40,7 @@ app.include_router(stats_controller.router)
 app.include_router(dashboard_controller.router)
 app.include_router(agent_controller.router)
 app.include_router(events_controller.router)
+app.include_router(geo_controller.router)
 
     # Dynamic origins from environment
 origins = [
