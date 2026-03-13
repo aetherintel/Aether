@@ -94,44 +94,6 @@ def load_geonames_index():
         _geonames_loaded = True
 
 
-def resolve_toponym(location_name: str, context: str = "") -> Optional[Dict]:
-    """Resolve location name to coordinates"""
-    load_geonames_index()  # Lazy load on first use
-    
-    if not GEONAMES_INDEX:
-        return None
-    
-    name_lower = location_name.lower().strip()
-    
-    # Check alternate names (handles "Alex" -> "Alexanderplatz")
-    if name_lower in ALTERNATE_NAMES:
-        canonical = ALTERNATE_NAMES[name_lower]
-        if canonical in GEONAMES_INDEX:
-            return GEONAMES_INDEX[canonical]
-    
-    # Direct lookup
-    if name_lower in GEONAMES_INDEX:
-        return GEONAMES_INDEX[name_lower]
-    
-    # Fuzzy matching
-    candidates = [
-        data for key, data in GEONAMES_INDEX.items()
-        if name_lower in key or key in name_lower
-    ]
-    
-    if not candidates:
-        return None
-    
-    # Disambiguation via context
-    if context:
-        context_lower = context.lower()
-        for candidate in candidates:
-            if candidate['name'].lower() in context_lower:
-                return candidate
-    
-    # Return most populous
-    return max(candidates, key=lambda x: x['population'])
-
 # ============================================================================
 # NER - Extract Location Entities
 # ============================================================================

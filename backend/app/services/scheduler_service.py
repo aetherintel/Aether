@@ -74,15 +74,22 @@ async def reconcile_pending_statuses():
     from services.queue_service import queue_service
     from repository.neo4j.base import driver
 
+    use_modal = os.getenv("USE_MODAL", "false").lower() == "true"
+
     # Map: (queue_name, neo4j_status_field)
+    # Modal-managed queues have no Redis jobs — skip them to avoid wiping
+    # statuses that are being processed asynchronously by Modal.
     QUEUE_STATUS_FIELDS = [
         ('image',          'image_analysis_status'),
         ('audio',          'audio_transcription_status'),
-        ('translation',    'translation_status'),
-        ('emotion',        'emotion_status'),
-        ('classification', 'classification_status'),
         ('geolocation',    'geolocation_status'),
     ]
+    if not use_modal:
+        QUEUE_STATUS_FIELDS += [
+            ('translation',    'translation_status'),
+            ('emotion',        'emotion_status'),
+            ('classification', 'classification_status'),
+        ]
 
     total_reset = 0
 
