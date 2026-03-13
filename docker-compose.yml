@@ -145,6 +145,9 @@ services:
       args:
         VITE_API_URL: http://localhost:8000/api
         VITE_ESRI_API_KEY: ${ESRI_API_KEY}
+    environment:
+      - VITE_ESRI_API_KEY=${ESRI_API_KEY}
+      - VITE_API_URL=http://localhost:8000/api
     ports:
       - "80:80"
       - "443:443"

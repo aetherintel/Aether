@@ -204,7 +204,7 @@ class QueueService:
             # 1. Call Modal inference endpoint
             try:
                 resp = await self._modal_client.post(
-                    f"{self.modal_translation_url}/translate",
+                    f"{self.modal_translation_url}",
                     json={
                         "text": payload.original_text,
                         "source_language": payload.source_language,
@@ -416,7 +416,7 @@ class QueueService:
             # 1. Call Modal inference endpoint
             try:
                 resp = await self._modal_client.post(
-                    f"{self.modal_emotion_url}/classify",
+                    f"{self.modal_emotion_url}",
                     json={
                         "text": payload.text,
                         "threshold": payload.threshold,
@@ -547,7 +547,7 @@ class QueueService:
         async def _run():
             try:
                 resp = await self._modal_client.post(
-                    f"{self.modal_classification_url}/classify",
+                    f"{self.modal_classification_url}",
                     json={
                         "text": payload.text,
                         "threshold": payload.threshold if hasattr(payload, 'threshold') else 0.3,

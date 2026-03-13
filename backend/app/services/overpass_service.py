@@ -1,16 +1,16 @@
 import os
 import httpx
 import logging
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
-OVERPASS_URL = os.getenv(
-    "OVERPASS_API_URL",
-    "https://overpass-api.de/api/interpreter"
-)
+# Primary + fallback Overpass endpoints
+OVERPASS_URLS = [
+    os.getenv("OVERPASS_API_URL", "https://overpass-api.de/api/interpreter"),
+    "https://overpass.kumi.systems/api/interpreter",
+]
 
-# OSM tag filters per layer
+# OSM tag filters per layer — used to build Overpass QL queries
 LAYER_QUERIES: dict[str, str] = {
     "cameras":  'node["man_made"="surveillance"]',
     "atm":      'node["amenity"="atm"]',
@@ -22,24 +22,34 @@ LAYER_QUERIES: dict[str, str] = {
     "alpr":     'node["man_made"="surveillance"]["surveillance:type"="ALPR"]',
 }
 
+# Direct tag matchers per layer — (key, value_or_None) tuples.
+# None means "key must exist with any value".
+# alpr uses two conditions — handled specially.
+LAYER_MATCHERS: dict[str, list[tuple[str, str | None]]] = {
+    "alpr":     [("man_made", "surveillance"), ("surveillance:type", "ALPR")],
+    "cameras":  [("man_made", "surveillance")],
+    "atm":      [("amenity", "atm")],
+    "bank":     [("amenity", "bank")],
+    "police":   [("amenity", "police")],
+    "military": [("military", None)],
+    "power":    [("power", "substation")],
+    "water":    [("man_made", "water_tower")],
+}
 
-def _parse_layer_tag(query_filter: str) -> tuple[str, Optional[str]]:
-    """Extract (key, value) from an Overpass tag filter string."""
-    # Strip 'node[' prefix and trailing ']'
-    inner = query_filter[len("node["):].rstrip("]")
-    # Handle multi-tag filters like "key"="val"]["key2"="val2" — only use first tag
-    first_tag = inner.split(']["')[0]
-    first_tag = first_tag.strip('"')
-    if '="' in first_tag:
-        key, _, val = first_tag.partition('="')
-        return key, val.rstrip('"')
-    return first_tag, None
+
+def _matches_layer(tags: dict, layer: str) -> bool:
+    """Return True if the element tags satisfy all conditions for the layer."""
+    conditions = LAYER_MATCHERS.get(layer, [])
+    return all(
+        (tags.get(k) == v if v is not None else k in tags)
+        for k, v in conditions
+    )
 
 
 async def fetch_osint_layers(
     lat: float,
     lng: float,
-    radius: int = 1000,
+    radius: int = 500,
     layers: list[str] | None = None,
 ) -> dict:
     """Query Overpass API for OSINT points of interest around given coordinates.
@@ -58,13 +68,20 @@ async def fetch_osint_layers(
 );
 out body;"""
 
-    try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            resp = await client.post(OVERPASS_URL, data={"data": query})
-            resp.raise_for_status()
-        raw_elements = resp.json().get("elements", [])
-    except Exception as e:
-        logger.error(f"Overpass request failed: {e}")
+    raw_elements = None
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        for url in OVERPASS_URLS:
+            try:
+                resp = await client.post(url, data={"data": query})
+                resp.raise_for_status()
+                raw_elements = resp.json().get("elements", [])
+                logger.info(f"Overpass OK via {url} ({len(raw_elements)} elements)")
+                break
+            except Exception as e:
+                logger.warning(f"Overpass {url} failed: {e}, trying next...")
+
+    if raw_elements is None:
+        logger.error("All Overpass endpoints failed")
         return {layer: [] for layer in active}
 
     result: dict[str, list] = {layer: [] for layer in active}
@@ -79,19 +96,13 @@ out body;"""
             "operator": tags.get("operator", ""),
             "tags":     tags,
         }
-        # Assign element to the first matching layer
+        # alpr is most specific — check it first, then the others
         for layer in active:
-            key, val = _parse_layer_tag(LAYER_QUERIES[layer])
-            if val:
-                if tags.get(key) == val:
-                    result[layer].append(item)
-                    break
-            else:
-                if key in tags:
-                    result[layer].append(item)
-                    break
+            if _matches_layer(tags, layer):
+                result[layer].append(item)
+                break
 
     for layer in active:
-        logger.debug(f"Overpass layer '{layer}': {len(result[layer])} elements")
+        logger.info(f"Overpass layer '{layer}': {len(result[layer])} elements")
 
     return result
