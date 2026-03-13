@@ -249,6 +249,34 @@ async def get_total_message_count_for_channels(channel_ids: list[str], owner_id:
         record = await result.single()
         return record["total_count"] if record else 0
 
+async def get_message_enrichment(message_id: str, owner_id: str | None) -> dict:
+    """Fetch emotions, classifications, and locations for a single message."""
+    async with get_session(owner_id) as session:
+        cypher = """
+        MATCH (m:Message {mid: $mid})
+        WHERE $ownerId IS NULL OR m.owner_id = $ownerId
+
+        OPTIONAL MATCH (m)-[re:HAS_EMOTION]->(e:Emotion)
+        OPTIONAL MATCH (m)-[rc:HAS_CLASSIFICATION]->(c:Classification)
+        OPTIONAL MATCH (m)-[:MENTIONS_LOCATION]->(l:Location)
+
+        RETURN
+            collect(DISTINCT {label: e.name, confidence: re.confidence, source_emotions: re.source_emotions}) AS emotions,
+            collect(DISTINCT {label: c.name, description: c.description, confidence: rc.confidence}) AS classifications,
+            collect(DISTINCT {name: l.canonical_name, country: l.country, lat: l.lat, lng: l.lng}) AS locations
+        """
+        result = await session.run(cypher, {"mid": message_id, "ownerId": owner_id})
+        record = await result.single()
+        if not record:
+            return {"emotions": [], "classifications": [], "locations": []}
+
+        emotions = [e for e in record["emotions"] if e.get("label")]
+        classifications = [c for c in record["classifications"] if c.get("label")]
+        locations = [loc for loc in record["locations"] if loc.get("name") or loc.get("lat") is not None]
+
+        return {"emotions": emotions, "classifications": classifications, "locations": locations}
+
+
 async def get_message_volume_over_time(owner_id: str | None, start_date: datetime, end_date: datetime, interval: str = "day"):
     async with get_session(owner_id) as session:
         date_trunc = "date(m.date)" if interval == "day" else "date({year: m.date.year, month: m.date.month, day: 1})"

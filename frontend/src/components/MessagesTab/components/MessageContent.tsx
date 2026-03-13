@@ -1,4 +1,4 @@
-import React, { useState, useRef, useLayoutEffect } from 'react';
+import React, { useState, useRef, useLayoutEffect, useEffect } from 'react';
 import { Button, Anchor } from '@mantine/core';
 import { escapeRegExp } from '../utils';
 import classes from '../MessagesTab.module.css';
@@ -80,11 +80,16 @@ export const MessageContent: React.FC<MessageContentProps> = ({
 }) => {
   const { measureRef, needsTruncation } = useMeasureText();
   const [showOriginal, setShowOriginal] = useState(false);
-  
+
   const hasTranslation =
     !!message.translated_text &&
     message.translated_text.trim().length > 0 &&
     message.translation_status === 'completed';
+
+  // When a translation arrives live (via SSE), automatically show it
+  useEffect(() => {
+    if (hasTranslation) setShowOriginal(false);
+  }, [hasTranslation]);
 
   const displayedText = (showOriginal || !hasTranslation ? message.original_text : message.translated_text) || '';
   const handleToggleLanguage = () => setShowOriginal((prev) => !prev);

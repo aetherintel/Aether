@@ -8,7 +8,7 @@ router = APIRouter(prefix="/geo", tags=["geo"])
 async def get_osint_layers(
     lat: float = Query(..., description="Latitude of the center point"),
     lng: float = Query(..., description="Longitude of the center point"),
-    radius: int = Query(1000, ge=100, le=5000, description="Search radius in meters"),
+    radius: int = Query(500, ge=100, le=5000, description="Search radius in meters"),
     layers: str = Query(
         "cameras,atm,police,military",
         description=f"Comma-separated layer names. Available: {', '.join(LAYER_QUERIES.keys())}"

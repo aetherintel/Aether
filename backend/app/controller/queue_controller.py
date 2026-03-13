@@ -256,7 +256,7 @@ async def test_modal_translation(
 
     try:
         resp = await queue_service._modal_client.post(
-            f"{queue_service.modal_translation_url}/translate",
+            f"{queue_service.modal_translation_url}",
             json={"text": "This is a test message.", "source_language": "en", "target_language": "de"},
         )
         resp.raise_for_status()

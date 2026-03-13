@@ -15,6 +15,7 @@ from services.neo4j_backend_client import (
     get_case_channels_with_recommendations,
     get_channel_locations_data,
 )
+from repository.neo4j.message_repo import get_message_enrichment
 from starlette.responses import FileResponse
 from model.message_model import (
     Message,
@@ -285,3 +286,16 @@ async def get_channel_emotions_endpoint(
             status_code=500,
             detail=f"Fehler beim Abrufen der Emotionen: {str(e)}"
         )
+
+
+@router.get("/{message_id}/enrichment")
+async def get_enrichment(
+    message_id: str,
+    user: UserCtx = Depends(user_ctx),
+):
+    """Return emotions, classifications, and locations for a single message."""
+    owner = None if is_admin(user) else user["id"]
+    try:
+        return await get_message_enrichment(message_id, owner)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

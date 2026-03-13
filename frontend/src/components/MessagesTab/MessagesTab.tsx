@@ -27,6 +27,7 @@ import { ImageWithTranscript } from './components/ImageWithTranscript';
 import { AudioPlayer } from './components/AudioPlayer';
 import { VideoPlayer } from './components/VideoPlayer';
 import { MessageActions } from './components/MessageActions';
+import { MessageEnrichment } from './components/MessageEnrichment';
 
 const apiUrl = import.meta.env.VITE_API_URL;
 
@@ -343,7 +344,16 @@ const MessagesTab: React.FC<MessagesTabProps> = ({
               </Group>
             </div>
             <Group wrap="nowrap" align="flex-start" justify="space-between">
-              <MessageContent message={message} isExpanded={isExpanded} onToggleExpand={() => toggleMessageExpansion(message.message_id)} searchQuery={searchQuery} />
+              <Box style={{ flex: 1, minWidth: 0 }}>
+                <MessageContent message={message} isExpanded={isExpanded} onToggleExpand={() => toggleMessageExpansion(message.message_id)} searchQuery={searchQuery} />
+                <MessageEnrichment
+                  messageId={message.message_id}
+                  emotionStatus={message.emotion_status}
+                  classificationStatus={message.classification_status}
+                  geolocationStatus={message.geolocation_status}
+                  apiUrl={apiUrl ?? 'http://localhost:8000/api'}
+                />
+              </Box>
               {renderMedia()}
             </Group>
           </Box>

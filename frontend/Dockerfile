@@ -5,8 +5,10 @@ WORKDIR /app
 COPY package.json .
 
 ARG VITE_API_URL
+ARG VITE_ESRI_API_KEY
 
 ENV VITE_API_URL=${VITE_API_URL}
+ENV VITE_ESRI_API_KEY=${VITE_ESRI_API_KEY}
 
 RUN npm install --legacy-peer-deps
 

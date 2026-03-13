@@ -27,6 +27,7 @@ jobs:
             dockerfile: ./frontend/Dockerfile
             build-args: |
               VITE_API_URL=https://aethery.cloud/api
+              VITE_ESRI_API_KEY=${{ secrets.ESRI_API_KEY }}
           - service: backend
             context: .
             dockerfile: ./backend/app/Dockerfile

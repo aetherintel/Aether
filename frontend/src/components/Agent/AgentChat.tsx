@@ -3,7 +3,7 @@ import {
     Autocomplete, ActionIcon, Stack, Paper, Text, Loader, Button,
     Group, Box, ScrollArea, Table, Avatar, Select, Modal, Code, Card, SimpleGrid, Badge, Collapse
 } from '@mantine/core';
-import { IconSend, IconDatabaseImport, IconRobot, IconUser, IconSettings, IconX, IconThumbUp, IconThumbDown, IconCode, IconChevronDown, IconChevronRight } from '@tabler/icons-react';
+import { IconSend, IconDatabaseImport, IconRobot, IconUser, IconX, IconThumbUp, IconThumbDown, IconCode, IconChevronDown } from '@tabler/icons-react';
 import { agentService, AgentResponse, CommandSuggestion } from '../../services/agentService';
 import { GraphRAGWidget } from '../Dashboard/GraphRAGWidget';
 import { notifications } from '@mantine/notifications';
@@ -11,34 +11,8 @@ import { PieChart, BarChart } from '@mantine/charts';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { motion, AnimatePresence } from 'framer-motion';
-import { MapContainer, TileLayer, Marker, Popup, useMap, LayersControl, LayerGroup } from 'react-leaflet';
-import MarkerClusterGroup from 'react-leaflet-cluster';
-import 'leaflet/dist/leaflet.css';
-import L from 'leaflet';
-import { OSINT_ICONS, OSINT_LABELS } from '@/utils/osintIcons';
 import { authFetch } from '@/utils/authFetch';
-
-const AGENT_ESRI_KEY = import.meta.env.VITE_ESRI_API_KEY ?? '';
-const agentApiUrl = import.meta.env.VITE_API_URL;
-
-// Fix Leaflet default marker icons
-delete (L.Icon.Default.prototype as any)._getIconUrl;
-L.Icon.Default.mergeOptions({
-    iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
-    iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
-    shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
-});
-
-const FitMapBounds: React.FC<{ points: Array<{ lat: number; lng: number }> }> = ({ points }) => {
-    const map = useMap();
-    useEffect(() => {
-        if (points.length > 0) {
-            const bounds = L.latLngBounds(points.map(p => [p.lat, p.lng]));
-            map.fitBounds(bounds, { padding: [40, 40] });
-        }
-    }, [points, map]);
-    return null;
-};
+import { LocationMap, MapPoint } from '@/components/map/LocationMap';
 
 interface AgentChatProps {
   embedded?: boolean;
@@ -94,24 +68,6 @@ export const AgentChat: React.FC<AgentChatProps> = ({ embedded = false }) => {
   const [activeRequestId, setActiveRequestId] = useState<string | null>(null);
   const [expandedCypher, setExpandedCypher] = useState<Set<string>>(new Set());
   const [slowQuery, setSlowQuery] = useState(false);
-  const [agentOsintData, setAgentOsintData] = useState<Record<string, Record<string, any[]>>>({});
-  const [loadingAgentOsint, setLoadingAgentOsint] = useState<Record<string, boolean>>({});
-
-  const loadAgentOsintLayers = async (msgId: string, lat: number, lng: number) => {
-    setLoadingAgentOsint(prev => ({ ...prev, [msgId]: true }));
-    try {
-      const base = agentApiUrl ?? 'http://localhost:8000/api';
-      const res = await authFetch(
-        `${base}/geo/osint-layers?lat=${lat}&lng=${lng}&radius=500&layers=cameras,atm,bank,police,military,power,water,alpr`
-      );
-      const data = await res.json();
-      setAgentOsintData(prev => ({ ...prev, [msgId]: data }));
-    } catch (err) {
-      console.error('Failed to load OSINT layers for agent chat:', err);
-    } finally {
-      setLoadingAgentOsint(prev => ({ ...prev, [msgId]: false }));
-    }
-  };
   const slowQueryTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const scrollViewport = useRef<HTMLDivElement>(null);
@@ -469,144 +425,23 @@ export const AgentChat: React.FC<AgentChatProps> = ({ embedded = false }) => {
                                             </Card>
                                         )}
 
-                                        {/* 🎯 Location Map Widget - Interactive Leaflet map with Satellite + OSINT */}
+                                        {/* 🎯 Location Map — shared LocationMap component */}
                                         {msg.widgetType === 'location_map' && msg.widgetData && msg.widgetData.length > 0 && (() => {
-                                            const validPoints = msg.widgetData.filter((d: any) =>
-                                                (d.lat ?? d.latitude) != null && (d.lng ?? d.longitude) != null
-                                            );
-                                            const msgOsint = agentOsintData[msg.id] ?? {};
-                                            const isLoadingOsint = loadingAgentOsint[msg.id] ?? false;
-                                            const firstPoint = validPoints[0];
-                                            const satelliteUrl = AGENT_ESRI_KEY
-                                                ? `https://ibasemaps-api.arcgis.com/arcgis/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}?token=${AGENT_ESRI_KEY}`
-                                                : null;
+                                            const points: MapPoint[] = msg.widgetData
+                                                .filter((d: any) => (d.lat ?? d.latitude) != null && (d.lng ?? d.longitude) != null)
+                                                .map((d: any, i: number) => ({
+                                                    id: d.message_id ?? `${i}`,
+                                                    lat: d.lat ?? d.latitude,
+                                                    lng: d.lng ?? d.longitude,
+                                                    canonical_name: d.canonical_name ?? d.name,
+                                                    country: d.country,
+                                                    mention_count: d.mention_count,
+                                                    sample_messages: d.sample_messages,
+                                                }));
+                                            if (points.length === 0) return null;
                                             return (
-                                                <Box mt="md">
-                                                    <Group justify="space-between" mb="xs">
-                                                        <Text fw={500} size="sm" c="dimmed">📍 {validPoints.length} locations</Text>
-                                                        {firstPoint && (
-                                                            <Button
-                                                                size="xs"
-                                                                variant="light"
-                                                                loading={isLoadingOsint}
-                                                                leftSection={<IconSettings size={14} />}
-                                                                onClick={() => loadAgentOsintLayers(
-                                                                    msg.id,
-                                                                    firstPoint.lat ?? firstPoint.latitude,
-                                                                    firstPoint.lng ?? firstPoint.longitude
-                                                                )}
-                                                            >
-                                                                OSINT Layer laden
-                                                            </Button>
-                                                        )}
-                                                    </Group>
-                                                    <Box style={{ height: 420, borderRadius: 8, overflow: 'hidden', border: '1px solid #374151' }}>
-                                                        <MapContainer
-                                                            center={[51.1657, 10.4515]}
-                                                            zoom={5}
-                                                            style={{ height: '100%', width: '100%' }}
-                                                        >
-                                                            <LayersControl position="topright">
-                                                                <LayersControl.BaseLayer checked name="OpenStreetMap">
-                                                                    <TileLayer
-                                                                        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-                                                                        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                                                                    />
-                                                                </LayersControl.BaseLayer>
-                                                                {satelliteUrl && (
-                                                                    <LayersControl.BaseLayer name="Satellite (ArcGIS)">
-                                                                        <TileLayer
-                                                                            url={satelliteUrl}
-                                                                            attribution='Tiles &copy; Esri &mdash; Maxar, Earthstar Geographics'
-                                                                            maxZoom={19}
-                                                                        />
-                                                                    </LayersControl.BaseLayer>
-                                                                )}
-                                                                {Object.entries(msgOsint).map(([layer, items]: [string, any[]]) =>
-                                                                    items && items.length > 0 ? (
-                                                                        <LayersControl.Overlay key={layer} checked name={OSINT_LABELS[layer] ?? layer}>
-                                                                            <LayerGroup>
-                                                                                {items.map((item: any) =>
-                                                                                    item.lat != null && item.lng != null ? (
-                                                                                        <Marker
-                                                                                            key={item.id}
-                                                                                            position={[item.lat, item.lng]}
-                                                                                            icon={OSINT_ICONS[layer]}
-                                                                                        >
-                                                                                            <Popup>
-                                                                                                <div style={{ fontFamily: 'system-ui, sans-serif' }}>
-                                                                                                    <div style={{ fontWeight: 700 }}>{OSINT_LABELS[layer] ?? layer}</div>
-                                                                                                    {item.name && <div>{item.name}</div>}
-                                                                                                    {item.operator && <div style={{ fontSize: '0.75rem', color: '#888' }}>{item.operator}</div>}
-                                                                                                </div>
-                                                                                            </Popup>
-                                                                                        </Marker>
-                                                                                    ) : null
-                                                                                )}
-                                                                            </LayerGroup>
-                                                                        </LayersControl.Overlay>
-                                                                    ) : null
-                                                                )}
-                                                            </LayersControl>
-                                                            <FitMapBounds points={validPoints.map((d: any) => ({ lat: d.lat ?? d.latitude, lng: d.lng ?? d.longitude }))} />
-                                                            <MarkerClusterGroup>
-                                                                {validPoints.map((item: any, idx: number) => {
-                                                                    const lat = item.lat ?? item.latitude;
-                                                                    const lng = item.lng ?? item.longitude;
-                                                                    const mentions = item.mention_count ?? 1;
-                                                                    const radius = Math.min(Math.max(8 + Math.sqrt(mentions) * 2, 10), 36);
-                                                                    const hue = Math.max(0, 120 - mentions * 4);
-                                                                    const circleIcon = L.divIcon({
-                                                                        className: '',
-                                                                        html: `<div style="width:${radius*2}px;height:${radius*2}px;border-radius:50%;background:hsl(${hue},80%,50%);border:2px solid white;opacity:0.85;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:bold;color:white;box-shadow:0 1px 4px rgba(0,0,0,0.4)">${mentions > 1 ? mentions : ''}</div>`,
-                                                                        iconSize: [radius * 2, radius * 2],
-                                                                        iconAnchor: [radius, radius],
-                                                                    });
-                                                                    const sampleMsgs: Array<{text: string; date?: string}> = item.sample_messages || [];
-                                                                    return (
-                                                                        <Marker key={idx} position={[lat, lng]} icon={circleIcon}>
-                                                                            <Popup minWidth={260} maxWidth={320}>
-                                                                                <div style={{ fontFamily: 'system-ui, sans-serif' }}>
-                                                                                    <div style={{ fontWeight: 700, fontSize: '0.95rem', marginBottom: 2 }}>
-                                                                                        📍 {item.canonical_name || 'Unknown'}
-                                                                                    </div>
-                                                                                    {item.country && (
-                                                                                        <div style={{ fontSize: '0.75rem', color: '#888', marginBottom: 6 }}>
-                                                                                            🌍 {item.country}
-                                                                                        </div>
-                                                                                    )}
-                                                                                    <div style={{ display: 'inline-block', background: `hsl(${hue},80%,45%)`, color: 'white', borderRadius: 10, padding: '2px 10px', fontSize: '0.72rem', fontWeight: 700, marginBottom: sampleMsgs.length ? 8 : 0 }}>
-                                                                                        {mentions} {mentions === 1 ? 'mention' : 'mentions'}
-                                                                                    </div>
-                                                                                    {sampleMsgs.length > 0 && (
-                                                                                        <div style={{ borderTop: '1px solid #e9ecef', paddingTop: 6 }}>
-                                                                                            <div style={{ fontSize: '0.68rem', color: '#aaa', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 5 }}>
-                                                                                                Recent messages
-                                                                                            </div>
-                                                                                            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 180, overflowY: 'auto' }}>
-                                                                                                {sampleMsgs.map((smsg, mi) => (
-                                                                                                    <div key={mi} style={{ background: '#f8f9fa', borderRadius: 6, padding: '5px 8px', borderLeft: '3px solid #4dabf7' }}>
-                                                                                                        <div style={{ fontSize: '0.76rem', color: '#333', lineHeight: 1.4 }}>
-                                                                                                            {smsg.text && smsg.text.length > 140 ? smsg.text.substring(0, 140) + '…' : (smsg.text || '—')}
-                                                                                                        </div>
-                                                                                                        {smsg.date && (
-                                                                                                            <div style={{ fontSize: '0.65rem', color: '#bbb', marginTop: 3 }}>
-                                                                                                                {new Date(smsg.date).toLocaleDateString('de-DE', { day: '2-digit', month: 'short', year: 'numeric' })}
-                                                                                                            </div>
-                                                                                                        )}
-                                                                                                    </div>
-                                                                                                ))}
-                                                                                            </div>
-                                                                                        </div>
-                                                                                    )}
-                                                                                </div>
-                                                                            </Popup>
-                                                                        </Marker>
-                                                                    );
-                                                                })}
-                                                            </MarkerClusterGroup>
-                                                        </MapContainer>
-                                                    </Box>
+                                                <Box mt="md" style={{ minWidth: 520, width: '100%' }}>
+                                                    <LocationMap points={points} height={400} />
                                                 </Box>
                                             );
                                         })()}
