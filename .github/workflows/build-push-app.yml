@@ -27,7 +27,6 @@ jobs:
             dockerfile: ./frontend/Dockerfile
             build-args: |
               VITE_API_URL=https://aethery.cloud/api
-              VITE_ESRI_API_KEY=${{ secrets.ESRI_API_KEY }}
           - service: backend
             context: .
             dockerfile: ./backend/app/Dockerfile
@@ -67,7 +66,9 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-          build-args: ${{ matrix.build-args }}
+          build-args: |
+            ${{ matrix.build-args }}
+            VITE_ESRI_API_KEY=${{ secrets.ESRI_API_KEY }}
           secrets: |
             GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }}
 
