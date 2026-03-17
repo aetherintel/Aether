@@ -202,7 +202,7 @@ const TelegramScraper: React.FC<TelegramScraperProps> = ({ case_id }) => {
 
   const handleJobControl = async (
     jobId: string,
-    action: 'remove' | 'requeue'
+    action: 'remove' | 'requeue' | 'stop'
   ): Promise<void> => {
     setControlLoading((prev) => ({ ...prev, [jobId]: true }));
 
@@ -210,7 +210,7 @@ const TelegramScraper: React.FC<TelegramScraperProps> = ({ case_id }) => {
       let endpoint = '';
       let method = 'POST';
 
-      if (action === 'remove') {
+      if (action === 'remove' || action === 'stop') {
         endpoint = `${apiUrl}/queue/jobs/${jobId}`;
         method = 'DELETE';
       } else if (action === 'requeue') {
@@ -225,9 +225,10 @@ const TelegramScraper: React.FC<TelegramScraperProps> = ({ case_id }) => {
         throw new Error(error.detail || 'Operation failed');
       }
 
+      const actionLabel = action === 'remove' ? 'removed' : action === 'stop' ? 'stopped' : 'requeued';
       notifications.show({
         title: 'Success',
-        message: `Job ${action === 'remove' ? 'removed' : 'requeued'} successfully`,
+        message: `Job ${actionLabel} successfully`,
         color: 'green',
       });
 
@@ -384,6 +385,10 @@ const TelegramScraper: React.FC<TelegramScraperProps> = ({ case_id }) => {
 
   const canRemoveJob = (status: string): boolean => {
     return ['exited', 'failed', 'pending'].includes(status);
+  };
+
+  const canStopJob = (status: string): boolean => {
+    return ['running', 'started'].includes(status);
   };
 
   const canRequeueJob = (status: string): boolean => {
@@ -561,6 +566,7 @@ const TelegramScraper: React.FC<TelegramScraperProps> = ({ case_id }) => {
           controlLoading={controlLoading}
           onJobControl={handleJobControl}
           canRemoveJob={canRemoveJob}
+          canStopJob={canStopJob}
           canRequeueJob={canRequeueJob}
         />
       )}

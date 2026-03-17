@@ -369,6 +369,7 @@ services:
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      ESRI_API_KEY: ${ESRI_API_KEY}
     volumes:
       - app_geolocation_models:/app/models
     depends_on:

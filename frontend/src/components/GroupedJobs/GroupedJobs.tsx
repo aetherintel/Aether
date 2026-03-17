@@ -15,6 +15,7 @@ import {
   IconActivity,
   IconRefresh,
   IconTrash,
+  IconPlayerStop,
   IconChevronDown,
   IconChevronUp,
   IconBrandTelegram,
@@ -48,8 +49,9 @@ interface ContainerInfo {
 interface GroupedJobsDisplayProps {
   status: ContainerInfo[];
   controlLoading: Record<string, boolean>;
-  onJobControl: (jobId: string, action: 'remove' | 'requeue') => Promise<void>;
+  onJobControl: (jobId: string, action: 'remove' | 'requeue' | 'stop') => Promise<void>;
   canRemoveJob: (status: string) => boolean;
+  canStopJob: (status: string) => boolean;
   canRequeueJob: (status: string) => boolean;
 }
 
@@ -58,6 +60,7 @@ const GroupedJobsDisplay: React.FC<GroupedJobsDisplayProps> = ({
   controlLoading,
   onJobControl,
   canRemoveJob,
+  canStopJob,
   canRequeueJob,
 }) => {
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({
@@ -196,6 +199,19 @@ const GroupedJobsDisplay: React.FC<GroupedJobsDisplayProps> = ({
           </Stack>
 
           <Stack gap="xs" align="flex-end">
+            {canStopJob(container.status) && (
+              <Button
+                size="xs"
+                variant="light"
+                color="red"
+                leftSection={<IconPlayerStop size="0.75rem" />}
+                onClick={() => onJobControl(container.id, 'stop')}
+                loading={isLoading}
+              >
+                Stop
+              </Button>
+            )}
+
             {canRequeueJob(container.status) && (
               <Button
                 size="xs"
@@ -213,19 +229,13 @@ const GroupedJobsDisplay: React.FC<GroupedJobsDisplayProps> = ({
               <Button
                 size="xs"
                 variant="light"
-                color="red"
+                color="gray"
                 leftSection={<IconTrash size="0.75rem" />}
                 onClick={() => onJobControl(container.id, 'remove')}
                 loading={isLoading}
               >
                 Remove
               </Button>
-            )}
-
-            {!canRemoveJob(container.status) && !canRequeueJob(container.status) && (
-              <Badge color="green" variant="dot">
-                Active
-              </Badge>
             )}
           </Stack>
         </Group>
