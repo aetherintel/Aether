@@ -117,7 +117,7 @@ def extract_location_entities(text: str) -> List[Tuple[str, int, int]]:
         return []
     
     # Focused labels for GLiNER
-    labels = ["city", "country", "location", "landmark"]
+    labels = ["city", "country", "location", "landmark", "street", "address", "place", "building"]
     
     try:
         # GLiNER predict_entities
