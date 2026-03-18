@@ -1,8 +1,8 @@
 // src/components/map/LocationMap.tsx
 // Shared map component used by LocationMapWidget (dashboard) and AgentChat.
 import React, { useEffect, useState } from 'react';
-import { Box, Group, Badge, ActionIcon, Tooltip, Loader, Button, MultiSelect } from '@mantine/core';
-import { IconRefresh, IconSettings } from '@tabler/icons-react';
+import { Box, Group, Badge, ActionIcon, Tooltip, Loader, Button, Popover, Checkbox, Stack } from '@mantine/core';
+import { IconRefresh, IconSettings, IconSearch } from '@tabler/icons-react';
 import {
   MapContainer,
   TileLayer,
@@ -80,7 +80,7 @@ export const LocationMap: React.FC<LocationMapProps> = ({
 }) => {
   const [osintData, setOsintData] = useState<OsintData>({});
   const [loadingOsint, setLoadingOsint] = useState(false);
-  const [selectedLayers, setSelectedLayers] = useState<string[]>(Object.keys(OSINT_LABELS));
+  const [selectedLayers, setSelectedLayers] = useState<string[]>(['police', 'military', 'cameras']);
   // Track which coordinate was last loaded so we can show a button for the first point too
   const [osintCenter, setOsintCenter] = useState<{ lat: number; lng: number } | null>(null);
 
@@ -123,17 +123,29 @@ export const LocationMap: React.FC<LocationMapProps> = ({
           {points.length} locations
         </Badge>
 
-        <MultiSelect
-          data={Object.entries(OSINT_LABELS).map(([k, v]) => ({ value: k, label: v }))}
-          value={selectedLayers}
-          onChange={setSelectedLayers}
-          placeholder="POIs auswählen"
-          clearable
-          searchable
-          size="xs"
-          w={220}
-          maxDropdownHeight={300}
-        />
+        <Popover position="bottom-end" withArrow shadow="md" closeOnClickOutside={true}>
+          <Popover.Target>
+            <Tooltip label="POI-Filter konfigurieren" withArrow>
+              <ActionIcon variant="subtle" color="gray" size="md">
+                <IconSettings size={18} />
+              </ActionIcon>
+            </Tooltip>
+          </Popover.Target>
+          <Popover.Dropdown>
+            <Checkbox.Group
+              label="POI-Kategorien"
+              description="Auswahl für den Umfeld-Scan"
+              value={selectedLayers}
+              onChange={setSelectedLayers}
+            >
+              <Stack gap="xs" mt="xs">
+                {Object.entries(OSINT_LABELS).map(([k, v]) => (
+                  <Checkbox key={k} value={k} label={v} size="sm" />
+                ))}
+              </Stack>
+            </Checkbox.Group>
+          </Popover.Dropdown>
+        </Popover>
 
         {firstPoint && (
           <Tooltip label={hasOsint ? 'Umgebungsdaten aktualisieren' : 'Umgebungsdaten laden'} withArrow>
@@ -142,7 +154,7 @@ export const LocationMap: React.FC<LocationMapProps> = ({
               variant="filled"
               color="dark"
               loading={loadingOsint}
-              leftSection={<IconSettings size={13} />}
+              leftSection={<IconSearch size={13} />}
               onClick={() => loadOsintLayers(
                 osintCenter?.lat ?? firstPoint.lat,
                 osintCenter?.lng ?? firstPoint.lng,
