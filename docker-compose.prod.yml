@@ -376,15 +376,10 @@ services:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       ESRI_API_KEY: ${ESRI_API_KEY}
-      GLINER_MODEL_PATH: /app/models/gliner_model
-      GEONAMES_DATA_DIR: /app/models/geonames
-    volumes:
-      - app_geolocation_models:/app/models
     depends_on:
       - redis
       - neo4j
       - backend
-      - geolocation-models
     networks:
       - aether-network
     deploy:

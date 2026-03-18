@@ -260,6 +260,7 @@ jobs:
             export SMTP_PASSWORD="${{ secrets.SMTP_PASSWORD }}"
             export GITHUB_USER="${{ github.actor }}"
             export GITHUB_TOKEN="${{ secrets.GITHUB_TOKEN }}"
+            export ESRI_API_KEY="${{ secrets.ESRI_API_KEY }}"
 
             COMPOSE_CMD="docker compose"
 
@@ -311,6 +312,7 @@ jobs:
               printf 'SMTP_PASSWORD=%s\n'               "${SMTP_PASSWORD}"
               printf 'GITHUB_USER=%s\n'                 "${GITHUB_USER}"
               printf 'GITHUB_TOKEN=%s\n'                "${GITHUB_TOKEN}"
+              printf 'ESRI_API_KEY=%s\n'                "${ESRI_API_KEY}"
             } > ~/app/.env
             chmod 600 ~/app/.env
             echo "✅ .env file written"
