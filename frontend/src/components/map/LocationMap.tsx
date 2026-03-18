@@ -125,11 +125,9 @@ export const LocationMap: React.FC<LocationMapProps> = ({
 
         <Popover position="bottom-end" withArrow shadow="md" closeOnClickOutside={true}>
           <Popover.Target>
-            <Tooltip label="POI-Filter konfigurieren" withArrow>
-              <ActionIcon variant="subtle" color="gray" size="md">
-                <IconSettings size={18} />
-              </ActionIcon>
-            </Tooltip>
+            <ActionIcon variant="subtle" color="gray" size="md" title="POI-Filter konfigurieren">
+              <IconSettings size={18} />
+            </ActionIcon>
           </Popover.Target>
           <Popover.Dropdown>
             <Checkbox.Group
