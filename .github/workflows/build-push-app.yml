@@ -499,7 +499,9 @@ jobs:
             fi
 
             echo "🔌 Ensuring MCP server is running..."
-            $COMPOSE_CMD -f docker-compose.prod.yml up -d --no-recreate mcp-neo4j-cypher-server
+            # Forcibly remove legacy conflicting containers with the same name before recreating
+            docker rm -f mcp-neo4j-cypher-server 2>/dev/null || true
+            $COMPOSE_CMD -f docker-compose.prod.yml up -d --force-recreate mcp-neo4j-cypher-server
 
             # ═══════════════════════════════════════════════════════════════
             # PHASE 7: Cleanup
