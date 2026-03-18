@@ -228,6 +228,12 @@ services:
       MEDIA_ROOT: /shared/media
       REDIS_HOST: redis
       REDIS_PORT: 6379
+      USE_MODAL: ${USE_MODAL:-true}
+      MODAL_TRANSLATION_URL: ${MODAL_TRANSLATION_URL}
+      MODAL_EMOTION_URL: ${MODAL_EMOTION_URL}
+      MODAL_CLASSIFICATION_URL: ${MODAL_CLASSIFICATION_URL}
+      MODAL_TOKEN_ID: ${MODAL_TOKEN_ID}
+      MODAL_TOKEN_SECRET: ${MODAL_TOKEN_SECRET}
     volumes:
       - tg_sessions:/app/sessions
       - ./shared/media:/shared/media
