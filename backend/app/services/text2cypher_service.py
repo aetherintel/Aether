@@ -364,7 +364,9 @@ class Text2CypherService:
             # Strip owner_id values from displayed query to avoid leaking internal IDs
             import re as _re
             display_cypher = _re.sub(r"\b\w+\.owner_id\s*=\s*'[^']*'\s*(AND\s*)?", "", cypher_query).strip()
-            display_cypher = _re.sub(r"\bAND\s+RETURN\b", "RETURN", display_cypher)
+            display_cypher = _re.sub(r"\bAND\s+RETURN\b", "RETURN", display_cypher, flags=_re.IGNORECASE)
+            display_cypher = _re.sub(r"\bWHERE\s+RETURN\b", "RETURN", display_cypher, flags=_re.IGNORECASE)
+            display_cypher = _re.sub(r"\bWHERE\s*$", "", display_cypher, flags=_re.IGNORECASE).strip()
             summary_text = f"**Generated Cypher:**\n`{display_cypher}`"
             
             # If specifically asked to summarize OR using a persona that implies it
@@ -957,7 +959,7 @@ class Text2CypherService:
                 order_by_clause = "" # Empty if we stripped everything
 
         limit_clause = ""
-        if limit_val is not None:
+        if limit_val is not None and str(limit_val).strip():
              limit_str = str(limit_val).strip()
              # If model output "LIMIT 50", don't add "LIMIT" again
              if limit_str.upper().startswith("LIMIT"):
