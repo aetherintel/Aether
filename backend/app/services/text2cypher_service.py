@@ -1002,7 +1002,17 @@ class Text2CypherService:
         # Relationships to hide (deprecated)
         HIDDEN_RELATIONSHIPS = []
 
-        async with sse_client(self.mcp_url, headers={"Host": "localhost"}) as streams:
+        neo4j_user = os.getenv("NEO4J_USER", "neo4j")
+        neo4j_pass = os.getenv("NEO4J_PASSWORD", "")
+        import base64
+        auth_str = f"{neo4j_user}:{neo4j_pass}"
+        auth_b64 = base64.b64encode(auth_str.encode()).decode()
+        headers = {
+            "Host": "localhost",
+            "Authorization": f"Basic {auth_b64}"
+        }
+
+        async with sse_client(self.mcp_url, headers=headers) as streams:
             async with ClientSession(streams[0], streams[1]) as session:
                 await session.initialize()
 
@@ -1099,7 +1109,17 @@ class Text2CypherService:
         
         for attempt in range(max_retries + 1):
             try:
-                async with sse_client(self.mcp_url, headers={"Host": "localhost"}) as streams:
+                neo4j_user = os.getenv("NEO4J_USER", "neo4j")
+                neo4j_pass = os.getenv("NEO4J_PASSWORD", "")
+                import base64
+                auth_str = f"{neo4j_user}:{neo4j_pass}"
+                auth_b64 = base64.b64encode(auth_str.encode()).decode()
+                headers = {
+                    "Host": "localhost",
+                    "Authorization": f"Basic {auth_b64}"
+                }
+
+                async with sse_client(self.mcp_url, headers=headers) as streams:
                     async with ClientSession(streams[0], streams[1]) as session:
                         await session.initialize()
                         

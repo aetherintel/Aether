@@ -5,6 +5,7 @@ on:
     branches: [ "main" ]
   pull_request:
     branches: [ "main" ]
+  workflow_dispatch:
 
 env:
   REGISTRY: ghcr.io
@@ -80,44 +81,76 @@ jobs:
   check-worker-changes:
     runs-on: ubuntu-latest
     outputs:
-      workers_changed: ${{ steps.filter.outputs.workers }}
+      workers_matrix: ${{ steps.set-matrix.outputs.matrix }}
+      has_changes: ${{ steps.set-matrix.outputs.has_changes }}
     steps:
       - uses: actions/checkout@v4
       - uses: dorny/paths-filter@v3
         id: filter
         with:
           filters: |
-            workers:
-              - 'workers/**'
-              - 'docker/**'
+            telegram-scraper:
               - 'telegram_scraper/**'
               - 'aether_lib/**'
+            report-worker:
+              - 'workers/report_worker/**'
+              - 'aether_lib/**'
+            audio-worker:
+              - 'workers/audio_worker/**'
+              - 'aether_lib/**'
+            image-worker:
+              - 'workers/image_worker/**'
+              - 'aether_lib/**'
+            geolocation-worker:
+              - 'workers/geolocation_worker/**'
+              - 'aether_lib/**'
+      - id: set-matrix
+        run: |
+          MATRIX="[]"
+          
+          # Telegram Scraper
+          if [ "${{ steps.filter.outputs.telegram-scraper }}" == "true" ] || [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            MATRIX=$(echo "$MATRIX" | jq '. + [{"service":"telegram-scraper", "context":".", "dockerfile":"./telegram_scraper/Dockerfile"}]')
+          fi
+          
+          # Report Worker
+          if [ "${{ steps.filter.outputs.report-worker }}" == "true" ] || [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            MATRIX=$(echo "$MATRIX" | jq '. + [{"service":"report-worker", "context":".", "dockerfile":"./workers/report_worker/Dockerfile"}]')
+          fi
+          
+          # Audio Worker
+          if [ "${{ steps.filter.outputs.audio-worker }}" == "true" ] || [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            MATRIX=$(echo "$MATRIX" | jq '. + [{"service":"audio-worker", "context":".", "dockerfile":"./workers/audio_worker/Dockerfile"}]')
+          fi
+          
+          # Image Worker
+          if [ "${{ steps.filter.outputs.image-worker }}" == "true" ] || [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            MATRIX=$(echo "$MATRIX" | jq '. + [{"service":"image-worker", "context":".", "dockerfile":"./workers/image_worker/Dockerfile"}]')
+          fi
+          
+          # Geolocation Worker
+          if [ "${{ steps.filter.outputs.geolocation-worker }}" == "true" ] || [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            MATRIX=$(echo "$MATRIX" | jq '. + [{"service":"geolocation-worker", "context":".", "dockerfile":"./workers/geolocation_worker/Dockerfile"}]')
+          fi
+          
+          echo "matrix=$MATRIX" >> $GITHUB_OUTPUT
+          if [ "$MATRIX" == "[]" ]; then
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+          else
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+          fi
 
   build-workers:
     needs: check-worker-changes
-    if: needs.check-worker-changes.outputs.workers_changed == 'true'
+    if: needs.check-worker-changes.outputs.has_changes == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
     strategy:
+      fail-fast: false
       matrix:
-        include:
-          - service: telegram-scraper
-            context: .
-            dockerfile: ./telegram_scraper/Dockerfile
-          - service: report-worker
-            context: .
-            dockerfile: ./workers/report_worker/Dockerfile
-          - service: audio-worker
-            context: .
-            dockerfile: ./workers/audio_worker/Dockerfile
-          - service: image-worker
-            context: .
-            dockerfile: ./workers/image_worker/Dockerfile
-          - service: geolocation-worker
-            context: .
-            dockerfile: ./workers/geolocation_worker/Dockerfile
+        include: ${{ fromJson(needs.check-worker-changes.outputs.workers_matrix) }}
 
     steps:
       - name: 🧾 Checkout repository

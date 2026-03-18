@@ -434,14 +434,6 @@ services:
     volumes:
       - app_image_models:/models
 
-  geolocation-models:
-    build:
-      context: ./models
-      dockerfile: geolocation/Dockerfile
-    image: ghcr.io/${GITHUB_REPOSITORY_OWNER:-aetherintel}/aether-geolocation-models:latest
-    volumes:
-      - app_geolocation_models:/models
-
   llm-models:
     build:
       context: ./models
@@ -464,5 +456,4 @@ volumes:
   app_audio_models:
   app_image_models:
     name: app_image_models
-  app_geolocation_models:
   app_llm_models:

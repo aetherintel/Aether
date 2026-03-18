@@ -71,4 +71,5 @@ EOF
 ENV PYTHONPATH=/app:/app/shared_libs \
     PYTHONUNBUFFERED=1 \
     GEONAMES_DATA_DIR=/app/models/geolocation/geonames \
+    GLINER_MODEL_PATH=/app/models/geolocation/gliner_model \
     PHOTON_URL=http://photon:2322
