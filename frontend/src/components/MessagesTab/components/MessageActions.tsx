@@ -84,7 +84,7 @@ export const MessageActions: React.FC<MessageActionsProps> = ({
 
   const showGeo =
     hasAnalysisText &&
-    !['completed', 'no_location', 'no_coordinates', 'failed'].includes(message.geolocation_status);
+    message.geolocation_status !== 'pending';
 
   if (!showTranslate && !showOcr && !showClassify && !showEmotion && !showGeo) return null;
 
