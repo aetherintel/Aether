@@ -79,8 +79,8 @@ async def get_channel_locations_data(channel_id: str, owner_id: str | None, limi
         query = """
         MATCH (ch:Channel)-[:HAS_MESSAGE]->(m:Message)-[:MENTIONS_LOCATION]->(l:Location)
         WHERE toLower(ch.channel_id) = toLower($channel_id) AND ($ownerId IS NULL OR m.owner_id = $ownerId) AND l.location IS NOT NULL
-        RETURN m.id as message_id, l.location as location, l.canonical_name as canonical_name, l.latitude as latitude,
-               l.longitude as longitude, l.country as country, l.mention_count as mention_count, m.text as text
+        RETURN m.id as message_id, l.location as location, l['canonical_name'] as canonical_name, l['latitude'] as latitude,
+               l['longitude'] as longitude, l['country'] as country, l['mention_count'] as mention_count, coalesce(m.translated_text, m.original_text, m['text'], '') as text
         LIMIT $limit
         """
         result = await session.run(query, {"channel_id": str(channel_id), "ownerId": owner_id, "limit": limit})
