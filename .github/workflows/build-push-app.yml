@@ -110,27 +110,27 @@ jobs:
           
           # Telegram Scraper
           if [ "${{ steps.filter.outputs.telegram-scraper }}" == "true" ] || [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
-            MATRIX=$(echo "$MATRIX" | jq '. + [{"service":"telegram-scraper", "context":".", "dockerfile":"./telegram_scraper/Dockerfile"}]')
+            MATRIX=$(echo "$MATRIX" | jq -c '. + [{"service":"telegram-scraper", "context":".", "dockerfile":"./telegram_scraper/Dockerfile"}]')
           fi
           
           # Report Worker
           if [ "${{ steps.filter.outputs.report-worker }}" == "true" ] || [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
-            MATRIX=$(echo "$MATRIX" | jq '. + [{"service":"report-worker", "context":".", "dockerfile":"./workers/report_worker/Dockerfile"}]')
+            MATRIX=$(echo "$MATRIX" | jq -c '. + [{"service":"report-worker", "context":".", "dockerfile":"./workers/report_worker/Dockerfile"}]')
           fi
           
           # Audio Worker
           if [ "${{ steps.filter.outputs.audio-worker }}" == "true" ] || [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
-            MATRIX=$(echo "$MATRIX" | jq '. + [{"service":"audio-worker", "context":".", "dockerfile":"./workers/audio_worker/Dockerfile"}]')
+            MATRIX=$(echo "$MATRIX" | jq -c '. + [{"service":"audio-worker", "context":".", "dockerfile":"./workers/audio_worker/Dockerfile"}]')
           fi
           
           # Image Worker
           if [ "${{ steps.filter.outputs.image-worker }}" == "true" ] || [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
-            MATRIX=$(echo "$MATRIX" | jq '. + [{"service":"image-worker", "context":".", "dockerfile":"./workers/image_worker/Dockerfile"}]')
+            MATRIX=$(echo "$MATRIX" | jq -c '. + [{"service":"image-worker", "context":".", "dockerfile":"./workers/image_worker/Dockerfile"}]')
           fi
           
           # Geolocation Worker
           if [ "${{ steps.filter.outputs.geolocation-worker }}" == "true" ] || [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
-            MATRIX=$(echo "$MATRIX" | jq '. + [{"service":"geolocation-worker", "context":".", "dockerfile":"./workers/geolocation_worker/Dockerfile"}]')
+            MATRIX=$(echo "$MATRIX" | jq -c '. + [{"service":"geolocation-worker", "context":".", "dockerfile":"./workers/geolocation_worker/Dockerfile"}]')
           fi
           
           echo "matrix=$MATRIX" >> $GITHUB_OUTPUT
