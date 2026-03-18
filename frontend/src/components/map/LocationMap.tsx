@@ -1,7 +1,7 @@
 // src/components/map/LocationMap.tsx
 // Shared map component used by LocationMapWidget (dashboard) and AgentChat.
 import React, { useEffect, useState } from 'react';
-import { Box, Group, Badge, ActionIcon, Tooltip, Loader, Button } from '@mantine/core';
+import { Box, Group, Badge, ActionIcon, Tooltip, Loader, Button, MultiSelect } from '@mantine/core';
 import { IconRefresh, IconSettings } from '@tabler/icons-react';
 import {
   MapContainer,
@@ -80,6 +80,7 @@ export const LocationMap: React.FC<LocationMapProps> = ({
 }) => {
   const [osintData, setOsintData] = useState<OsintData>({});
   const [loadingOsint, setLoadingOsint] = useState(false);
+  const [selectedLayers, setSelectedLayers] = useState<string[]>(Object.keys(OSINT_LABELS));
   // Track which coordinate was last loaded so we can show a button for the first point too
   const [osintCenter, setOsintCenter] = useState<{ lat: number; lng: number } | null>(null);
 
@@ -89,7 +90,7 @@ export const LocationMap: React.FC<LocationMapProps> = ({
     try {
       const res = await authFetch(
         `${apiUrl}/geo/osint-layers?lat=${lat}&lng=${lng}&radius=500` +
-        `&layers=cameras,atm,bank,police,military,power,water,alpr`,
+        `&layers=${selectedLayers.length > 0 ? selectedLayers.join(',') : 'none'}`,
       );
       const data: OsintData = await res.json();
       console.log('[OSINT] received:', JSON.stringify(Object.fromEntries(Object.entries(data).map(([k,v]) => [k, v.length]))));
@@ -122,8 +123,20 @@ export const LocationMap: React.FC<LocationMapProps> = ({
           {points.length} locations
         </Badge>
 
+        <MultiSelect
+          data={Object.entries(OSINT_LABELS).map(([k, v]) => ({ value: k, label: v }))}
+          value={selectedLayers}
+          onChange={setSelectedLayers}
+          placeholder="POIs auswählen"
+          clearable
+          searchable
+          size="xs"
+          w={220}
+          maxDropdownHeight={300}
+        />
+
         {firstPoint && (
-          <Tooltip label={hasOsint ? 'OSINT aktualisieren' : 'OSINT Layer laden'} withArrow>
+          <Tooltip label={hasOsint ? 'Umgebungsdaten aktualisieren' : 'Umgebungsdaten laden'} withArrow>
             <Button
               size="xs"
               variant="filled"
@@ -135,7 +148,7 @@ export const LocationMap: React.FC<LocationMapProps> = ({
                 osintCenter?.lng ?? firstPoint.lng,
               )}
             >
-              OSINT
+              Umfeld-Scan
             </Button>
           </Tooltip>
         )}
@@ -248,7 +261,7 @@ export const LocationMap: React.FC<LocationMapProps> = ({
                       {mentions} {mentions === 1 ? 'mention' : 'mentions'}
                     </div>
                     <div style={{ fontSize: '0.68rem', color: '#aaa', marginTop: 4 }}>
-                      ↓ Klicken um OSINT-Layer zu laden
+                      ↓ Klicken um Umgebungsdaten zu laden
                     </div>
                     {sampleMsgs.length > 0 && (
                       <div style={{ borderTop: '1px solid #e9ecef', paddingTop: 6, marginTop: 6 }}>
