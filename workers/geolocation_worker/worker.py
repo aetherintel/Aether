@@ -47,9 +47,13 @@ def get_gliner_model():
     global _gliner_model
     if _gliner_model is None:
         try:
-            logger.info(f"🚀 Loading GLiNER model from {GLINER_MODEL_PATH}...")
-            # Load from local path, ensure map_location is set for CPU if needed
-            _gliner_model = GLiNER.from_pretrained(GLINER_MODEL_PATH, local_files_only=True)
+            from pathlib import Path
+            model_path = Path(GLINER_MODEL_PATH)
+            if not model_path.exists():
+                raise FileNotFoundError(f"Model directory not found: {GLINER_MODEL_PATH}")
+            logger.info(f"🚀 Loading GLiNER model from {model_path}...")
+            # Pass as Path object — avoids HuggingFace repo ID format validation
+            _gliner_model = GLiNER.from_pretrained(model_path, local_files_only=True)
             logger.info("✅ GLiNER model loaded")
         except Exception as e:
             logger.error(f"❌ Failed to load GLiNER model: {e}")
