@@ -1,0 +1,13 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+RUN pip install --no-cache-dir httpx neo4j redis rq pydantic
+
+COPY aether_lib /app/aether_lib
+COPY workers/translation_worker/modal_worker.py ./workers/translation_worker/modal_worker.py
+
+RUN touch /app/workers/__init__.py /app/workers/translation_worker/__init__.py
+
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONPATH=/app:/app/workers

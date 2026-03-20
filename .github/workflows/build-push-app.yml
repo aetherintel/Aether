@@ -75,8 +75,6 @@ jobs:
 
   # ============================================================
   # WORKER SERVICES — only build when worker files change
-  # translation-worker, emotion-worker, classification-worker,
-  # llm-service run on Modal.com and are NOT built here.
   # ============================================================
   check-worker-changes:
     runs-on: ubuntu-latest
@@ -104,33 +102,62 @@ jobs:
             geolocation-worker:
               - 'workers/geolocation_worker/**'
               - 'aether_lib/**'
+            translation-worker-modal:
+              - 'workers/translation_worker/modal_worker.py'
+              - 'workers/translation_worker/Dockerfile.modal'
+              - 'aether_lib/**'
+            emotion-worker-modal:
+              - 'workers/emotion_worker/modal_worker.py'
+              - 'workers/emotion_worker/neo4j_utils.py'
+              - 'workers/emotion_worker/Dockerfile.modal'
+              - 'aether_lib/**'
+            classification-worker-modal:
+              - 'workers/classification_worker/modal_worker.py'
+              - 'workers/classification_worker/neo4j_utils.py'
+              - 'workers/classification_worker/Dockerfile.modal'
+              - 'aether_lib/**'
       - id: set-matrix
         run: |
           MATRIX="[]"
-          
+
           # Telegram Scraper
           if [ "${{ steps.filter.outputs.telegram-scraper }}" == "true" ] || [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
             MATRIX=$(echo "$MATRIX" | jq -c '. + [{"service":"telegram-scraper", "context":".", "dockerfile":"./telegram_scraper/Dockerfile"}]')
           fi
-          
+
           # Report Worker
           if [ "${{ steps.filter.outputs.report-worker }}" == "true" ] || [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
             MATRIX=$(echo "$MATRIX" | jq -c '. + [{"service":"report-worker", "context":".", "dockerfile":"./workers/report_worker/Dockerfile"}]')
           fi
-          
+
           # Audio Worker
           if [ "${{ steps.filter.outputs.audio-worker }}" == "true" ] || [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
             MATRIX=$(echo "$MATRIX" | jq -c '. + [{"service":"audio-worker", "context":".", "dockerfile":"./workers/audio_worker/Dockerfile"}]')
           fi
-          
+
           # Image Worker
           if [ "${{ steps.filter.outputs.image-worker }}" == "true" ] || [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
             MATRIX=$(echo "$MATRIX" | jq -c '. + [{"service":"image-worker", "context":".", "dockerfile":"./workers/image_worker/Dockerfile"}]')
           fi
-          
+
           # Geolocation Worker
           if [ "${{ steps.filter.outputs.geolocation-worker }}" == "true" ] || [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
             MATRIX=$(echo "$MATRIX" | jq -c '. + [{"service":"geolocation-worker", "context":".", "dockerfile":"./workers/geolocation_worker/Dockerfile"}]')
+          fi
+
+          # Translation Worker (Modal)
+          if [ "${{ steps.filter.outputs.translation-worker-modal }}" == "true" ] || [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            MATRIX=$(echo "$MATRIX" | jq -c '. + [{"service":"translation-worker-modal", "context":".", "dockerfile":"./workers/translation_worker/Dockerfile.modal"}]')
+          fi
+
+          # Emotion Worker (Modal)
+          if [ "${{ steps.filter.outputs.emotion-worker-modal }}" == "true" ] || [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            MATRIX=$(echo "$MATRIX" | jq -c '. + [{"service":"emotion-worker-modal", "context":".", "dockerfile":"./workers/emotion_worker/Dockerfile.modal"}]')
+          fi
+
+          # Classification Worker (Modal)
+          if [ "${{ steps.filter.outputs.classification-worker-modal }}" == "true" ] || [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            MATRIX=$(echo "$MATRIX" | jq -c '. + [{"service":"classification-worker-modal", "context":".", "dockerfile":"./workers/classification_worker/Dockerfile.modal"}]')
           fi
           
           echo "matrix=$MATRIX" >> $GITHUB_OUTPUT
@@ -372,6 +399,7 @@ jobs:
               telegram-worker report-worker \
               image-worker audio-worker \
               geolocation-worker \
+              translation-worker emotion-worker classification-worker \
               mcp-neo4j-cypher-server
 
             # ═══════════════════════════════════════════════════════════════
@@ -474,8 +502,7 @@ jobs:
             # PHASE 6: Workers
             # --no-recreate: start if not running, leave alone if already up.
             # Workers are only force-recreated when their images were rebuilt
-            # (i.e. when build-workers ran). translation/emotion/classification
-            # run on Modal.com and are NOT started here.
+            # (i.e. when build-workers ran).
             # ═══════════════════════════════════════════════════════════════
             echo "👷 Ensuring workers are running..."
             if [ "${{ needs.build-workers.result }}" = "success" ]; then
@@ -485,17 +512,25 @@ jobs:
               $COMPOSE_CMD -f docker-compose.prod.yml up -d \
                 --scale telegram-worker=3 \
                 --scale geolocation-worker=2 \
+                --scale translation-worker=2 \
+                --scale emotion-worker=2 \
+                --scale classification-worker=2 \
                 --force-recreate --no-build \
                 telegram-worker audio-worker \
-                image-worker geolocation-worker report-worker
+                image-worker geolocation-worker report-worker \
+                translation-worker emotion-worker classification-worker
             else
               echo "  Workers unchanged — starting any that are not yet running..."
               $COMPOSE_CMD -f docker-compose.prod.yml up -d \
                 --scale telegram-worker=3 \
                 --scale geolocation-worker=2 \
+                --scale translation-worker=2 \
+                --scale emotion-worker=2 \
+                --scale classification-worker=2 \
                 --no-recreate --no-build \
                 telegram-worker audio-worker \
-                image-worker geolocation-worker report-worker
+                image-worker geolocation-worker report-worker \
+                translation-worker emotion-worker classification-worker
             fi
 
             echo "🔌 Ensuring MCP server is running..."
