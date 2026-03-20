@@ -283,7 +283,7 @@ async def test_modal_emotion(
 
     try:
         resp = await queue_service._modal_client.post(
-            f"{queue_service.modal_emotion_url}/classify",
+            f"{queue_service.modal_emotion_url}",
             json={"text": "Das ist eine sehr wütende Nachricht!", "threshold": 0.3, "top_k": 3},
         )
         resp.raise_for_status()

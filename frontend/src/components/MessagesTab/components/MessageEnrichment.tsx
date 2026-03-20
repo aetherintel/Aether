@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import {
-  ActionIcon,
   Badge,
   Box,
   Collapse,
@@ -106,31 +105,26 @@ export const MessageEnrichment: React.FC<MessageEnrichmentProps> = ({
   return (
     <Box mt={4}>
       {/* Summary row — always visible */}
-      <Group gap={4} style={{ cursor: 'pointer' }} onClick={toggle}>
-        {hasEmotions && (
-          <Tooltip label="Emotions analysiert">
-            <Badge size="xs" variant="dot" color="pink" leftSection={<IconMoodSmile size={10} />}>
-              Emotion
-            </Badge>
-          </Tooltip>
-        )}
-        {hasClassifications && (
-          <Tooltip label="Klassifiziert">
-            <Badge size="xs" variant="dot" color="violet" leftSection={<IconTag size={10} />}>
-              Klassifikation
-            </Badge>
-          </Tooltip>
-        )}
-        {hasLocation && (
-          <Tooltip label="Orte erkannt">
-            <Badge size="xs" variant="dot" color="teal" leftSection={<IconMapPin size={10} />}>
-              Geo
-            </Badge>
-          </Tooltip>
-        )}
-        <ActionIcon size="xs" variant="subtle" color="gray">
-          {open ? <IconChevronDown size={12} /> : <IconChevronRight size={12} />}
-        </ActionIcon>
+      <Group
+        gap={4}
+        onClick={toggle}
+        style={{
+          cursor: 'pointer',
+          display: 'inline-flex',
+          alignItems: 'center',
+          padding: '2px 6px',
+          borderRadius: 'var(--mantine-radius-sm)',
+          border: '1px solid var(--mantine-color-gray-3)',
+          color: 'var(--mantine-color-dimmed)',
+          fontSize: 'var(--mantine-font-size-xs)',
+          userSelect: 'none',
+        }}
+      >
+        {hasEmotions && <IconMoodSmile size={11} color="var(--mantine-color-pink-5)" />}
+        {hasClassifications && <IconTag size={11} color="var(--mantine-color-violet-5)" />}
+        {hasLocation && <IconMapPin size={11} color="var(--mantine-color-teal-5)" />}
+        <Text size="xs" c="dimmed" style={{ lineHeight: 1 }}>Mehr Informationen</Text>
+        {open ? <IconChevronDown size={11} /> : <IconChevronRight size={11} />}
       </Group>
 
       {/* Expanded detail panel */}
