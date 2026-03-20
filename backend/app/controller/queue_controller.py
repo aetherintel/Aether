@@ -185,7 +185,7 @@ def enqueue_emotion_analysis(
 # ============================================================================
 
 @router.post("/classification")
-def enqueue_classification(
+async def enqueue_classification(
     payload: ClassificationJobPayload,
     user: UserCtx = Depends(user_ctx),
 ):
