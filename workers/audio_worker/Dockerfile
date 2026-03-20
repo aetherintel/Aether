@@ -7,8 +7,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
+# Heavy deps first — cached unless explicitly changed
+RUN pip install --no-cache-dir torch torchaudio --index-url https://download.pytorch.org/whl/cpu
+RUN pip install --no-cache-dir openai-whisper
+
 COPY workers/audio_worker/requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt openai-whisper
+RUN pip install --no-cache-dir -r requirements.txt
 
 COPY aether_lib /app/aether_lib
 COPY workers/audio_worker/ /app/workers/audio_worker
