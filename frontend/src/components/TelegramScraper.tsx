@@ -3,18 +3,13 @@ import {
   IconActivity,
   IconExclamationCircle,
   IconPlayerPlay,
-  IconRefresh,
-  IconTrash,
   IconPhoto,
   IconVolume,
-  IconLanguage,
   IconMoodSmile,
 } from '@tabler/icons-react';
 import {
   Alert,
-  Badge,
   Button,
-  Card,
   Container,
   Group,
   Loader,
@@ -31,7 +26,6 @@ import {
 } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
 import { authFetch } from '@/utils/authFetch';
-import GroupedJobs from './GroupedJobs/GroupedJobs';
 
 const apiUrl = import.meta.env.VITE_API_URL;
 
@@ -50,70 +44,16 @@ interface TelegramSession {
   user?: UserInfo;
 }
 
-interface ContainerInfo {
-  id: string;
-  name: string;
-  image: string;
-  status: string;
-  labels: {
-    queue?: string;
-    channels?: string;
-    mode?: string;
-    case_id?: string;
-  };
-  queue?: string;
-  channels?: string;
-  mode?: string;
-  case_id?: string | number;
-  session?: string;
-  runtime?: string;
-  created?: string;
-}
-
 interface TelegramScraperProps {
   case_id?: number;
 }
 
 type ScraperMode = 'full' | 'live';
 
-const mapJobStatus = (status: string): string => {
-  const statusMap: Record<string, string> = {
-    queued: 'pending',
-    pending: 'pending',
-    started: 'running',
-    running: 'running',
-    finished: 'exited',
-    exited: 'exited',
-    failed: 'failed',
-  };
-  return statusMap[status] || status;
-};
-
-const getStatusColor = (status: string): string => {
-  switch (status) {
-    case 'running':
-    case 'started':
-      return 'green';
-    case 'pending':
-    case 'queued':
-      return 'yellow';
-    case 'exited':
-    case 'finished':
-      return 'gray';
-    case 'failed':
-      return 'red';
-    default:
-      return 'blue';
-  }
-};
-
 const TelegramScraper: React.FC<TelegramScraperProps> = ({ case_id }) => {
-  const [sessions, setSessions] = useState<TelegramSession[]>([]);
   const [activeSessions, setActiveSessions] = useState<TelegramSession[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [submitting, setSubmitting] = useState<boolean>(false);
-  const [status, setStatus] = useState<ContainerInfo[]>([]);
-  const [controlLoading, setControlLoading] = useState<Record<string, boolean>>({});
 
   // Form state
   const [channel, setChannel] = useState<string>('');
@@ -132,13 +72,6 @@ const TelegramScraper: React.FC<TelegramScraperProps> = ({ case_id }) => {
 
   useEffect(() => {
     fetchSessions();
-    fetchStatus();
-
-    const interval = setInterval(() => {
-      fetchStatus();
-    }, 10000);
-
-    return () => clearInterval(interval);
   }, [case_id]);
 
   const fetchSessions = async (): Promise<void> => {
@@ -150,8 +83,6 @@ const TelegramScraper: React.FC<TelegramScraperProps> = ({ case_id }) => {
       }
 
       const data = await response.json();
-      setSessions(data.sessions || []);
-
       const active = data.sessions?.filter((s: TelegramSession) => s.active) || [];
       setActiveSessions(active);
 
@@ -167,80 +98,6 @@ const TelegramScraper: React.FC<TelegramScraperProps> = ({ case_id }) => {
       });
     } finally {
       setLoading(false);
-    }
-  };
-
-  const fetchStatus = async (): Promise<void> => {
-    try {
-      const url = new URL(`${apiUrl}/queue/jobs`);
-      if (case_id) {
-        url.searchParams.append('case_id', case_id.toString());
-      }
-
-      const response = await authFetch(url.toString(), {
-        method: 'GET',
-        headers: { 'Content-Type': 'application/json' },
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to fetch status');
-      }
-
-      const data = await response.json();
-      // Handle both old (data.containers) and new (data.jobs) response formats
-      const jobsArray = data.jobs || data.containers || [];
-      const mappedContainers = jobsArray.map((job: any) => ({
-        ...job,
-        status: mapJobStatus(job.status),
-      }));
-
-      setStatus(mappedContainers);
-    } catch (error) {
-      console.error('Error fetching status:', error);
-    }
-  };
-
-  const handleJobControl = async (
-    jobId: string,
-    action: 'remove' | 'requeue' | 'stop'
-  ): Promise<void> => {
-    setControlLoading((prev) => ({ ...prev, [jobId]: true }));
-
-    try {
-      let endpoint = '';
-      let method = 'POST';
-
-      if (action === 'remove' || action === 'stop') {
-        endpoint = `${apiUrl}/queue/jobs/${jobId}`;
-        method = 'DELETE';
-      } else if (action === 'requeue') {
-        endpoint = `${apiUrl}/queue/jobs/${jobId}/requeue`;
-        method = 'POST';
-      }
-
-      const response = await authFetch(endpoint, { method });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.detail || 'Operation failed');
-      }
-
-      const actionLabel = action === 'remove' ? 'removed' : action === 'stop' ? 'stopped' : 'requeued';
-      notifications.show({
-        title: 'Success',
-        message: `Job ${actionLabel} successfully`,
-        color: 'green',
-      });
-
-      await fetchStatus();
-    } catch (error: any) {
-      notifications.show({
-        title: 'Error',
-        message: error.message || `Failed to ${action} job`,
-        color: 'red',
-      });
-    } finally {
-      setControlLoading((prev) => ({ ...prev, [jobId]: false }));
     }
   };
 
@@ -354,7 +211,6 @@ const TelegramScraper: React.FC<TelegramScraperProps> = ({ case_id }) => {
       }
 
       setChannel('');
-      setTimeout(fetchStatus, 1000);
     } catch (error: any) {
       notifications.show({
         title: 'Error',
@@ -375,24 +231,6 @@ const TelegramScraper: React.FC<TelegramScraperProps> = ({ case_id }) => {
         label: `${session.name} (${name})`,
       };
     });
-  };
-
-  const getUserDisplayName = (session: TelegramSession): string => {
-    const user = session.user || session.user_info;
-    if (!user) return 'Unknown User';
-    return `${user.first_name} ${user.last_name}`.trim();
-  };
-
-  const canRemoveJob = (status: string): boolean => {
-    return ['exited', 'failed', 'pending'].includes(status);
-  };
-
-  const canStopJob = (status: string): boolean => {
-    return ['running', 'started'].includes(status);
-  };
-
-  const canRequeueJob = (status: string): boolean => {
-    return status === 'failed';
   };
 
   if (loading) {
@@ -560,39 +398,6 @@ const TelegramScraper: React.FC<TelegramScraperProps> = ({ case_id }) => {
         </Stack>
       </Paper>
 
-      {status.length > 0 && (
-        <GroupedJobs
-          status={status}
-          controlLoading={controlLoading}
-          onJobControl={handleJobControl}
-          canRemoveJob={canRemoveJob}
-          canStopJob={canStopJob}
-          canRequeueJob={canRequeueJob}
-        />
-      )}
-
-      {sessions.length > 0 && (
-        <Paper p="lg" withBorder>
-          <Stack gap="md">
-            <Title order={3}>Available Sessions</Title>
-            <Stack gap="sm">
-              {sessions.map((session, index) => (
-                <Group key={index} justify="space-between">
-                  <Stack gap="xs">
-                    <Text fw={500}>{session.name}</Text>
-                    <Text size="sm" c="dimmed">
-                      {getUserDisplayName(session)}
-                    </Text>
-                  </Stack>
-                  <Badge color={session.active ? 'green' : 'gray'} variant="light">
-                    {session.active ? 'Active' : 'Inactive'}
-                  </Badge>
-                </Group>
-              ))}
-            </Stack>
-          </Stack>
-        </Paper>
-      )}
     </Stack>
   );
 };

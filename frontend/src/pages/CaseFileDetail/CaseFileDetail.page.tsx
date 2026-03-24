@@ -1,13 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useSSE } from '@/hooks/useSSE';
-import { IconEye, IconInfoCircle, IconMessage, IconUsersGroup, IconFileAnalytics } from '@tabler/icons-react';
+import { IconActivity, IconEye, IconInfoCircle, IconMessage, IconUsersGroup, IconFileAnalytics } from '@tabler/icons-react';
 import { useLocation, useParams } from 'react-router-dom';
-import { Badge, Card, Grid, Group, Loader, Stack, Tabs, Text, Title } from '@mantine/core';
+import { Badge, Button, Card, Drawer, Grid, Group, Indicator, Loader, Stack, Tabs, Text, Title } from '@mantine/core';
 import BreadcrumbsBar from '@/components/BreadcrumbsBar/BreadcrumbsBar';
 import ChannelsTab from '@/components/ChannelsTab';
 import { AgentChat } from '@/components/Agent/AgentChat';
 import MessagesTab from '@/components/MessagesTab/MessagesTab';
 import TgChannelsCheckboxList from '@/components/TgChannelsCheckboxList';
+import GroupedJobs from '@/components/GroupedJobs/GroupedJobs';
+import TelegramScraper from '@/components/TelegramScraper';
+import { notifications } from '@mantine/notifications';
 import { authFetch } from '@/utils/authFetch';
 import type {
   Channel,
@@ -19,6 +22,39 @@ import classes from './CaseFileDetail.module.css';
 
 const apiUrl = import.meta.env.VITE_API_URL;
 type ExpandedChannels = Record<string, string[]>;
+
+interface ContainerInfo {
+  id: string;
+  name: string;
+  image: string;
+  status: string;
+  labels?: {
+    queue?: string;
+    channels?: string;
+    mode?: string;
+    case_id?: string;
+  };
+  queue?: string;
+  channels?: string;
+  mode?: string;
+  case_id?: string | number;
+  session?: string;
+  runtime?: string;
+  created?: string;
+}
+
+const mapJobStatus = (status: string): string => {
+  const statusMap: Record<string, string> = {
+    queued: 'pending',
+    pending: 'pending',
+    started: 'running',
+    running: 'running',
+    finished: 'exited',
+    exited: 'exited',
+    failed: 'failed',
+  };
+  return statusMap[status] || status;
+};
 
 export function CaseFileDetail() {
   const { id } = useParams<{ id: string }>();
@@ -39,6 +75,53 @@ export function CaseFileDetail() {
   const [tgChannels, setTgChannels] = useState<any>([]);
   const [selectedTgChannelIds, setSelectedTgChannelIds] = useState<string[]>([]);
   const caseChannelsRef = useRef<string[]>([]);
+
+  const [jobStatus, setJobStatus] = useState<ContainerInfo[]>([]);
+  const [controlLoading, setControlLoading] = useState<Record<string, boolean>>({});
+  const [jobsDrawerOpen, setJobsDrawerOpen] = useState(false);
+  const [scraperDrawerOpen, setScraperDrawerOpen] = useState(false);
+
+  const fetchJobStatus = useCallback(async () => {
+    try {
+      const base = apiUrl ?? 'http://localhost:8000/api';
+      const url = new URL(`${base}/queue/jobs`);
+      if (id) url.searchParams.append('case_id', id);
+      const response = await authFetch(url.toString());
+      if (!response.ok) return;
+      const data = await response.json();
+      const jobsArray = data.jobs || data.containers || [];
+      setJobStatus(jobsArray.map((job: any) => ({ ...job, status: mapJobStatus(job.status) })));
+    } catch (error) {
+      console.error('Error fetching job status:', error);
+    }
+  }, [id]);
+
+  const handleJobControl = async (jobId: string, action: 'remove' | 'requeue' | 'stop'): Promise<void> => {
+    const base = apiUrl ?? 'http://localhost:8000/api';
+    setControlLoading((prev) => ({ ...prev, [jobId]: true }));
+    try {
+      const endpoint = action === 'requeue'
+        ? `${base}/queue/jobs/${jobId}/requeue`
+        : `${base}/queue/jobs/${jobId}`;
+      const method = action === 'requeue' ? 'POST' : 'DELETE';
+      const response = await authFetch(endpoint, { method });
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.detail || 'Operation failed');
+      }
+      const actionLabel = action === 'remove' ? 'removed' : action === 'stop' ? 'stopped' : 'requeued';
+      notifications.show({ title: 'Success', message: `Job ${actionLabel} successfully`, color: 'green' });
+      await fetchJobStatus();
+    } catch (error: any) {
+      notifications.show({ title: 'Error', message: error.message || `Failed to ${action} job`, color: 'red' });
+    } finally {
+      setControlLoading((prev) => ({ ...prev, [jobId]: false }));
+    }
+  };
+
+  const canRemoveJob = (status: string) => ['exited', 'failed', 'pending'].includes(status);
+  const canStopJob = (status: string) => ['running', 'started'].includes(status);
+  const canRequeueJob = (status: string) => status === 'failed';
 
   const refreshChannels = useCallback(async (initialChannels: string[]) => {
     if (initialChannels.length === 0) {
@@ -90,6 +173,12 @@ export function CaseFileDetail() {
       refreshChannels(caseChannelsRef.current);
     }
   }, [refreshChannels]));
+
+  useEffect(() => {
+    fetchJobStatus();
+    const interval = setInterval(fetchJobStatus, 10000);
+    return () => clearInterval(interval);
+  }, [fetchJobStatus]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -211,7 +300,7 @@ export function CaseFileDetail() {
                     Channels
                   </Tabs.Tab>
                   <Tabs.Tab value="visuals" leftSection={<IconEye size={16} />}>
-                    Graph
+                    AgentChat
                   </Tabs.Tab>
                   <Tabs.Tab value="downloads" leftSection={<IconFileAnalytics size={16} />}>
                     Downloads
@@ -219,7 +308,59 @@ export function CaseFileDetail() {
                   <Tabs.Tab value="details" leftSection={<IconInfoCircle size={16} />}>
                     Details
                   </Tabs.Tab>
+                  <Group ml="auto" align="center" gap="xs" pr="xs">
+                    <Button
+                      size="xs"
+                      variant="light"
+                      leftSection={<IconUsersGroup size={14} />}
+                      onClick={() => setScraperDrawerOpen(true)}
+                    >
+                      Scrape
+                    </Button>
+                    <Indicator
+                      disabled={!jobStatus.some(j => j.status === 'running')}
+                      color="green"
+                      size={8}
+                      processing
+                    >
+                      <Button
+                        size="xs"
+                        variant="light"
+                        leftSection={<IconActivity size={14} />}
+                        onClick={() => setJobsDrawerOpen(true)}
+                      >
+                        Jobs
+                      </Button>
+                    </Indicator>
+                  </Group>
                 </Tabs.List>
+
+                <Drawer
+                  opened={jobsDrawerOpen}
+                  onClose={() => setJobsDrawerOpen(false)}
+                  title="Jobs"
+                  position="right"
+                  size="lg"
+                >
+                  <GroupedJobs
+                    status={jobStatus}
+                    controlLoading={controlLoading}
+                    onJobControl={handleJobControl}
+                    canRemoveJob={canRemoveJob}
+                    canStopJob={canStopJob}
+                    canRequeueJob={canRequeueJob}
+                  />
+                </Drawer>
+
+                <Drawer
+                  opened={scraperDrawerOpen}
+                  onClose={() => setScraperDrawerOpen(false)}
+                  title="Start Scraper"
+                  position="right"
+                  size="lg"
+                >
+                  <TelegramScraper case_id={Number(id)} />
+                </Drawer>
 
                 <Tabs.Panel value="messages" mt="md">
                   <MessagesTab

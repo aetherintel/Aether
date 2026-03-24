@@ -7,6 +7,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
+# Heavy deps first — cached unless explicitly changed
+RUN pip install --no-cache-dir torch==2.1.2 torchvision==0.16.2 --index-url https://download.pytorch.org/whl/cpu
+RUN pip install --no-cache-dir easyocr==1.7.2
+
 COPY workers/image_worker/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
