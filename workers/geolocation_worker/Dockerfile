@@ -7,6 +7,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
+# Heavy deps first — cached unless explicitly changed
+RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu
+RUN pip install --no-cache-dir gliner
+
 COPY workers/geolocation_worker/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 

@@ -11,7 +11,7 @@ async def get_channel_list(owner_id: str | None, usernames: List[str] | None = N
           AND ($usernames IS NULL OR size($usernames) = 0 OR toLower(ch.username) IN usernames_lower OR toLower(ch.channel_id) IN usernames_lower)
         OPTIONAL MATCH (ch)-[:HAS_MESSAGE]->(m:Message)
         WHERE ($ownerId IS NULL OR m.owner_id = $ownerId) AND m.date IS NOT NULL AND (m.original_text IS NOT NULL OR m.text IS NOT NULL)
-        WITH ch, COUNT { (ch)-[:HAS_MESSAGE]->(m) } AS msg_count, MAX(m.date) AS latest
+        WITH ch, count(m) AS msg_count, MAX(m.date) AS latest
         WHERE msg_count > 0 OR ($usernames IS NOT NULL AND size($usernames) > 0)
         OPTIONAL MATCH (other:Channel)-[:RECOMMENDS]->(ch)
         WHERE ($ownerId IS NULL OR other.owner_id = $ownerId) AND (other.channel_id = ch.channel_id OR other.username = ch.username)

@@ -1,7 +1,5 @@
 # Lightweight OCR requirements
-torch==2.1.2 
-torchvision==0.16.2
-easyocr==1.7.2
+# torch, torchvision, easyocr installed as separate cached layers in Dockerfile
 opencv-python-headless==4.10.0.84
 numpy<2
 langdetect==1.0.9

@@ -61,23 +61,29 @@ const ChannelsTab: React.FC<ChannelsTabProps> = ({ caseId, structuredChannels })
                         <Box>
                           <Text fw={500}>{groupValue.channel!.username}</Text>
                           <Text size="sm" c="dimmed">
-                            Last message: {formatDate(groupValue.channel!.last_message_date)}
+                            {groupValue.channel!.message_count} messages · Last message: {formatDate(groupValue.channel!.last_message_date)}
                           </Text>
                           <Text size="xs" c="dimmed">
                             ID: {groupValue.channel!.channel_id}
                           </Text>
                         </Box>
 
-                        <Text size="xs">Recommended Channels:</Text>
-                        <List>
-                          {Object.entries(groupValue.recommended).map(([recUsername, recData]) => (
-                            <List.Item key={recUsername}>
-                              <Text size="xs">
-                                {recUsername} ({recData.channel.message_count} messages)
-                              </Text>
-                            </List.Item>
-                          ))}
-                        </List>
+                        {Object.entries(groupValue.recommended).filter(([recUsername]) => recUsername !== groupValue.channel!.username).length > 0 && (
+                          <>
+                            <Text size="xs">Recommended Channels:</Text>
+                            <List>
+                              {Object.entries(groupValue.recommended)
+                                .filter(([recUsername]) => recUsername !== groupValue.channel!.username)
+                                .map(([recUsername, recData]) => (
+                                  <List.Item key={recUsername}>
+                                    <Text size="xs">
+                                      {recUsername} ({recData.channel.message_count} messages)
+                                    </Text>
+                                  </List.Item>
+                                ))}
+                            </List>
+                          </>
+                        )}
                       </Stack>
                       <Stack gap="xs">
                         <Button
