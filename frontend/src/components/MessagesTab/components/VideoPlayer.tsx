@@ -13,6 +13,8 @@ interface VideoPlayerProps {
   messageId: string;
   showAudioTranscripts: boolean;
   apiUrl: string;
+  ownerId: string;
+  caseId: number;
 }
 
 export const VideoPlayer: React.FC<VideoPlayerProps> = ({
@@ -23,6 +25,8 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
   messageId,
   showAudioTranscripts,
   apiUrl,
+  ownerId,
+  caseId,
 }) => {
   const [opened, setOpened] = useState(false);
   const [isPinned, setIsPinned] = useState(false);
@@ -42,10 +46,10 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
   const handleTriggerAudioTranscription = async () => {
     setIsTriggering(true);
     try {
-      const response = await authFetch(`${apiUrl}/queue/audio-transcription`, {
+      const response = await authFetch(`${apiUrl}/queue/audio`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message_id: messageId, media_path: mediaPath, media_type: 'video', translate_transcription: true }),
+        body: JSON.stringify({ message_id: messageId, audio_path: mediaPath, media_type: 'video', translate_transcription: true, owner_id: ownerId, case_id: caseId }),
       });
       if (!response.ok) throw new Error('Failed to trigger audio transcription');
       notifications.show({ title: 'Success', message: 'Video audio transcription job queued', color: 'green' });

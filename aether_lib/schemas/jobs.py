@@ -166,6 +166,11 @@ class TranslationJobPayload(BaseJobPayload):
     image_text: bool = Field(default=False, description="Text extracted from image")
     audio_text: bool = Field(default=False, description="Text transcribed from audio")
 
+    # Downstream worker enable flags (controls chaining after translation)
+    enable_emotion_analysis: bool = Field(default=False, description="Chain emotion analysis after translation")
+    enable_label_classifier: bool = Field(default=False, description="Chain classification after translation")
+    enable_geolocation_extraction: bool = Field(default=False, description="Chain geolocation after translation")
+
 
 # ============================================================================
 # IMAGE ANALYSIS

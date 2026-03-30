@@ -129,7 +129,12 @@ async def process_message(msg, username, found_channels, all_seen_channels, foun
 
         full_id = f"{msg.chat_id}-{msg.id}"
         if needs_trans and config.get('ENABLE_TRANSLATION'):
-            queue_client.enqueue_translation(TranslationJobPayload(message_id=full_id, original_text=text, source_language=detected_lang, owner_id=owner_id, case_id=case_id))
+            queue_client.enqueue_translation(TranslationJobPayload(
+                message_id=full_id, original_text=text, source_language=detected_lang, owner_id=owner_id, case_id=case_id,
+                enable_emotion_analysis=config.get('ENABLE_EMOTION_ANALYSIS', False),
+                enable_label_classifier=config.get('ENABLE_LABEL_CLASSIFIER', False),
+                enable_geolocation_extraction=config.get('ENABLE_GEOLOCATION_EXTRACTION', False),
+            ))
         else:
             if text and len(text.strip()) > 10:
                 if config.get('ENABLE_EMOTION_ANALYSIS'):

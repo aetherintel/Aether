@@ -378,7 +378,8 @@ def transcribe_and_update(
     translate_transcription: bool = True,
     owner_id: str = None,
     case_id: int = None,
-    job_id: str = None
+    job_id: str = None,
+    parent_job_id: str = None,
 ):
     """
     Main audio transcription worker function
@@ -454,18 +455,16 @@ def transcribe_and_update(
         if transcription and translate_transcription:
             if needs_translation(transcription, detected_lang):
                 logger.info(f"🌍 Step 3: Queueing translation ({detected_lang} -> de)...")
-                translation_payload = {
-                    'message_id': message_id,
-                    'original_text': transcription, 
-                    'source_language': detected_lang,
-                    'case_id': case_id,
-                    'owner_id': owner_id,
-                    'parent_job_id': job_id,
-                    'audio_text': True
-                }
-                translation_job_id = queue_client.QueueClient.enqueue_translation(
-                    translation_payload=translation_payload
-                )
+                from aether_lib.schemas.jobs import TranslationJobPayload
+                translation_job_id = queue_client.enqueue_translation(TranslationJobPayload(
+                    message_id=message_id,
+                    original_text=transcription,
+                    source_language=detected_lang,
+                    case_id=case_id,
+                    owner_id=owner_id,
+                    parent_job_id=job_id,
+                    audio_text=True,
+                ))
                 if translation_job_id:
                     logger.info(f"✅ Step 3: Translation queued")
             else:

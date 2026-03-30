@@ -17,6 +17,8 @@ from .neo4j_utils import (
     get_messages_pending_classification,
     mark_classification_failed
 )
+from aether_lib.neo4j_client.messages import get_message_text_sources
+from aether_lib.neo4j_client.connection import run_in_neo4j_loop
 
 # ---------------------------------------------------------------
 # Logging setup
@@ -124,13 +126,19 @@ load_classification_model()
 # ---------------------------------------------------------------
 class PostClassificationService:
     def classify(
-        self, 
-        text: str, 
-        threshold: float = 0.3, 
+        self,
+        text: str,
+        threshold: float = 0.7,
         top_k: int = 3,
         use_multi_label: bool = True
     ):
-        """Classify post into predefined categories using zero-shot classification"""
+        """Classify post into predefined categories using zero-shot classification.
+
+        Threshold note: mDeBERTa NLI scores in multi-label mode are raw entailment
+        probabilities, NOT calibrated confidence values — they do not sum to 1 and
+        scores below ~0.65 are typically noise for truly irrelevant labels.
+        Default threshold is therefore 0.7.
+        """
         if not text or not text.strip():
             return [{
                 "label_id": 20,
@@ -139,28 +147,35 @@ class PostClassificationService:
                 "confidence": 1.0,
                 "method": "empty_text"
             }]
-        
+
         text = text[:512]
-        
+
         try:
-            candidate_labels = list(LABEL_DESCRIPTIONS.values())
-            
+            # Include a negative anchor label so the model has a clear "none of the above"
+            # option — this improves precision by giving the NLI model an explicit
+            # non-criminal hypothesis to compare against.
+            candidate_labels = list(LABEL_DESCRIPTIONS.values()) + [LABEL_DESCRIPTIONS[20]]
+
             result = CLASSIFIER(
                 text,
                 candidate_labels,
                 multi_label=use_multi_label,
                 truncation=True
             )
-            
+
             classifications = []
-            
+
             for label_desc, score in zip(result['labels'], result['scores']):
+                # Skip the negative anchor and label 20 (Allgemeine Kommunikation)
+                if label_desc == LABEL_DESCRIPTIONS[20]:
+                    continue
+
                 label_id = None
                 for lid, desc in LABEL_DESCRIPTIONS.items():
                     if desc == label_desc:
                         label_id = lid
                         break
-                
+
                 if label_id and score >= threshold:
                     classifications.append({
                         "label_id": label_id,
@@ -169,30 +184,26 @@ class PostClassificationService:
                         "confidence": float(score),
                         "method": "zero-shot"
                     })
-            
-            if not classifications and result['scores']:
-                top_label_desc = result['labels'][0]
-                top_score = result['scores'][0]
-                
-                for lid, desc in LABEL_DESCRIPTIONS.items():
-                    if desc == top_label_desc:
-                        classifications.append({
-                            "label_id": lid,
-                            "label": CLASSIFICATION_LABELS[lid],
-                            "description": top_label_desc,
-                            "confidence": float(top_score),
-                            "method": "top-prediction"
-                        })
-                        break
-            
+
+            # If nothing clears the threshold, return "Allgemeine Kommunikation" —
+            # do NOT fall back to the top prediction, which produces false positives.
+            if not classifications:
+                classifications.append({
+                    "label_id": 20,
+                    "label": CLASSIFICATION_LABELS[20],
+                    "description": LABEL_DESCRIPTIONS[20],
+                    "confidence": 1.0,
+                    "method": "below_threshold"
+                })
+
             classifications = classifications[:top_k]
-            
+
             logger.info(f"📊 Classification results:")
             for cls in classifications:
                 logger.info(f"   [{cls['label_id']}] {cls['label']} ({cls['confidence']:.2f})")
-            
+
             return classifications
-            
+
         except Exception as e:
             logger.error(f"❌ Classification error: {e}")
             logger.exception("Full traceback:")
@@ -226,10 +237,20 @@ def classify_post_job(
         neo4j_uri = os.getenv("NEO4J_URI")
         neo4j_user = os.getenv("NEO4J_USER")
         neo4j_password = os.getenv("NEO4J_PASSWORD")
+        # Combine all available text sources for this message
+        extra = run_in_neo4j_loop(get_message_text_sources, message_id=message_id, owner_id=owner_id)
+        parts = [text] if text and text.strip() else []
+        if extra:
+            if extra.get('image_text') and extra['image_text'].strip():
+                parts.append(extra['image_text'])
+            if extra.get('audio_text') and extra['audio_text'].strip():
+                parts.append(extra['audio_text'])
+        combined_text = '\n\n'.join(parts) if parts else text
+
         # Classify post (sync operation)
         classifications = classification_service.classify(
-            text, 
-            threshold=threshold, 
+            combined_text,
+            threshold=threshold,
             top_k=top_k,
             use_multi_label=use_multi_label
         )

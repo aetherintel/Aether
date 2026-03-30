@@ -11,7 +11,7 @@ import logging
 import httpx
 from neo4j import AsyncGraphDatabase
 from aether_lib.queue_client import queue_client
-from aether_lib.schemas.jobs import EmotionJobPayload
+from aether_lib.schemas.jobs import EmotionJobPayload, ClassificationJobPayload, GeolocationJobPayload
 from aether_lib.utils.event_publisher import publish_event
 
 logging.basicConfig(
@@ -40,6 +40,9 @@ def translate_and_update(
     chained_from: str = None,
     image_text: bool = False,
     audio_text: bool = False,
+    enable_emotion_analysis: bool = False,
+    enable_label_classifier: bool = False,
+    enable_geolocation_extraction: bool = False,
 ):
     """RQ job entry point — forwards to Modal, writes result to Neo4j."""
     logger.info(f"📤 Forwarding translation to Modal for {message_id}")
@@ -80,6 +83,29 @@ def translate_and_update(
         "owner_id": owner_id,
         "updates": {status_key: "completed", text_key: translated_text},
     })
+
+    if translated_text and len(translated_text.strip()) > 10:
+        if enable_emotion_analysis:
+            logger.info("🎭 Chaining emotion analysis...")
+            try:
+                queue_client.enqueue_emotion(EmotionJobPayload(message_id=message_id, text=translated_text, owner_id=owner_id, case_id=case_id))
+            except Exception as e:
+                logger.error(f"❌ Failed to chain emotion analysis: {e}")
+
+        if enable_label_classifier:
+            logger.info("🏷️ Chaining classification...")
+            try:
+                queue_client.enqueue_classification(ClassificationJobPayload(message_id=message_id, text=translated_text, owner_id=owner_id, case_id=case_id))
+            except Exception as e:
+                logger.error(f"❌ Failed to chain classification: {e}")
+
+        if enable_geolocation_extraction:
+            logger.info("📍 Chaining geolocation extraction...")
+            try:
+                queue_client.enqueue_geolocation(GeolocationJobPayload(message_id=message_id, text=translated_text, owner_id=owner_id, case_id=case_id))
+            except Exception as e:
+                logger.error(f"❌ Failed to chain geolocation: {e}")
+
     return translated_text
 
 

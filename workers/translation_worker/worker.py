@@ -3,7 +3,7 @@ import asyncio
 import os
 import logging
 from aether_lib.queue_client import queue_client
-from aether_lib.schemas.jobs import EmotionJobPayload
+from aether_lib.schemas.jobs import EmotionJobPayload, ClassificationJobPayload, GeolocationJobPayload
 from redis import Redis
 from rq import Queue
 import torch
@@ -195,7 +195,10 @@ def translate_and_update(
     parent_job_id: str = None,
     image_text: bool = False,
     audio_text: bool = False,
-    target_language: str = "de"
+    target_language: str = "de",
+    enable_emotion_analysis: bool = False,
+    enable_label_classifier: bool = False,
+    enable_geolocation_extraction: bool = False,
 ):
     """
     Main translation worker function
@@ -243,16 +246,38 @@ def translate_and_update(
             logger.warning("⚠️ Step 2: Update returned False")
 
         if translated_text and len(translated_text.strip()) > 10:
-            # Step 3: Trigger emotion analysis
-            logger.info("🎭 Step 3: Triggering emotion analysis...")
-            try:
-                emotion_job_id = queue_client.enqueue_emotion(EmotionJobPayload(message_id=message_id, text=translated_text, owner_id=owner_id, case_id=case_id))
-                if emotion_job_id:
-                    logger.info(f"✅ Step 3: Emotion analysis queued: {emotion_job_id}")
-                else:
-                    logger.warning("⚠️ Step 3: Emotion analysis not queued")
-            except Exception as e:
-                logger.error(f"❌ Step 3: Failed to trigger emotion analysis: {e}")
+            if enable_emotion_analysis:
+                logger.info("🎭 Step 3a: Triggering emotion analysis...")
+                try:
+                    emotion_job_id = queue_client.enqueue_emotion(EmotionJobPayload(message_id=message_id, text=translated_text, owner_id=owner_id, case_id=case_id))
+                    if emotion_job_id:
+                        logger.info(f"✅ Step 3a: Emotion analysis queued: {emotion_job_id}")
+                    else:
+                        logger.warning("⚠️ Step 3a: Emotion analysis not queued")
+                except Exception as e:
+                    logger.error(f"❌ Step 3a: Failed to trigger emotion analysis: {e}")
+
+            if enable_label_classifier:
+                logger.info("🏷️ Step 3b: Triggering classification...")
+                try:
+                    classification_job_id = queue_client.enqueue_classification(ClassificationJobPayload(message_id=message_id, text=translated_text, owner_id=owner_id, case_id=case_id))
+                    if classification_job_id:
+                        logger.info(f"✅ Step 3b: Classification queued: {classification_job_id}")
+                    else:
+                        logger.warning("⚠️ Step 3b: Classification not queued")
+                except Exception as e:
+                    logger.error(f"❌ Step 3b: Failed to trigger classification: {e}")
+
+            if enable_geolocation_extraction:
+                logger.info("📍 Step 3c: Triggering geolocation extraction...")
+                try:
+                    geo_job_id = queue_client.enqueue_geolocation(GeolocationJobPayload(message_id=message_id, text=translated_text, owner_id=owner_id, case_id=case_id))
+                    if geo_job_id:
+                        logger.info(f"✅ Step 3c: Geolocation queued: {geo_job_id}")
+                    else:
+                        logger.warning("⚠️ Step 3c: Geolocation not queued")
+                except Exception as e:
+                    logger.error(f"❌ Step 3c: Failed to trigger geolocation: {e}")
         
         return result
         

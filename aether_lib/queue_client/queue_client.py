@@ -71,6 +71,9 @@ class QueueClient:
                 'parent_job_id': translation_payload.parent_job_id,
                 'image_text': translation_payload.image_text,
                 'audio_text': translation_payload.audio_text,
+                'enable_emotion_analysis': translation_payload.enable_emotion_analysis,
+                'enable_label_classifier': translation_payload.enable_label_classifier,
+                'enable_geolocation_extraction': translation_payload.enable_geolocation_extraction,
             },
             meta={'owner_id': translation_payload.owner_id, 'case_id': translation_payload.case_id}
         )
@@ -128,6 +131,7 @@ class QueueClient:
                 'translate_transcription': audio_transcription_payload.translate_transcription,
                 'owner_id': audio_transcription_payload.owner_id,
                 'case_id': audio_transcription_payload.case_id,
+                'parent_job_id': audio_transcription_payload.parent_job_id,
             },
             meta={'owner_id': audio_transcription_payload.owner_id, 'case_id': audio_transcription_payload.case_id}
         )
