@@ -31,3 +31,15 @@ export const isAudioFile = (path: string): boolean => {
   const audioExtensions: string[] = ['.mp3', '.wav', '.ogg', '.m4a', '.aac', '.flac'];
   return audioExtensions.some((ext: string) => path.toLowerCase().endsWith(ext));
 };
+
+export function formatDate(dateString: string | null): string {
+  if (!dateString) return 'No valid date provided';
+  return new Date(dateString).toLocaleString();
+}
+
+export function formatNumber(num?: number): string {
+  if (!num) return '0';
+  if (num >= 1_000_000) return `${(num / 1_000_000).toFixed(1)}M`;
+  if (num >= 1_000) return `${(num / 1_000).toFixed(1)}K`;
+  return num.toString();
+}

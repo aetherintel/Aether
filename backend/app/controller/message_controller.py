@@ -215,40 +215,6 @@ async def get_messages_for_user(
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Fehler beim Abrufen der Nachrichten für Benutzer {user_id}: {str(e)}")
-@router.get("/users/{user_id}/channels", response_model=List[ChannelListItem])
-async def get_channels_for_user(
-    user_id: int,
-    user: UserCtx = Depends(user_ctx),
-):
-    owner = None if is_admin(user) else user["id"]
-    try:
-        channels = await get_user_channels(user_id, owner)
-        for channel in channels:
-            channel["last_message_date"] = channel.pop("last_active", None)
-        return channels
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Fehler beim Abrufen der Kanäle für Benutzer {user_id}: {str(e)}")
-
-@router.get("/users/{user_id}/messages", response_model=List[Message])
-async def get_messages_for_user(
-    user_id: int,
-    limit: int = Query(100, ge=1, le=1000),
-    before: datetime | None = None,
-    q: str | None = None,
-    user: UserCtx = Depends(user_ctx),
-):
-    owner = None if is_admin(user) else user["id"]
-    try:
-        messages = await get_user_messages(
-            user_id,
-            owner,
-            limit=limit,
-            before=before,
-            query=q,
-        )
-        return messages
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Fehler beim Abrufen der Nachrichten für Benutzer {user_id}: {str(e)}")
 
 @router.get("/channels/{channel_id}/locations")
 async def get_channel_locations(

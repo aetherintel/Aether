@@ -25,26 +25,7 @@ import {
   IconMoodSmile,
   IconMapPin,
 } from '@tabler/icons-react';
-
-interface ContainerInfo {
-  id: string;
-  name: string;
-  image: string;
-  status: string;
-  labels?: {
-    queue?: string;
-    channels?: string;
-    mode?: string;
-    case_id?: string;
-  };
-  queue?: string;
-  channels?: string;
-  mode?: string;
-  case_id?: string | number;
-  session?: string;
-  runtime?: string;
-  created?: string;
-}
+import type { ContainerInfo } from '@/types/jobs';
 
 interface GroupedJobsDisplayProps {
   status: ContainerInfo[];

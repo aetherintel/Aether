@@ -26,6 +26,7 @@ import {
 } from '@tabler/icons-react';
 import { WidgetComponentProps } from '@/types/widgets.types';
 import { authFetch } from '@/utils/authFetch';
+import { formatRelativeTime, formatNumber } from '@/components/MessagesTab/utils';
 import classes from './TopPostsWidget.module.css';
 
 const apiUrl = import.meta.env.VITE_API_URL;
@@ -187,27 +188,6 @@ export const TopPostsWidget: React.FC<WidgetComponentProps> = ({
       return () => clearInterval(intervalId);
     }
   }, [widget.config, refreshKey]);
-
-  // Format relative time
-  const formatRelativeTime = (date: string): string => {
-    const now = new Date();
-    const messageDate = new Date(date);
-    const diff = now.getTime() - messageDate.getTime();
-    const hours = Math.floor(diff / (1000 * 60 * 60));
-    const days = Math.floor(hours / 24);
-    
-    if (days > 0) return `${days}d ago`;
-    if (hours > 0) return `${hours}h ago`;
-    return 'Just now';
-  };
-
-  // Format number with K/M suffix
-  const formatNumber = (num?: number): string => {
-    if (!num) return '0';
-    if (num >= 1000000) return `${(num / 1000000).toFixed(1)}M`;
-    if (num >= 1000) return `${(num / 1000).toFixed(1)}K`;
-    return num.toString();
-  };
 
   // Handle manual refresh
   const handleManualRefresh = () => {

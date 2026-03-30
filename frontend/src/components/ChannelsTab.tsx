@@ -1,14 +1,15 @@
 import { IconTrash } from '@tabler/icons-react';
 import { Box, Button, Card, Group, List, Stack, Text, Title } from '@mantine/core';
+import { notifications } from '@mantine/notifications';
 import TelegramScraper from '@/components/TelegramScraper';
 import type { OutputChannelEntry } from '@/types/caseFileDetail';
 import { authFetch } from '@/utils/authFetch';
+import { formatDate } from '@/components/MessagesTab/utils';
 
 const apiUrl = import.meta.env.VITE_API_URL;
 
 interface ChannelsTabProps {
   caseId: string;
-  caseFile: any;
   structuredChannels: [string, OutputChannelEntry][];
 }
 
@@ -27,23 +28,21 @@ const ChannelsTab: React.FC<ChannelsTabProps> = ({ caseId, structuredChannels })
 
       if (removeChannelsRes.ok) {
         const result = await removeChannelsRes.json();
-        alert(
-          `${result.removed_channels.length} removed channels: ${result.removed_channels.join(', ')}`
-        );
+        notifications.show({
+          title: 'Channels removed',
+          message: `${result.removed_channels.length} removed: ${result.removed_channels.join(', ')}`,
+          color: 'green',
+        });
       }
     } catch (error) {
       console.error('Error removing channels from case:', error);
-      alert('Error removing channels from case');
+      notifications.show({
+        title: 'Error',
+        message: 'Failed to remove channels from case',
+        color: 'red',
+      });
     }
   };
-
-  function formatDate(dateString: string | null): string {
-    if (!dateString) {
-      return 'No valid date provided';
-    }
-    const date = new Date(dateString);
-    return date.toLocaleString();
-  }
 
   return (
     <div>
