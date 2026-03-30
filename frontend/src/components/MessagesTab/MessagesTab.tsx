@@ -302,12 +302,14 @@ const MessagesTab: React.FC<MessagesTabProps> = ({
         return <VideoPlayer mediaPath={message.media_path} audioText={message.audio_text}
                             audioTextTranslated={message.audio_text_translated}
                             audioTranscriptionStatus={message.audio_transcription_status} messageId={message.message_id}
-                            showAudioTranscripts={showAudioTranscripts} apiUrl={apiUrl} />;
+                            showAudioTranscripts={showAudioTranscripts} apiUrl={apiUrl}
+                            ownerId={ownerId} caseId={caseId} />;
       } else if (isAudioFile(message.media_path)) {
         return <AudioPlayer mediaPath={message.media_path} audioText={message.audio_text}
                             audioTextTranslated={message.audio_text_translated}
                             audioTranscriptionStatus={message.audio_transcription_status} messageId={message.message_id}
-                            mediaType={message.media_type} showAudioTranscripts={showAudioTranscripts} apiUrl={apiUrl} />;
+                            mediaType={message.media_type} showAudioTranscripts={showAudioTranscripts} apiUrl={apiUrl}
+                            ownerId={ownerId} caseId={caseId} />;
       } else {
         return <ImageWithTranscript mediaPath={message.media_path} imageText={message.image_text}
                                     imageTextTranslated={message.image_text_translated}

@@ -100,7 +100,7 @@ LABEL_DESCRIPTIONS = {
 
 class ClassificationRequest(BaseModel):
     text: str
-    threshold: float = 0.3
+    threshold: float = 0.7
     top_k: int = 3
 
 
@@ -182,7 +182,9 @@ class ClassificationWorker:
             use_fast=True,
         )
 
-        # Pre-build candidate label list (descriptions are the classification targets)
+        # Candidate labels: all descriptions + a negative "normal content" anchor.
+        # Including the anchor label makes the NLI model more discriminative —
+        # it gives it an explicit non-criminal hypothesis to score against.
         self.candidate_labels = list(LABEL_DESCRIPTIONS.values())
         # Reverse map: description → label_id
         self.desc_to_id = {desc: lid for lid, desc in LABEL_DESCRIPTIONS.items()}
@@ -221,18 +223,17 @@ class ClassificationWorker:
                         "method": "zero-shot",
                     })
 
-            # Always return at least the top prediction even if below threshold
-            if not classifications and result["scores"]:
-                top_desc = result["labels"][0]
-                top_id = self.desc_to_id.get(top_desc)
-                if top_id:
-                    classifications.append({
-                        "label_id": top_id,
-                        "label": CLASSIFICATION_LABELS[top_id],
-                        "description": top_desc,
-                        "confidence": float(result["scores"][0]),
-                        "method": "top-prediction",
-                    })
+            # Nothing cleared the threshold — return "Allgemeine Kommunikation".
+            # Do NOT fall back to the top prediction: NLI scores are not calibrated
+            # confidence values, and forcing a result produces false positives.
+            if not classifications:
+                classifications.append({
+                    "label_id": 20,
+                    "label": CLASSIFICATION_LABELS[20],
+                    "description": LABEL_DESCRIPTIONS[20],
+                    "confidence": 1.0,
+                    "method": "below_threshold",
+                })
 
             return classifications[:top_k]
 

@@ -11,6 +11,8 @@ import logging
 import httpx
 from neo4j import AsyncGraphDatabase
 from aether_lib.utils.event_publisher import publish_event
+from aether_lib.neo4j_client.messages import get_message_text_sources
+from aether_lib.neo4j_client.connection import run_in_neo4j_loop
 
 from .neo4j_utils import store_emotions_in_neo4j
 
@@ -43,10 +45,20 @@ def classify_emotion_job(
     """RQ job entry point — forwards to Modal, writes result to Neo4j."""
     logger.info(f"📤 Forwarding emotion analysis to Modal for {message_id}")
 
+    # Combine all available text sources for this message
+    extra = run_in_neo4j_loop(get_message_text_sources, message_id=message_id, owner_id=owner_id)
+    parts = [text] if text and text.strip() else []
+    if extra:
+        if extra.get('image_text') and extra['image_text'].strip():
+            parts.append(extra['image_text'])
+        if extra.get('audio_text') and extra['audio_text'].strip():
+            parts.append(extra['audio_text'])
+    combined_text = '\n\n'.join(parts) if parts else text
+
     try:
         resp = httpx.post(
             MODAL_EMOTION_URL,
-            json={"text": text, "threshold": threshold, "top_k": top_k},
+            json={"text": combined_text, "threshold": threshold, "top_k": top_k},
             headers=_HEADERS,
             timeout=120.0,
         )

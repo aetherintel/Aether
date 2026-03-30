@@ -62,7 +62,6 @@ const TelegramScraper: React.FC<TelegramScraperProps> = ({ case_id }) => {
   const [selectedSession, setSelectedSession] = useState<string>('');
 
   // Worker options
-  const [enableTranslation, setEnableTranslation] = useState<boolean>(true);
   const [enableImageAnalysis, setEnableImageAnalysis] = useState<boolean>(true);
   const [enableAudioTranscription, setEnableAudioTranscription] = useState<boolean>(true);
   const [enableEmotionAnalysis, setEnableEmotionAnalysis] = useState<boolean>(false);
@@ -178,7 +177,7 @@ const TelegramScraper: React.FC<TelegramScraperProps> = ({ case_id }) => {
             channel: [channel.trim()],
             tg_session: selectedSession,
             case_id: case_id || undefined,
-            enable_translation: enableTranslation,
+            enable_translation: true,
             enable_image_analysis: enableImageAnalysis,
             enable_audio_transcription: enableAudioTranscription,
             enable_emotion_analysis: enableEmotionAnalysis,
@@ -292,24 +291,10 @@ const TelegramScraper: React.FC<TelegramScraperProps> = ({ case_id }) => {
               onChange={(e) => setRecursive(e.currentTarget.checked)}
             />
           )}
-          
-
 
           <Divider label="Worker Options" labelPosition="center" />
 
           <Stack gap="xs">
-            {/* <Checkbox
-              label={
-                <Group gap="xs">
-                  <IconLanguage size={16} />
-                  <Text size="sm">Enable Translation</Text>
-                </Group>
-              }
-              description="Automatically translate messages to German"
-              checked={enableTranslation}
-              onChange={(e) => setEnableTranslation(e.currentTarget.checked)}
-            /> */}
-
             <Checkbox
               label={
                 <Group gap="xs">

@@ -24,6 +24,7 @@ import {
 } from '@tabler/icons-react';
 import { WidgetComponentProps } from '@/types/widgets.types';
 import { authFetch } from '@/utils/authFetch';
+import { formatNumber } from '@/components/MessagesTab/utils';
 
 const apiUrl = import.meta.env.VITE_API_URL;
 
@@ -153,11 +154,6 @@ export const TopInfluencersWidget: React.FC<WidgetComponentProps> = ({
     }
   }, [widget.config, refreshKey]);
 
-  const formatNumber = (num: number): string => {
-    if (num >= 1000000) return `${(num / 1000000).toFixed(1)}M`;
-    if (num >= 1000) return `${(num / 1000).toFixed(1)}K`;
-    return num.toString();
-  };
 
   if (isLoading) {
     return (

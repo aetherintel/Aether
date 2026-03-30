@@ -4,6 +4,11 @@ from typing import List, Optional
 from model.message_model import Author, Channel, Message
 from repository.neo4j.base import get_session, convert_neo4j_datetime
 
+
+def _author_name(r) -> str:
+    return r["username"] or f"{r['first_name'] or ''} {r['last_name'] or ''}".strip() or "Unknown"
+
+
 async def get_unified_timeline_messages(
     owner_id: str | None,
     selected_channels: list[str] = None,
@@ -66,7 +71,7 @@ async def get_unified_timeline_messages(
             date_value = convert_neo4j_datetime(r["date"])
             if not date_value or not r["original_text"]: continue
             
-            author_name = r["username"] or f"{r['first_name'] or ''} {r['last_name'] or ''}".strip() or "Unknown"
+            author_name = _author_name(r)
             messages.append({
                 "message_id": r["message_id"],
                 "original_text": r.get("original_text") or r.get("text") or "",
@@ -137,7 +142,7 @@ async def get_messages_for_channel(channel_id: str, owner_id: str | None, limit:
         async for r in result:
             date_value = convert_neo4j_datetime(r["date"])
             if not date_value: continue
-            author_name = r["username"] or f"{r['first_name'] or ''} {r['last_name'] or ''}".strip() or "Unknown"
+            author_name = _author_name(r)
             messages.append({
                 "message_id": r["message_id"], "original_text": r.get("original_text") or "",
                 "translated_text": r.get("translated_text"), "image_text": r.get("image_text") or "",
@@ -178,7 +183,7 @@ async def get_user_messages(user_id: int, owner_id: str | None, limit: int = 100
         result = await session.run(cypher, params)
         messages = []
         async for r in result:
-            author_name = r["username"] or f"{r['first_name'] or ''} {r['last_name'] or ''}".strip() or "Unknown"
+            author_name = _author_name(r)
             messages.append({
                 "message_id": r["message_id"], "original_text": r.get("original_text") or r.get("text") or "",
                 "translated_text": r.get("translated_text"), "original_language": r.get("original_language") or "unknown",
@@ -211,7 +216,7 @@ async def get_messages_with_media(owner_id: str | None, channel_ids: list[str] |
         result = await session.run(cypher, params)
         messages = []
         async for r in result:
-            author_name = r["username"] or f"{r['first_name'] or ''} {r['last_name'] or ''}".strip() or "Unknown"
+            author_name = _author_name(r)
             media_path = r["media_path"]
             if media_path:
                 file_ext = media_path.lower().split('.')[-1] if '.' in media_path else ''

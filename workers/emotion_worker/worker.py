@@ -18,6 +18,8 @@ from .neo4j_utils import (
     get_messages_pending_emotion_analysis,
     mark_emotion_analysis_failed
 )
+from aether_lib.neo4j_client.messages import get_message_text_sources
+from aether_lib.neo4j_client.connection import run_in_neo4j_loop
 
 # ---------------------------------------------------------------
 # Logging setup
@@ -312,8 +314,18 @@ def classify_emotion_job(
         neo4j_uri = os.getenv("NEO4J_URI")
         neo4j_user = os.getenv("NEO4J_USER")
         neo4j_password = os.getenv("NEO4J_PASSWORD")
+        # Combine all available text sources for this message
+        extra = run_in_neo4j_loop(get_message_text_sources, message_id=message_id, owner_id=owner_id)
+        parts = [text] if text and text.strip() else []
+        if extra:
+            if extra.get('image_text') and extra['image_text'].strip():
+                parts.append(extra['image_text'])
+            if extra.get('audio_text') and extra['audio_text'].strip():
+                parts.append(extra['audio_text'])
+        combined_text = '\n\n'.join(parts) if parts else text
+
         # Classify emotions (sync operation)
-        emotions = emotion_service.classify(text, threshold=threshold, top_k=top_k)
+        emotions = emotion_service.classify(combined_text, threshold=threshold, top_k=top_k)
         
         # Store in Neo4j (async operation wrapped in sync)
         asyncio.run(_store_async(

@@ -405,6 +405,31 @@ async def update_message_image_analysis(driver, message_id: str, image_text: str
         return False
 
 
+async def get_message_text_sources(driver, message_id: str, owner_id: str = None) -> dict:
+    """
+    Fetch all available text sources for a message (image_text, audio_text).
+    Used by AI workers to combine all text before inference.
+    """
+    try:
+        async with driver.session() as session:
+            result = await session.run(
+                """
+                MATCH (m:Message {mid: $mid})
+                WHERE $owner_id IS NULL OR m.owner_id = $owner_id
+                RETURN m.image_text AS image_text, m.audio_text AS audio_text
+                """,
+                mid=message_id,
+                owner_id=owner_id,
+            )
+            record = await result.single()
+            if record:
+                return {"image_text": record["image_text"], "audio_text": record["audio_text"]}
+            return {}
+    except Exception as e:
+        logger.error(f"❌ [get_message_text_sources] Failed for {message_id}: {e}")
+        return {}
+
+
 async def get_messages_pending_image_analysis(owner_id: str, limit: int = 100):
     """
     Get messages that have images but haven't been analyzed yet

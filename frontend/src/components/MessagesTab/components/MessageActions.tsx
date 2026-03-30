@@ -6,6 +6,8 @@ import {
   IconTag,
   IconMoodSmile,
   IconMapPin,
+  IconMicrophone,
+  IconRefresh,
 } from '@tabler/icons-react';
 import { notifications } from '@mantine/notifications';
 import { authFetch } from '@/utils/authFetch';
@@ -57,13 +59,17 @@ export const MessageActions: React.FC<MessageActionsProps> = ({
 }) => {
   const [loadingTranslate, setLoadingTranslate] = useState(false);
   const [loadingOcr, setLoadingOcr] = useState(false);
+  const [loadingAudio, setLoadingAudio] = useState(false);
   const [loadingClassify, setLoadingClassify] = useState(false);
   const [loadingEmotion, setLoadingEmotion] = useState(false);
   const [loadingGeo, setLoadingGeo] = useState(false);
 
   const hasText = !!message.original_text?.trim();
-  const hasAnalysisText = !!(message.translated_text?.trim() || message.original_text?.trim());
+  const hasImageText = !!message.image_text?.trim();
+  const hasAudioText = !!message.audio_text?.trim();
+  const hasAnalysisText = !!(message.translated_text?.trim() || message.original_text?.trim() || hasImageText || hasAudioText);
   const isImage = message.media_path && !isAudioFile(message.media_path) && !isVideoFile(message.media_path);
+  const isAudioOrVideo = message.media_path && (isAudioFile(message.media_path) || isVideoFile(message.media_path));
 
   const showTranslate =
     hasText &&
@@ -74,21 +80,39 @@ export const MessageActions: React.FC<MessageActionsProps> = ({
     isImage &&
     message.image_analysis_status !== 'completed';
 
+  const showAudioTranscribe =
+    isAudioOrVideo &&
+    message.audio_transcription_status !== 'completed' &&
+    message.audio_transcription_status !== 'pending';
+
+  // A worker ran before, but image_text or audio_text arrived afterwards — offer re-run
+  const hasNewSources = (hasImageText || hasAudioText) &&
+    !!(message.image_analysis_status === 'completed' || message.audio_transcription_status === 'completed');
+
   const showClassify =
     hasAnalysisText &&
-    message.classification_status !== 'completed';
+    (message.classification_status !== 'completed' || hasNewSources);
+  const rerunClassify = message.classification_status === 'completed' && hasNewSources;
 
   const showEmotion =
     hasAnalysisText &&
-    message.emotion_status !== 'completed';
+    (message.emotion_status !== 'completed' || hasNewSources);
+  const rerunEmotion = message.emotion_status === 'completed' && hasNewSources;
 
   const showGeo =
     hasAnalysisText &&
-    message.geolocation_status !== 'pending';
+    message.geolocation_status !== 'pending' &&
+    (message.geolocation_status !== 'completed' &&
+     message.geolocation_status !== 'no_location' &&
+     message.geolocation_status !== 'no_coordinates' || hasNewSources);
+  const rerunGeo = (message.geolocation_status === 'completed' ||
+    message.geolocation_status === 'no_location' ||
+    message.geolocation_status === 'no_coordinates') && hasNewSources;
 
-  if (!showTranslate && !showOcr && !showClassify && !showEmotion && !showGeo) return null;
+  if (!showTranslate && !showOcr && !showAudioTranscribe && !showClassify && !showEmotion && !showGeo) return null;
 
-  const analysisText = message.translated_text?.trim() || message.original_text || '';
+  const analysisText = message.translated_text?.trim() || message.original_text?.trim()
+    || message.audio_text?.trim() || message.image_text?.trim() || '';
 
   return (
     <Group gap={4} wrap="nowrap">
@@ -154,22 +178,49 @@ export const MessageActions: React.FC<MessageActionsProps> = ({
         </Tooltip>
       )}
 
+      {showAudioTranscribe && (
+        <Tooltip label="Transcribe audio">
+          <ActionIcon
+            size="sm"
+            variant="subtle"
+            color="orange"
+            loading={loadingAudio}
+            onClick={() =>
+              enqueue(
+                'queue/audio',
+                {
+                  message_id: message.message_id,
+                  audio_path: message.media_path,
+                  media_type: isVideoFile(message.media_path) ? 'video' : 'audio',
+                  translate_transcription: true,
+                  owner_id: ownerId,
+                  case_id: caseId,
+                },
+                'Audio transcription',
+                message.message_id,
+                'audio_transcription_status',
+                onStatusChange,
+                setLoadingAudio,
+              )
+            }
+          >
+            <IconMicrophone size={14} />
+          </ActionIcon>
+        </Tooltip>
+      )}
+
       {showClassify && (
-        <Tooltip label="Classify">
+        <Tooltip label={rerunClassify ? 'Re-classify (new text available)' : 'Classify'}>
           <ActionIcon
             size="sm"
             variant="subtle"
             color="violet"
+            opacity={rerunClassify ? 0.6 : 1}
             loading={loadingClassify}
             onClick={() =>
               enqueue(
                 'queue/classification',
-                {
-                  message_id: message.message_id,
-                  text: analysisText,
-                  owner_id: ownerId,
-                  case_id: caseId,
-                },
+                { message_id: message.message_id, text: analysisText, owner_id: ownerId, case_id: caseId },
                 'Classification',
                 message.message_id,
                 'classification_status',
@@ -178,27 +229,23 @@ export const MessageActions: React.FC<MessageActionsProps> = ({
               )
             }
           >
-            <IconTag size={14} />
+            {rerunClassify ? <IconRefresh size={14} /> : <IconTag size={14} />}
           </ActionIcon>
         </Tooltip>
       )}
 
       {showEmotion && (
-        <Tooltip label="Emotion analysis">
+        <Tooltip label={rerunEmotion ? 'Re-analyse emotions (new text available)' : 'Emotion analysis'}>
           <ActionIcon
             size="sm"
             variant="subtle"
             color="pink"
+            opacity={rerunEmotion ? 0.6 : 1}
             loading={loadingEmotion}
             onClick={() =>
               enqueue(
                 'queue/emotion',
-                {
-                  message_id: message.message_id,
-                  text: analysisText,
-                  owner_id: ownerId,
-                  case_id: caseId,
-                },
+                { message_id: message.message_id, text: analysisText, owner_id: ownerId, case_id: caseId },
                 'Emotion',
                 message.message_id,
                 'emotion_status',
@@ -207,27 +254,23 @@ export const MessageActions: React.FC<MessageActionsProps> = ({
               )
             }
           >
-            <IconMoodSmile size={14} />
+            {rerunEmotion ? <IconRefresh size={14} /> : <IconMoodSmile size={14} />}
           </ActionIcon>
         </Tooltip>
       )}
 
       {showGeo && (
-        <Tooltip label="Extract locations">
+        <Tooltip label={rerunGeo ? 'Re-extract locations (new text available)' : 'Extract locations'}>
           <ActionIcon
             size="sm"
             variant="subtle"
             color="teal"
+            opacity={rerunGeo ? 0.6 : 1}
             loading={loadingGeo}
             onClick={() =>
               enqueue(
                 'queue/geolocation',
-                {
-                  message_id: message.message_id,
-                  text: analysisText,
-                  owner_id: ownerId,
-                  case_id: caseId,
-                },
+                { message_id: message.message_id, text: analysisText, owner_id: ownerId, case_id: caseId },
                 'Geolocation',
                 message.message_id,
                 'geolocation_status',
@@ -236,7 +279,7 @@ export const MessageActions: React.FC<MessageActionsProps> = ({
               )
             }
           >
-            <IconMapPin size={14} />
+            {rerunGeo ? <IconRefresh size={14} /> : <IconMapPin size={14} />}
           </ActionIcon>
         </Tooltip>
       )}

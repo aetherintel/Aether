@@ -18,43 +18,13 @@ import type {
   OutputChannelEntry,
   OutputChannelStructure,
 } from '../../types/caseFileDetail';
+import type { ContainerInfo } from '../../types/jobs';
+import { mapJobStatus } from '../../types/jobs';
+import { formatDate } from '@/components/MessagesTab/utils';
 import classes from './CaseFileDetail.module.css';
 
 const apiUrl = import.meta.env.VITE_API_URL;
 type ExpandedChannels = Record<string, string[]>;
-
-interface ContainerInfo {
-  id: string;
-  name: string;
-  image: string;
-  status: string;
-  labels?: {
-    queue?: string;
-    channels?: string;
-    mode?: string;
-    case_id?: string;
-  };
-  queue?: string;
-  channels?: string;
-  mode?: string;
-  case_id?: string | number;
-  session?: string;
-  runtime?: string;
-  created?: string;
-}
-
-const mapJobStatus = (status: string): string => {
-  const statusMap: Record<string, string> = {
-    queued: 'pending',
-    pending: 'pending',
-    started: 'running',
-    running: 'running',
-    finished: 'exited',
-    exited: 'exited',
-    failed: 'failed',
-  };
-  return statusMap[status] || status;
-};
 
 export function CaseFileDetail() {
   const { id } = useParams<{ id: string }>();
@@ -209,14 +179,6 @@ export function CaseFileDetail() {
     setGraphType(type);
     setGraphUser(user);
     setActiveTab('visuals');
-  }
-
-  function formatDate(dateString: string | null): string {
-    if (!dateString) {
-      return 'No valid date provided';
-    }
-    const date = new Date(dateString);
-    return date.toLocaleString();
   }
 
   function transformChannelData(
@@ -375,7 +337,6 @@ export function CaseFileDetail() {
                 <Tabs.Panel value="scraper" mt="md">
                   <ChannelsTab
                     caseId={id!}
-                    caseFile={caseFile}
                     structuredChannels={structuredChannels}
                   />
                 </Tabs.Panel>
