@@ -29,6 +29,7 @@ interface ChatMessage {
 }
 
 const CHAT_STORAGE_KEY = 'aether_agent_chat_history';
+const MAX_MESSAGES = 40;
 
 function loadMessagesFromStorage(): ChatMessage[] {
     try {
@@ -118,7 +119,10 @@ export const AgentChat: React.FC<AgentChatProps> = ({ embedded = false }) => {
         timestamp: new Date()
     };
     
-    setMessages(prev => [...prev, userMsg]);
+    setMessages(prev => {
+        const next = [...prev, userMsg];
+        return next.length > MAX_MESSAGES ? next.slice(next.length - MAX_MESSAGES) : next;
+    });
     setQuery('');
     setLoading(true);
     setSlowQuery(false);
@@ -145,26 +149,25 @@ export const AgentChat: React.FC<AgentChatProps> = ({ embedded = false }) => {
             timestamp: new Date()
         };
         
-        setMessages(prev => [...prev, agentMsg]);
-        
+        setMessages(prev => {
+            const next = [...prev, agentMsg];
+            return next.length > MAX_MESSAGES ? next.slice(next.length - MAX_MESSAGES) : next;
+        });
+
     } catch (error: any) {
       console.error(error);
-      
+
       if (error.message === 'Request cancelled') {
-          setMessages(prev => [...prev, {
-              id: Date.now().toString(),
-              sender: 'agent',
-              text: 'Request cancelled.',
-              timestamp: new Date()
-          }]);
+          setMessages(prev => {
+              const next = [...prev, { id: Date.now().toString(), sender: 'agent' as const, text: 'Request cancelled.', timestamp: new Date() }];
+              return next.length > MAX_MESSAGES ? next.slice(next.length - MAX_MESSAGES) : next;
+          });
       } else {
           notifications.show({ color: 'red', message: 'Failed to process query' });
-          setMessages(prev => [...prev, {
-              id: Date.now().toString(),
-              sender: 'agent',
-              text: 'I encountered an error processing your request.',
-              timestamp: new Date()
-          }]);
+          setMessages(prev => {
+              const next = [...prev, { id: Date.now().toString(), sender: 'agent' as const, text: 'I encountered an error processing your request.', timestamp: new Date() }];
+              return next.length > MAX_MESSAGES ? next.slice(next.length - MAX_MESSAGES) : next;
+          });
       }
     } finally {
       setLoading(false);

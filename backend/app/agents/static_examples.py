@@ -18,10 +18,7 @@ STATIC_EXAMPLES = [
         "cypher": (
             "MATCH (u1:User)-[:SENT]->(m1:Message)-[:REPLY_TO]->(m2:Message)<-[:SENT]-(u2:User) "
             "WHERE u1 <> u2 "
-            "WITH u1, u2, count(*) AS interactions ORDER BY interactions DESC LIMIT 50 "
-            "MATCH (u1x:User) WHERE u1x.user_id = u1.user_id "
-            "MATCH (u2x:User) WHERE u2x.user_id = u2.user_id "
-            "RETURN u1x, u2x, interactions"
+            "RETURN u1, u2 LIMIT 100"
         )
     },
     {
@@ -75,7 +72,7 @@ STATIC_EXAMPLES = [
             "  toLower(m1.original_text) CONTAINS 'polit' OR toLower(m1.translated_text) CONTAINS 'polit' OR "
             "  toLower(m2.original_text) CONTAINS 'polit' OR toLower(m2.translated_text) CONTAINS 'polit'"
             ") "
-            "RETURN u1, u2, count(*) AS interactions ORDER BY interactions DESC LIMIT 60"
+            "RETURN u1, u2 LIMIT 60"
         )
     },
 
@@ -86,7 +83,7 @@ STATIC_EXAMPLES = [
         "cypher": (
             "MATCH (m:Message)-[:MENTIONS_LOCATION]->(l:Location) "
             "MATCH (m)-[:HAS_EMOTION]->(e:Emotion) "
-            "WHERE e.name CONTAINS 'Wut' OR e.name CONTAINS 'Angst' OR e.name CONTAINS 'Hass' "
+            "WHERE (e.name CONTAINS 'Wut' OR e.name CONTAINS 'Angst' OR e.name CONTAINS 'Hass') "
             "WITH l, collect(m)[..3] AS sms, count(m) AS emotion_count "
             "WHERE l.latitude IS NOT NULL AND l.longitude IS NOT NULL "
             "RETURN l.latitude AS lat, l.longitude AS lng, l.canonical_name AS canonical_name, "
@@ -114,7 +111,7 @@ STATIC_EXAMPLES = [
         "question": "Show map of locations mentioned by channels with the most propaganda content",
         "cypher": (
             "MATCH (c:Channel)-[:HAS_MESSAGE]->(m:Message)-[:HAS_CLASSIFICATION]->(cl:Classification) "
-            "WHERE toLower(cl.label) CONTAINS 'propaganda' "
+            "WHERE toLower(cl.name) CONTAINS 'propaganda' "
             "WITH DISTINCT c "
             "MATCH (c)-[:HAS_MESSAGE]->(m2:Message)-[:MENTIONS_LOCATION]->(l:Location) "
             "WHERE l.latitude IS NOT NULL AND l.longitude IS NOT NULL "
@@ -131,8 +128,8 @@ STATIC_EXAMPLES = [
         "cypher": (
             "MATCH (m:Message)-[:MENTIONS_LOCATION]->(l:Location) "
             "MATCH (m)-[:HAS_EMOTION]->(e:Emotion) "
-            "WHERE e.name CONTAINS 'Hass' OR e.name CONTAINS 'Wut' OR e.name CONTAINS 'Angst' "
-            "OR e.name CONTAINS 'Verzweiflung' OR e.name CONTAINS 'Misstrauen' "
+            "WHERE (e.name CONTAINS 'Hass' OR e.name CONTAINS 'Wut' OR e.name CONTAINS 'Angst' "
+            "OR e.name CONTAINS 'Verzweiflung' OR e.name CONTAINS 'Misstrauen') "
             "AND l.latitude IS NOT NULL AND l.longitude IS NOT NULL "
             "WITH l, collect(m)[..3] AS sms "
             "RETURN l.latitude AS lat, l.longitude AS lng, l.canonical_name AS canonical_name, "
@@ -158,7 +155,7 @@ STATIC_EXAMPLES = [
         "question": "What are the most common message categories across all channels?",
         "cypher": (
             "MATCH (m:Message)-[:HAS_CLASSIFICATION]->(cl:Classification) "
-            "RETURN cl.label AS category, count(m) AS count "
+            "RETURN cl.name AS category, count(m) AS count "
             "ORDER BY count DESC LIMIT 20"
         )
     },
@@ -167,7 +164,7 @@ STATIC_EXAMPLES = [
         "question": "Which channels have the most messages classified as Gewalt or Bedrohung?",
         "cypher": (
             "MATCH (c:Channel)-[:HAS_MESSAGE]->(m:Message)-[:HAS_CLASSIFICATION]->(cl:Classification) "
-            "WHERE toLower(cl.label) CONTAINS 'gewalt' OR toLower(cl.label) CONTAINS 'bedrohung' "
+            "WHERE toLower(cl.name) CONTAINS 'gewalt' OR toLower(cl.name) CONTAINS 'bedrohung' "
             "RETURN c.username AS channel, count(m) AS count "
             "ORDER BY count DESC LIMIT 20"
         )
