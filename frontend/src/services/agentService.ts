@@ -1,3 +1,5 @@
+import { authFetch } from '@/utils/authFetch';
+
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
 
 export interface GraphNode {
@@ -32,27 +34,14 @@ export interface CommandSuggestion {
 export const agentService = {
   // ... existing methods ...
   async queryAgent(message: string, history: string[] = [], system_prompt_key: string = "default", request_id?: string): Promise<AgentResponse> {
-    const token = localStorage.getItem('token');
-    if (!token) throw new Error('Not authenticated');
-
-    const response = await fetch(`${API_URL}/agent/query`, {
+    const response = await authFetch(`${API_URL}/agent/query`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({ 
-          message,
-          history,
-          system_prompt_key,
-          request_id
-      }),
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message, history, system_prompt_key, request_id }),
     });
 
     if (!response.ok) {
-      if (response.status === 499) {
-          throw new Error('Request cancelled');
-      }
+      if (response.status === 499) throw new Error('Request cancelled');
       const error = await response.json();
       throw new Error(error.detail || 'Query failed');
     }
@@ -61,30 +50,18 @@ export const agentService = {
   },
 
   async cancelRequest(request_id: string): Promise<void> {
-      const token = localStorage.getItem('token');
-      if (!token) return;
-
-      await fetch(`${API_URL}/agent/cancel/${request_id}`, {
+      await authFetch(`${API_URL}/agent/cancel/${request_id}`, {
           method: 'POST',
-          headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${token}`
-          }
+          headers: { 'Content-Type': 'application/json' },
       });
   },
 
   async submitFeedback(question: string, cypher: string, rating: number): Promise<boolean> {
-      const token = localStorage.getItem('token');
-      if (!token) return false;
-
       try {
-          const response = await fetch(`${API_URL}/agent/feedback`, {
+          const response = await authFetch(`${API_URL}/agent/feedback`, {
               method: 'POST',
-              headers: {
-                  'Content-Type': 'application/json',
-                  Authorization: `Bearer ${token}`
-              },
-              body: JSON.stringify({ question, cypher, rating })
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ question, cypher, rating }),
           });
           return response.ok;
       } catch (e) {
@@ -94,36 +71,19 @@ export const agentService = {
   },
 
   async getSystemPrompts(): Promise<Record<string, string>> {
-      const token = localStorage.getItem('token');
-      const response = await fetch(`${API_URL}/agent/prompts`, {
-          headers: { Authorization: `Bearer ${token}` }
-      });
-      if (!response.ok) {
-        // Fallback or empty if failed
-        return {};
-      }
+      const response = await authFetch(`${API_URL}/agent/prompts`);
+      if (!response.ok) return {};
       return response.json();
   },
 
   async getSuggestions(): Promise<CommandSuggestion[]> {
-      const token = localStorage.getItem('token');
-      const response = await fetch(`${API_URL}/agent/suggestions`, {
-          headers: { Authorization: `Bearer ${token}` }
-      });
+      const response = await authFetch(`${API_URL}/agent/suggestions`);
       if (!response.ok) return [];
       return response.json();
   },
 
   async initializeIndex(): Promise<void> {
-    const token = localStorage.getItem('token');
-    const response = await fetch(`${API_URL}/dashboard/initialize`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    });
-     if (!response.ok) {
-      throw new Error('Initialization failed');
-    }
+    const response = await authFetch(`${API_URL}/dashboard/initialize`, { method: 'POST' });
+    if (!response.ok) throw new Error('Initialization failed');
   }
 };

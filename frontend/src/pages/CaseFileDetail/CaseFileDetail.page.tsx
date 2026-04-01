@@ -104,6 +104,7 @@ export function CaseFileDetail() {
       const expandUrl = new URL(`${base}/messages/channels/expand`);
       expandUrl.searchParams.set('channel_usernames', initialChannels.join(','));
       const expandRes = await authFetch(expandUrl.toString());
+      if (!expandRes.ok) return;
       const expandedChannels: ExpandedChannels = await expandRes.json();
 
       const uniqueChannels = [
@@ -123,6 +124,7 @@ export function CaseFileDetail() {
       const channelsUrl = new URL(`${base}/messages/channels`);
       channelsUrl.searchParams.set('usernames', uniqueChannels.join(','));
       const channelsRes = await authFetch(channelsUrl.toString());
+      if (!channelsRes.ok) return;
       const tgChannelsData = await channelsRes.json();
 
       const mergedChannelsData = transformChannelData(tgChannelsData, expandedChannels);
@@ -156,6 +158,7 @@ export function CaseFileDetail() {
       try {
         const base = apiUrl ?? 'http://localhost:8000/api';
         const resCaseFile = await authFetch(`${base}/casefiles/${id}`);
+        if (!resCaseFile.ok) return;
         const caseFileData = await resCaseFile.json();
         setCaseFile(caseFileData);
 

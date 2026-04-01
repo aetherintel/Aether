@@ -3,7 +3,7 @@ import os
 from telethon import events
 from .telegram_client import get_client, login
 from .telegram_client import get_client, login
-from aether_lib.neo4j_client.channels import is_scraped, mark_scraped, get_latest_message_id
+from aether_lib.neo4j_client.channels import is_scraped, mark_scraped, get_latest_message_id, find_scraped_channel_owner, copy_channel_for_owner, copy_recommended_channels_for_owner
 from .message_processor import process_message
 from aether_lib.utils.event_publisher import publish_event
 
@@ -68,10 +68,48 @@ async def scrape_channel_complete(channel_name, recursive=False, case_id=None, o
             latest_id = await get_latest_message_id(clean_name)
             min_id = 0
             if latest_id:
-                print(f"[SCRAPE] 🔄 Found existing messages for {clean_name}, latest ID: {latest_id}. Resuming scrape...", flush=True)
-                min_id = latest_id
+                # mid is stored as "{channel_id}-{message_id}" — extract the integer part
+                try:
+                    min_id = int(str(latest_id).rsplit('-', 1)[-1])
+                except (ValueError, AttributeError):
+                    min_id = 0
+                print(f"[SCRAPE] 🔄 Found existing messages for {clean_name}, latest ID: {latest_id} (min_id={min_id}). Resuming scrape...", flush=True)
             else:
-                print(f"[SCRAPE] 🆕 No existing messages for {clean_name}. Starting full scrape...", flush=True)
+                # Fast-copy: check if another owner already has this channel fully scraped
+                source_owner = await find_scraped_channel_owner(clean_name)
+                if source_owner and source_owner != owner_id:
+                    print(f"[SCRAPE] ⚡ {clean_name} already scraped by {source_owner}. Copying to {owner_id}...", flush=True)
+                    copied = await copy_channel_for_owner(clean_name, source_owner, owner_id)
+                    print(f"[SCRAPE] ✅ Copied {copied} messages from {source_owner} to {owner_id} for {clean_name}", flush=True)
+
+                    # If this is a recursive scrape, also copy all recommended child channels
+                    if recursive:
+                        rec_results = await copy_recommended_channels_for_owner(clean_name, source_owner, owner_id)
+                        if rec_results:
+                            total_rec = sum(rec_results.values())
+                            print(f"[SCRAPE] ⚡ Copied {len(rec_results)} recommended channels ({total_rec} messages) to {owner_id}", flush=True)
+                            # Queue each copied child channel for a delta scrape
+                            for rec_username in rec_results:
+                                if rec_username not in all_seen_channels:
+                                    all_seen_channels.add(rec_username)
+                                    await found_channels_queue.put((rec_username, clean_name))
+
+                    # Mark channel as scraped for this owner immediately
+                    await mark_scraped(clean_name)
+                    publish_event("new_channel", {"owner_id": owner_id, "channel_username": clean_name})
+                    # Continue to incremental scrape to pick up any new messages since the copy
+                    latest_id = await get_latest_message_id(clean_name)
+                    if latest_id:
+                        try:
+                            min_id = int(str(latest_id).rsplit('-', 1)[-1])
+                        except (ValueError, AttributeError):
+                            min_id = 0
+                        print(f"[SCRAPE] 🔄 Fetching new messages since ID {min_id} for {clean_name}...", flush=True)
+                    else:
+                        # Copy returned 0 (edge case), fall through to full scrape
+                        print(f"[SCRAPE] ⚠️ Copy returned no messages, falling back to full scrape for {clean_name}", flush=True)
+                else:
+                    print(f"[SCRAPE] 🆕 No existing messages for {clean_name}. Starting full scrape...", flush=True)
 
             print(f"[SCRAPE] Starting scrape of {clean_name} (min_id={min_id})", flush=True)
             found_channels, message_count = set(), 0
