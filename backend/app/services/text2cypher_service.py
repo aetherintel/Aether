@@ -320,8 +320,9 @@ class Text2CypherService:
                     viz_data = data
                     logger.info("🎯 Auto-detected location data → showing map")
                 
-                # Check for Emotion Data
-                elif any(k.lower() in ['emotion', 'sentiment', 'feeling'] for k in keys):
+                # Check for Emotion Data — only use emotion widget for pure per-message emotion breakdowns,
+                # not for channel x emotion distributions (which should be bar charts)
+                elif any(k.lower() in ['emotion', 'sentiment', 'feeling'] for k in keys) and not any(k.lower() in ['channel', 'cnt', 'count'] for k in keys):
                     viz_type = "emotion_analysis"
                     viz_data = data
                     logger.info("🎯 Auto-detected emotion data → showing emotion analysis")
@@ -1087,23 +1088,23 @@ class Text2CypherService:
                     lines.append("")
                     lines.append("## QUERY PATTERNS (follow exactly):")
                     lines.append("# Emotion filter: MATCH (m:Message)-[:HAS_EMOTION]->(e:Emotion) WHERE e.name CONTAINS 'Wut'")
-                    lines.append("# Classification filter: MATCH (m:Message)-[:HAS_CLASSIFICATION]->(cl:Classification) WHERE toLower(cl.label) CONTAINS 'gewalt'")
-                    lines.append("# Classification stats: MATCH (c:Channel)-[:HAS_MESSAGE]->(m:Message)-[:HAS_CLASSIFICATION]->(cl:Classification) RETURN cl.label AS label, count(m) AS cnt ORDER BY cnt DESC")
+                    lines.append("# Classification filter: MATCH (m:Message)-[:HAS_CLASSIFICATION]->(cl:Classification) WHERE toLower(cl.name) CONTAINS 'gewalt'")
+                    lines.append("# Classification stats: MATCH (c:Channel)-[:HAS_MESSAGE]->(m:Message)-[:HAS_CLASSIFICATION]->(cl:Classification) RETURN cl.name AS label, count(m) AS cnt ORDER BY cnt DESC")
                     lines.append("# Location map: MATCH (m:Message)-[:MENTIONS_LOCATION]->(l:Location) WITH l, collect(m)[..3] AS sms RETURN l.latitude AS lat, l.longitude AS lng, l.canonical_name AS canonical_name, l.country AS country, l.mention_count AS mention_count, [msg IN sms | {text: coalesce(msg.translated_text, msg.original_text), date: toString(msg.date)}] AS sample_messages ORDER BY l.mention_count DESC LIMIT 50")
                     lines.append("# Date filter: use datetime() for relative dates. Current time: datetime(). Last 30 days: m.date >= datetime() - duration({days: 30}). Last year: m.date >= datetime() - duration({years: 1})")
                     lines.append("# Message volume over time: MATCH (m:Message) WHERE m.date >= datetime() - duration({days: 30}) RETURN toString(date(m.date)) AS day, count(m) AS messages ORDER BY day")
                     lines.append("# Channel-emotion distribution (chart): MATCH (c:Channel)-[:HAS_MESSAGE]->(m:Message)-[:HAS_EMOTION]->(e:Emotion) RETURN c.username AS channel, e.name AS emotion, count(m) AS cnt ORDER BY cnt DESC LIMIT 100")
-                    lines.append("# Channels with most propaganda: MATCH (c:Channel)-[:HAS_MESSAGE]->(m:Message)-[:HAS_CLASSIFICATION]->(cl:Classification) WHERE toLower(cl.label) CONTAINS 'propaganda' RETURN c.username AS channel, count(m) AS propaganda_count ORDER BY propaganda_count DESC LIMIT 20")
+                    lines.append("# Channels with most propaganda: MATCH (c:Channel)-[:HAS_MESSAGE]->(m:Message)-[:HAS_CLASSIFICATION]->(cl:Classification) WHERE toLower(cl.name) CONTAINS 'propaganda' RETURN c.username AS channel, count(m) AS propaganda_count ORDER BY propaganda_count DESC LIMIT 20")
                     lines.append("# Reply chain of most-replied message: MATCH (m:Message)<-[:REPLY_TO]-(reply:Message) WITH m, count(reply) AS reply_count ORDER BY reply_count DESC LIMIT 1 MATCH (m)<-[:REPLY_TO*1..5]-(r:Message) RETURN m, r LIMIT 100")
                     lines.append("# Channels sharing locations: MATCH (c1:Channel)-[:HAS_MESSAGE]->(m1:Message)-[:MENTIONS_LOCATION]->(l:Location)<-[:MENTIONS_LOCATION]-(m2:Message)<-[:HAS_MESSAGE]-(c2:Channel) WHERE c1 <> c2 WITH c1, c2, count(DISTINCT l) AS shared RETURN c1, c2, shared ORDER BY shared DESC LIMIT 50")
-                    lines.append("# User reply network: MATCH (u1:User)-[:SENT]->(m1:Message)-[:REPLY_TO]->(m2:Message)<-[:SENT]-(u2:User) WHERE u1 <> u2 RETURN u1, u2, count(*) AS interactions ORDER BY interactions DESC LIMIT 50")
+                    lines.append("# User reply network: MATCH (u1:User)-[:SENT]->(m1:Message)-[:REPLY_TO]->(m2:Message)<-[:SENT]-(u2:User) WHERE u1 <> u2 RETURN u1, u2 LIMIT 100")
                     lines.append("")
                     lines.append("## RULES:")
                     lines.append("# Keyword search: use BOTH fields: (toLower(m.original_text) CONTAINS 'term' OR toLower(m.translated_text) CONTAINS 'term')")
                     lines.append("# m.original_text = raw text (may be Russian/Arabic/etc), m.translated_text = German translation")
                     lines.append("# NEVER use aggregate functions inside WHERE — aggregates only in RETURN or WITH...HAVING pattern")
                     lines.append("# NEVER use Python syntax like datetime.now() — use Cypher datetime() function")
-                    lines.append("# NEVER use 'IN toLower(string)' — classifications/emotions are nodes, use -[:HAS_CLASSIFICATION]->(cl) WHERE toLower(cl.label) CONTAINS '...'")
+                    lines.append("# NEVER use 'IN toLower(string)' — classifications/emotions are nodes, use -[:HAS_CLASSIFICATION]->(cl) WHERE toLower(cl.name) CONTAINS '...'")
                     lines.append("# GRAPH queries: RETURN ALL matched node variables for edges to appear. Example: MATCH (c)-[:HAS_MESSAGE]->(m)-[:HAS_EMOTION]->(e) RETURN c, m, e")
 
                     simplified = "\n".join(lines)

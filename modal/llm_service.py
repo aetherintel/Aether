@@ -165,7 +165,7 @@ Relationships:
 Emotion filter: use relationship to Emotion node, filter on e.name CONTAINS 'Wut'
   nodes: [m:Message, e:Emotion], relationships: [{m->e, HAS_EMOTION}], filters: [{e.name, CONTAINS, Wut}]
 
-Classification filter: use relationship to Classification node, filter on toLower(cl.label) CONTAINS 'gewalt'
+Classification filter: use relationship to Classification node, filter on toLower(cl.name) CONTAINS 'gewalt'
   nodes: [m:Message, cl:Classification], relationships: [{m->cl, HAS_CLASSIFICATION}]
 
 Date filter: use Cypher datetime() — example for last 30 days: {"variable": "m.date", "operator": ">=", "value": "datetime() - duration({days: 30})"}
