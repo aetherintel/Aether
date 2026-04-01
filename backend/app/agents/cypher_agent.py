@@ -6,8 +6,8 @@ import json
 
 logger = logging.getLogger(__name__)
 
-VALID_RELATIONSHIPS = {"HAS_MESSAGE", "SENT", "REPLY_TO", "MENTIONS_LOCATION", "PART_OF"}
-VALID_NODES = {"Message", "Channel", "User", "Location"}
+VALID_RELATIONSHIPS = {"HAS_MESSAGE", "SENT", "REPLY_TO", "MENTIONS_LOCATION", "PART_OF", "HAS_EMOTION", "HAS_CLASSIFICATION", "RECOMMENDS"}
+VALID_NODES = {"Message", "Channel", "User", "Location", "Emotion", "Classification"}
 
 class CypherAgent:
     def __init__(self, llm_service_url: str = "http://llm-service:8001"):

@@ -261,6 +261,11 @@ class Text2CypherService:
                 "visualize", "visualization", "graph", "network", "connections",
                 "relationships", "show the connection", "diagram"
             ])
+            # "chart" / "distribution" / "per channel" imply tabular stats, not a graph
+            user_wants_chart = any(kw in question_lower for kw in [
+                "chart", "distribution", "per channel", "breakdown", "statistics",
+                "how many", "count", "most active", "top ", "ranking"
+            ])
             
             # If graph has no nodes (or just 1 info node) or data is flat tabular, prefer table
             viz_type = "graph"
@@ -277,8 +282,12 @@ class Text2CypherService:
             if data and isinstance(data, list) and len(data) > 0:
                 first_row = data[0]
                 # If keys contain 'count', 'sum', 'avg', or doesn't look like graph components
-                if any(kw in k.lower() for k in first_row.keys() for kw in ['count', 'sum', 'avg', 'total']):
+                if any(kw in k.lower() for k in first_row.keys() for kw in ['count', 'sum', 'avg', 'total', 'cnt', 'messages', 'interactions', 'mentions']):
                     is_tabular = True
+
+            # User explicitly asked for a chart/distribution → force tabular
+            if user_wants_chart and not user_wants_graph:
+                is_tabular = True
             
             # Fallback: If we failed to extract any nodes for the graph, but we have data, show as table
             if not is_tabular and not graph_data["nodes"] and data:
@@ -331,14 +340,14 @@ class Text2CypherService:
                         # Single value -> KPI Card
                         viz_type = "kpi"
                         viz_data = data
-                    
+
                     elif len(keys) == 2:
                         val1 = first_row[keys[0]]
                         val2 = first_row[keys[1]]
-                        
+
                         col1_num = isinstance(val1, (int, float))
                         col2_num = isinstance(val2, (int, float))
-                        
+
                         # One numeric, one categorical
                         if col1_num != col2_num:
                              # Pie for small number of categories
@@ -348,6 +357,15 @@ class Text2CypherService:
                              else:
                                  viz_type = "bar"
                                  viz_data = data
+
+                    elif len(keys) >= 3:
+                        # Multi-dimensional tabular data (e.g. channel x emotion x count)
+                        # Check if at least one column is numeric
+                        has_numeric = any(isinstance(first_row[k], (int, float)) for k in keys)
+                        if has_numeric:
+                            viz_type = "bar"
+                            viz_data = data
+                            logger.info("🎯 Auto-detected multi-column stats → showing bar chart")
 
                     # Fallback: if still undecided, use table
                     if viz_type == "graph":
@@ -992,8 +1010,7 @@ class Text2CypherService:
 
         # Define simplified property whitelist for each node type
         SIMPLIFIED_PROPERTIES = {
-            "Message": ["mid", "owner_id", "date", "original_text", "translated_text", "language", "media_type", "media_path",
-                       "location_names"],
+            "Message": ["mid", "owner_id", "date", "original_text", "translated_text", "language", "media_type", "media_path"],
             "Channel": ["channel_id", "owner_id", "username", "title"],
             "User": ["user_id", "owner_id", "username", "first_name", "last_name"],
             "Location": ["canonical_name", "owner_id", "latitude", "longitude", "country", "mention_count"],
@@ -1028,9 +1045,7 @@ class Text2CypherService:
                         if not isinstance(details, dict): continue
                         if details.get("type") == "relationship": continue
 
-                        # Skip nodes not useful for LLM queries
-                        if label in ["Classification"]:
-                            continue
+                        # No nodes are skipped — all are needed for query generation
 
                         # Filter properties based on whitelist
                         all_props = list(details.get("properties", {}).keys())
@@ -1051,8 +1066,6 @@ class Text2CypherService:
                          if details.get("type") == "node":
                              src_label = label
 
-                             if src_label in ["Classification"]:
-                                 continue
 
                              for rel_name, rel_meta in details.get("relationships", {}).items():
                                  if rel_name in HIDDEN_RELATIONSHIPS:
@@ -1061,24 +1074,37 @@ class Text2CypherService:
                                  direction = rel_meta.get("direction")
                                  target_labels = rel_meta.get("labels", [])
                                  for tgt_label in target_labels:
-                                     if tgt_label in ["Classification"]:
-                                         continue
-
                                      if direction == "out":
                                          lines.append(f"- (:{src_label})-[:{rel_name}]->(:{tgt_label})")
 
                     # Append known Emotion label values so LLM can filter correctly
-                    lines.append("\n## Known Emotion labels (use CONTAINS for partial match):")
+                    lines.append("\n## Known Emotion labels (use CONTAINS for partial match on e.name):")
                     lines.append("Hass / Feindbild, Wut / Aggression, Angst / Bedrohungsempfinden,")
                     lines.append("Verzweiflung / Hoffnungslosigkeit, Misstrauen / Paranoia,")
                     lines.append("Neutral / Informationsorientiert, Ambivalent / Gemischt,")
                     lines.append("Euphorie / Begeisterung, Mobilisierende Hoffnung,")
                     lines.append("Stolz / Selbstermächtigung, Solidarität / Zusammenhalt")
-                    lines.append("## Emotion query pattern: MATCH (m:Message)-[:HAS_EMOTION]->(e:Emotion) WHERE e.name CONTAINS 'Wut'")
-                    lines.append("## Keyword search: use BOTH fields for best coverage: (toLower(m.original_text) CONTAINS 'term' OR toLower(m.translated_text) CONTAINS 'term')")
-                    lines.append("## m.original_text = raw text (may be Russian, Arabic, etc.), m.translated_text = German translation (may be null if not yet translated)")
-                    lines.append("## NEVER use aggregate functions (count, sum, avg) inside WHERE clauses — aggregates only belong in RETURN or HAVING (use WITH for HAVING)")
-                    lines.append("## GRAPH queries: RETURN ALL matched node variables to make edges visible. Example: MATCH (u:User)-[:SENT]->(m:Message) RETURN u, m — never RETURN u alone when messages are matched")
+                    lines.append("")
+                    lines.append("## QUERY PATTERNS (follow exactly):")
+                    lines.append("# Emotion filter: MATCH (m:Message)-[:HAS_EMOTION]->(e:Emotion) WHERE e.name CONTAINS 'Wut'")
+                    lines.append("# Classification filter: MATCH (m:Message)-[:HAS_CLASSIFICATION]->(cl:Classification) WHERE toLower(cl.label) CONTAINS 'gewalt'")
+                    lines.append("# Classification stats: MATCH (c:Channel)-[:HAS_MESSAGE]->(m:Message)-[:HAS_CLASSIFICATION]->(cl:Classification) RETURN cl.label AS label, count(m) AS cnt ORDER BY cnt DESC")
+                    lines.append("# Location map: MATCH (m:Message)-[:MENTIONS_LOCATION]->(l:Location) WITH l, collect(m)[..3] AS sms RETURN l.latitude AS lat, l.longitude AS lng, l.canonical_name AS canonical_name, l.country AS country, l.mention_count AS mention_count, [msg IN sms | {text: coalesce(msg.translated_text, msg.original_text), date: toString(msg.date)}] AS sample_messages ORDER BY l.mention_count DESC LIMIT 50")
+                    lines.append("# Date filter: use datetime() for relative dates. Current time: datetime(). Last 30 days: m.date >= datetime() - duration({days: 30}). Last year: m.date >= datetime() - duration({years: 1})")
+                    lines.append("# Message volume over time: MATCH (m:Message) WHERE m.date >= datetime() - duration({days: 30}) RETURN toString(date(m.date)) AS day, count(m) AS messages ORDER BY day")
+                    lines.append("# Channel-emotion distribution (chart): MATCH (c:Channel)-[:HAS_MESSAGE]->(m:Message)-[:HAS_EMOTION]->(e:Emotion) RETURN c.username AS channel, e.name AS emotion, count(m) AS cnt ORDER BY cnt DESC LIMIT 100")
+                    lines.append("# Channels with most propaganda: MATCH (c:Channel)-[:HAS_MESSAGE]->(m:Message)-[:HAS_CLASSIFICATION]->(cl:Classification) WHERE toLower(cl.label) CONTAINS 'propaganda' RETURN c.username AS channel, count(m) AS propaganda_count ORDER BY propaganda_count DESC LIMIT 20")
+                    lines.append("# Reply chain of most-replied message: MATCH (m:Message)<-[:REPLY_TO]-(reply:Message) WITH m, count(reply) AS reply_count ORDER BY reply_count DESC LIMIT 1 MATCH (m)<-[:REPLY_TO*1..5]-(r:Message) RETURN m, r LIMIT 100")
+                    lines.append("# Channels sharing locations: MATCH (c1:Channel)-[:HAS_MESSAGE]->(m1:Message)-[:MENTIONS_LOCATION]->(l:Location)<-[:MENTIONS_LOCATION]-(m2:Message)<-[:HAS_MESSAGE]-(c2:Channel) WHERE c1 <> c2 WITH c1, c2, count(DISTINCT l) AS shared RETURN c1, c2, shared ORDER BY shared DESC LIMIT 50")
+                    lines.append("# User reply network: MATCH (u1:User)-[:SENT]->(m1:Message)-[:REPLY_TO]->(m2:Message)<-[:SENT]-(u2:User) WHERE u1 <> u2 RETURN u1, u2, count(*) AS interactions ORDER BY interactions DESC LIMIT 50")
+                    lines.append("")
+                    lines.append("## RULES:")
+                    lines.append("# Keyword search: use BOTH fields: (toLower(m.original_text) CONTAINS 'term' OR toLower(m.translated_text) CONTAINS 'term')")
+                    lines.append("# m.original_text = raw text (may be Russian/Arabic/etc), m.translated_text = German translation")
+                    lines.append("# NEVER use aggregate functions inside WHERE — aggregates only in RETURN or WITH...HAVING pattern")
+                    lines.append("# NEVER use Python syntax like datetime.now() — use Cypher datetime() function")
+                    lines.append("# NEVER use 'IN toLower(string)' — classifications/emotions are nodes, use -[:HAS_CLASSIFICATION]->(cl) WHERE toLower(cl.label) CONTAINS '...'")
+                    lines.append("# GRAPH queries: RETURN ALL matched node variables for edges to appear. Example: MATCH (c)-[:HAS_MESSAGE]->(m)-[:HAS_EMOTION]->(e) RETURN c, m, e")
 
                     simplified = "\n".join(lines)
                     logger.info(f"\n{'='*60}")

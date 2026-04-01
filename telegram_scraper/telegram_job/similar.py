@@ -27,19 +27,21 @@ async def _search_fallback(query: str, limit: int = 15):
     return chans
 
 async def similar_channels_flexible(user_input: str, limit: int = 15):
-
-    
-    # 2️⃣ try the “official” recommendations API
+    # 2️⃣ try the "official" recommendations API
     try:
-        recs = await similar_channels(user_input)
+        async with get_client():
+            recs = await similar_channels(user_input)
         if recs:
             return recs
     except UsernameInvalidError:
-        # treat as “no recs”
+        # treat as "no recs"
+        pass
+    except Exception:
         pass
 
     # 3️⃣ fall back to keyword search
-    return await _search_fallback(user_input, limit)
+    async with get_client():
+        return await _search_fallback(user_input, limit)
 
 def run_similarity_and_scrape(channel: str, recursive: bool = False) -> dict:
     similar = similar_channels_flexible(channel)
