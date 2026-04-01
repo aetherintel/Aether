@@ -123,53 +123,61 @@ Your task: Convert natural language questions into a structured JSON plan for Cy
 
 ## CRITICAL REQUIREMENTS
 
-🚨 OUTPUT ONLY VALID JSON - No explanations, no Cypher code, no markdown!
-🚨 STRICTLY use only the nodes, properties, and relationships defined in the schema below.
-🚨 Every variable in return_fields MUST be defined in nodes.
+OUTPUT ONLY VALID JSON - No explanations, no Cypher code, no markdown!
+STRICTLY use only the nodes, properties, and relationships defined in the schema below.
+Every variable in return_fields MUST be defined in nodes.
+NEVER use Python syntax like datetime.now() — use Cypher datetime() function.
+NEVER use aggregate functions (count, sum) inside WHERE clauses.
+Emotions and classifications are NODES connected by relationships, NOT array properties on Message.
 
 ## Available Schema
 
-**Nodes:**
-- Message: mid, owner_id, date, text, language, media_type, media_path, emotions, classifications, location_names
+Nodes:
+- Message: mid, owner_id, date, original_text, translated_text, language, media_type, media_path
 - Channel: channel_id, owner_id, username, title
 - User: user_id, owner_id, username, first_name, last_name
-- Location: name, owner_id, latitude, longitude, country, mention_count
+- Location: canonical_name, owner_id, latitude, longitude, country, mention_count
+- Emotion: name, label_id
+- Classification: label, label_id
 
-**Relationships:**
+Relationships:
 - (Channel)-[:HAS_MESSAGE]->(Message)
 - (User)-[:SENT]->(Message)
 - (Message)-[:REPLY_TO]->(Message)
 - (Message)-[:MENTIONS_LOCATION]->(Location)
+- (Message)-[:HAS_EMOTION]->(Emotion)
+- (Message)-[:HAS_CLASSIFICATION]->(Classification)
 
 ## JSON Output Format
 
 {
   "nodes": [{"id": "variable_name", "label": "NodeLabel"}],
   "relationships": [{"source": "var_a", "target": "var_b", "type": "REL_TYPE"}],
-  "optional_relationships": [{"source": "var_a", "target": "var_b", "type": "REL_TYPE"}],
-  "filters": [{"variable": "var.property", "operator": "CONTAINS|=|IN|>|<", "value": "value"}],
+  "optional_relationships": [],
+  "filters": [{"variable": "var.property", "operator": "CONTAINS|=|>|<", "value": "value"}],
   "return_fields": ["variable1", "variable2"],
   "order_by": "m.date DESC",
   "limit": 50
 }
 
-## Operator Rules
+## Query Pattern Rules
 
-- **ARRAY properties (emotions, classifications, location_names)**: Use `IN` operator
-  - Example: {"variable": "m.emotions", "operator": "IN", "value": "angry"}
-  - NOTE: Cypher syntax is "'value' IN variable", NOT "variable IN ['value']"
+Emotion filter: use relationship to Emotion node, filter on e.name CONTAINS 'Wut'
+  nodes: [m:Message, e:Emotion], relationships: [{m->e, HAS_EMOTION}], filters: [{e.name, CONTAINS, Wut}]
 
-- **Text search**: Use `CONTAINS` operator
-  - Example: {"variable": "m.text", "operator": "CONTAINS", "value": "war"}
+Classification filter: use relationship to Classification node, filter on toLower(cl.label) CONTAINS 'gewalt'
+  nodes: [m:Message, cl:Classification], relationships: [{m->cl, HAS_CLASSIFICATION}]
 
-- **Exact match**: Use `=`
-  - Example: {"variable": "m.language", "operator": "=", "value": "ru"}
+Date filter: use Cypher datetime() — example for last 30 days: {"variable": "m.date", "operator": ">=", "value": "datetime() - duration({days: 30})"}
 
-## Valid Relationship Types (ONLY USE THESE):
-- HAS_MESSAGE (Channel -> Message)
-- SENT (User -> Message)
-- REPLY_TO (Message -> Message)
-- MENTIONS_LOCATION (Message -> Location)
+Keyword search: search BOTH m.original_text and m.translated_text with CONTAINS
+
+Known emotion labels (use CONTAINS for partial match):
+Hass / Feindbild, Wut / Aggression, Angst / Bedrohungsempfinden,
+Verzweiflung / Hoffnungslosigkeit, Misstrauen / Paranoia,
+Neutral / Informationsorientiert, Ambivalent / Gemischt,
+Euphorie / Begeisterung, Mobilisierende Hoffnung,
+Stolz / Selbstermaechtigung, Solidaritaet / Zusammenhalt
 
 Now convert the user's question to JSON:"""
 
