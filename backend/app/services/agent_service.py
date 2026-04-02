@@ -89,10 +89,12 @@ class AgentService:
 
     async def _handle_showmap(self, filter_hint: str = "", owner_id: Optional[str] = None) -> AgentResponse:
         """
-        Shows a location map. If a filter hint is given (e.g. "negative emotions"), uses the LLM
-        to build a filtered query that still returns flat lat/lng columns for the map widget.
-        Falls back to a hardcoded all-locations query when no filter is specified.
+        Shows a location map. If a filter hint is given (e.g. "negative emotions"), tries static
+        examples first, then falls back to the LLM, then falls back to all-locations query.
         """
+        import re as _re
+        from agents.static_examples import get_examples
+
         # Determine whether the user supplied a meaningful filter beyond just trigger phrases
         stripped = filter_hint.lower()
         for phrase in ["show map", "map of", "/showmap", "/show_map", "show locations",
@@ -102,28 +104,37 @@ class AgentService:
         has_filter = len(stripped.strip()) > 3
 
         if has_filter:
-            # Use the LLM but force the result to return flat location columns for the map widget.
-            # We allow an extra aggregation column for ordering (e.g. count(e)) but the five
-            # mandatory map columns must always be present so the map widget can render pins.
+            # --- Step 1: Try static examples first (they have correct WITH + sample_messages) ---
+            static_examples = get_examples(filter_hint)
+            map_examples = [ex for ex in static_examples if "lat" in ex.get("cypher", "").lower()]
+            if map_examples:
+                static_cypher = map_examples[0]["cypher"]
+                # Inject owner_id filter
+                if owner_id:
+                    static_cypher = self.text2cypher._inject_owner_id_filter(static_cypher, owner_id)
+                try:
+                    data = await self.text2cypher._execute_query(static_cypher)
+                    if data and isinstance(data, list) and len(data) > 0 and ("lat" in data[0] or "latitude" in data[0]):
+                        return AgentResponse(
+                            message=f"**Map of {len(data)} locations**",
+                            widget_type="location_map",
+                            widget_data=data,
+                            metadata={"cypher": static_cypher}
+                        )
+                    logger.warning("Static map example returned no data, trying LLM")
+                except Exception as e:
+                    logger.error(f"Static map example failed: {e}, trying LLM")
+
+            # --- Step 2: Use the LLM but ask for simple flat columns only (no WITH/sample_msgs) ---
+            # The plan builder cannot handle WITH clauses, so we must NOT ask for sample_messages.
             map_question = (
                 f"{filter_hint}. "
-                "IMPORTANT: Build a Cypher query that answers this question AND returns results "
-                "suitable for a map widget. "
-                "The query MUST always return these columns (use these exact aliases): "
+                "IMPORTANT: Return results suitable for a map widget with these exact column aliases: "
                 "l.latitude AS lat, l.longitude AS lng, l.canonical_name AS canonical_name, "
-                "l.country AS country, l.mention_count AS mention_count, "
-                "AND also sample_messages: use WITH l, collect(m)[..3] AS sample_msgs BEFORE the RETURN, "
-                "then: [msg IN sample_msgs | {text: coalesce(msg.translated_text, msg.original_text), date: toString(msg.date)}] AS sample_messages. "
-                "If ordering or filtering by a count (e.g. number of emotions, messages), add that "
-                "as an ADDITIONAL return column with an alias and use it in ORDER BY. "
-                "Example for 'locations with most emotions': "
-                "MATCH (m:Message)-[:MENTIONS_LOCATION]->(l:Location) OPTIONAL MATCH (m)-[:HAS_EMOTION]->(e:Emotion) "
-                "WITH l, collect(m)[..3] AS sample_msgs, count(e) AS emotion_count "
-                "RETURN l.latitude AS lat, l.longitude AS lng, l.canonical_name AS canonical_name, "
-                "l.country AS country, l.mention_count AS mention_count, emotion_count, "
-                "[msg IN sample_msgs | {text: coalesce(msg.translated_text, msg.original_text), date: toString(msg.date)}] AS sample_messages "
-                "ORDER BY emotion_count DESC LIMIT 10. "
-                "Do NOT return full node variables — only flat properties plus aggregation columns."
+                "l.country AS country, l.mention_count AS mention_count. "
+                "Filter by l.latitude IS NOT NULL AND l.longitude IS NOT NULL. "
+                "If ordering by emotion/message count, add that as an extra column. "
+                "Do NOT return full node variables — only flat location properties."
             )
             try:
                 result = await self.text2cypher.run_text2cypher(
@@ -131,6 +142,17 @@ class AgentService:
                 )
                 data = result.get("visualization", {}).get("data") or []
                 cypher = result.get("cypher", "")
+
+                # Strip any broken list-comprehension RETURN columns that reference undefined variables
+                # (plan builder drops WITH clauses so sample_msgs / sample_messages are never defined)
+                if cypher:
+                    cypher = _re.sub(
+                        r',?\s*\[msg\s+IN\s+\w+\s*\|[^\]]+\]\s+AS\s+\w+',
+                        '',
+                        cypher,
+                        flags=_re.IGNORECASE
+                    )
+
                 # Validate that the result actually has lat/lng columns
                 if data and isinstance(data, list) and ("lat" in data[0] or "latitude" in data[0]):
                     return AgentResponse(

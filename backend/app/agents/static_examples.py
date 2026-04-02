@@ -84,8 +84,8 @@ STATIC_EXAMPLES = [
             "MATCH (m:Message)-[:MENTIONS_LOCATION]->(l:Location) "
             "MATCH (m)-[:HAS_EMOTION]->(e:Emotion) "
             "WHERE (e.name CONTAINS 'Wut' OR e.name CONTAINS 'Angst' OR e.name CONTAINS 'Hass') "
+            "AND l.latitude IS NOT NULL AND l.longitude IS NOT NULL "
             "WITH l, collect(m)[..3] AS sms, count(m) AS emotion_count "
-            "WHERE l.latitude IS NOT NULL AND l.longitude IS NOT NULL "
             "RETURN l.latitude AS lat, l.longitude AS lng, l.canonical_name AS canonical_name, "
             "l.country AS country, l.mention_count AS mention_count, emotion_count, "
             "[msg IN sms | {text: coalesce(msg.translated_text, msg.original_text), date: toString(msg.date)}] AS sample_messages "
@@ -123,7 +123,7 @@ STATIC_EXAMPLES = [
         )
     },
     {
-        "keywords": ["negative emotion", "negative map", "map negative"],
+        "keywords": ["negative emotion", "negative map", "map negative", "negative gefühl", "negativen emotion"],
         "question": "Show map of locations from messages with negative emotions only",
         "cypher": (
             "MATCH (m:Message)-[:MENTIONS_LOCATION]->(l:Location) "

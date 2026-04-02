@@ -110,12 +110,12 @@ export const LocationMap: React.FC<LocationMapProps> = ({
   const firstPoint = points[0];
 
   return (
-    <Box style={{ display: 'flex', flexDirection: 'column', height, width: '100%' }}>
+    <Box style={{ display: 'flex', flexDirection: 'column', height, width: '100%', position: 'relative' }}>
       {/* ── Toolbar — sits above the map, no z-index/overflow fights ── */}
       <Group
         gap="xs"
         justify="flex-end"
-        style={{ padding: '4px 6px', flexShrink: 0 }}
+        style={{ padding: '4px 6px', flexShrink: 0, position: 'relative', zIndex: 1000 }}
       >
         {loadingOsint && <Loader size="xs" />}
 
@@ -123,7 +123,7 @@ export const LocationMap: React.FC<LocationMapProps> = ({
           {points.length} locations
         </Badge>
 
-        <Popover position="bottom-end" withArrow shadow="md" closeOnClickOutside={true}>
+        <Popover position="bottom-end" withArrow shadow="md" closeOnClickOutside={true} zIndex={2000}>
           <Popover.Target>
             <ActionIcon variant="subtle" color="gray" size="md" title="POI-Filter konfigurieren">
               <IconSettings size={18} />
@@ -173,7 +173,7 @@ export const LocationMap: React.FC<LocationMapProps> = ({
       </Group>
 
       {/* ── Map fills remaining height ── */}
-      <Box style={{ flex: 1, minHeight: 0, borderRadius: '8px', overflow: 'hidden' }}>
+      <Box style={{ flex: 1, minHeight: 0, borderRadius: '8px', overflow: 'hidden', position: 'relative', zIndex: 0 }}>
         <MapContainer
         center={[51.1657, 10.4515]}
         zoom={6}
