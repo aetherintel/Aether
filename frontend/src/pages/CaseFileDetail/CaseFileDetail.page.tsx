@@ -344,7 +344,7 @@ export function CaseFileDetail() {
                   />
                 </Tabs.Panel>
 
-                <Tabs.Panel value="visuals" mt="md">
+                <Tabs.Panel value="visuals" mt="md" style={{ height: 'calc(var(--app-shell-main-height, 100dvh) - 220px)', minHeight: 0, display: 'flex', flexDirection: 'column' }}>
                   <AgentChat embedded />
                 </Tabs.Panel>
 

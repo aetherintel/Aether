@@ -1,6 +1,5 @@
-import { useState } from 'react';
 import { IconFiles, IconHome2, IconLogout, IconSettings, IconFileAnalytics, IconRobot } from '@tabler/icons-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Box, Center, Stack, Text, Tooltip, UnstyledButton } from '@mantine/core';
 import { useAuthStore } from '../../store/client/authStore';
 import classes from './Navbar.module.css';
@@ -35,26 +34,28 @@ const mockdata = [
 ];
 
 export function Navbar({ isNavbarOpen }: NavbarProps) {
-  const [active, setActive] = useState(0);
   const { logout } = useAuthStore();
   const navigate = useNavigate();
+  const location = useLocation();
 
   const handleLogout = () => {
     logout();
     navigate('/login');
   };
 
-  const links = mockdata.map((link, index) => (
-    <NavbarLink
-      {...link}
-      key={link.label}
-      active={index === active}
-      onClick={() => {
-        setActive(index);
-        navigate(link.href);
-      }}
-    />
-  ));
+  const links = mockdata.map((link) => {
+    const isActive = link.href === '/'
+      ? location.pathname === '/'
+      : location.pathname.startsWith(link.href);
+    return (
+      <NavbarLink
+        {...link}
+        key={link.label}
+        active={isActive}
+        onClick={() => navigate(link.href)}
+      />
+    );
+  });
 
   return (
     <nav className={classes.navbar} data-collapsed={isNavbarOpen}>

@@ -349,20 +349,6 @@ export function CreateCaseFileForm() {
           </Stack>
         </Stepper.Step>
 
-        <Stepper.Step label="Settings" description="Case settings">
-          <Stack>
-            <Text mt="md">How long should this case stay active?</Text>
-            <Slider
-              {...form.getInputProps('duration')}
-              defaultValue={20}
-              label={(val: number) => marks.find((mark) => mark.value === val)!.label}
-              step={20}
-              marks={marks}
-              styles={{ markLabel: { display: 'none' } }}
-            />
-          </Stack>
-        </Stepper.Step>
-
         <Stepper.Completed>Completed, click back button to get to previous step</Stepper.Completed>
       </Stepper>
 
@@ -373,7 +359,7 @@ export function CreateCaseFileForm() {
           </Button>
         )}
 
-        {active <= 1 && (
+        {active < 1 && (
           <Button
             onClick={() => {
               const isValid = form.validate().hasErrors === false;
@@ -386,7 +372,7 @@ export function CreateCaseFileForm() {
           </Button>
         )}
 
-        {active === 2 && (
+        {active === 1 && (
           <Button type="submit" loading={loading}>
             Create Case
           </Button>
