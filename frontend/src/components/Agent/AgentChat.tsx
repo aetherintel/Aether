@@ -36,8 +36,9 @@ function loadMessagesFromStorage(): ChatMessage[] {
         const raw = sessionStorage.getItem(CHAT_STORAGE_KEY);
         if (!raw) return [];
         const parsed: ChatMessage[] = JSON.parse(raw);
-        // Re-hydrate Date objects
-        return parsed.map(m => ({ ...m, timestamp: new Date(m.timestamp) }));
+        // Re-hydrate Date objects and enforce cap on load
+        const hydrated = parsed.map(m => ({ ...m, timestamp: new Date(m.timestamp) }));
+        return hydrated.length > MAX_MESSAGES ? hydrated.slice(hydrated.length - MAX_MESSAGES) : hydrated;
     } catch {
         return [];
     }
@@ -45,7 +46,9 @@ function loadMessagesFromStorage(): ChatMessage[] {
 
 function saveMessagesToStorage(msgs: ChatMessage[]) {
     try {
-        sessionStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(msgs));
+        // Always cap before saving to prevent storage from growing unbounded
+        const toSave = msgs.length > MAX_MESSAGES ? msgs.slice(msgs.length - MAX_MESSAGES) : msgs;
+        sessionStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(toSave));
     } catch {
         // sessionStorage full or unavailable — silently ignore
     }
@@ -55,7 +58,7 @@ export const AgentChat: React.FC<AgentChatProps> = ({ embedded = false }) => {
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>(() => {
-      const stored = loadMessagesFromStorage();
+      const stored = loadMessagesFromStorage(); // already capped at MAX_MESSAGES
       if (stored.length > 0) return stored;
       return [{
           id: 'init',
@@ -308,16 +311,15 @@ export const AgentChat: React.FC<AgentChatProps> = ({ embedded = false }) => {
   };
 
   return (
-    <Stack gap="md" h="100%">
+    <Stack gap="md" style={{ height: '100%', minHeight: 0, display: 'flex', flexDirection: 'column' }}>
         {/* Header / Toolbar */}
-        <Paper p="xs" shadow="xs" radius="md">
+        <Paper p="xs" shadow="xs" radius="md" style={{ flexShrink: 0 }}>
             <Group justify="space-between">
                 <Group>
                     <IconRobot size={20} />
                     <Text fw={600}>Agent Chat</Text>
                 </Group>
                 <Group>
-
                     <Button variant="light" size="xs" onClick={handleInitialize} leftSection={<IconDatabaseImport size={14}/>}>
                         Re-Index
                     </Button>
@@ -325,9 +327,9 @@ export const AgentChat: React.FC<AgentChatProps> = ({ embedded = false }) => {
             </Group>
         </Paper>
 
-        {/* Chat Area */}
-        <Paper flex={1} p="md" radius="md" withBorder bg="var(--mantine-color-gray-0)" style={{ overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-            <ScrollArea viewportRef={scrollViewport} style={{ flex: 1 }}>
+        {/* Chat Area — flex:1 + minHeight:0 lets it shrink to fit available space */}
+        <Paper p="md" radius="md" withBorder bg="var(--mantine-color-gray-0)" style={{ flex: 1, minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+            <ScrollArea viewportRef={scrollViewport} style={{ flex: 1, minHeight: 0 }}>
                 <Stack gap="lg" pb="xl">
                     <AnimatePresence initial={false}>
                         {messages.map((msg) => (
@@ -341,7 +343,6 @@ export const AgentChat: React.FC<AgentChatProps> = ({ embedded = false }) => {
                                     maxWidth: '92%',
                                     width: 'fit-content' // Important for alignment
                                 }}
-                                onLayoutAnimationComplete={() => console.log("MSG DEBUG:", msg)}
                             >
                                 <Group align="flex-start" gap="xs" style={{flexDirection: msg.sender === 'user' ? 'row-reverse' : 'row'}}>
                                     <Avatar color={msg.sender === 'user' ? 'blue' : 'green'} radius="xl" size="md">
@@ -596,35 +597,53 @@ export const AgentChat: React.FC<AgentChatProps> = ({ embedded = false }) => {
             </ScrollArea>
         </Paper>
 
-        {/* Input Area */}
-        <Paper p="xs" withBorder radius="md">
-            <Autocomplete
-                placeholder="Type a message or command (e.g., /visualize query, /summarize)..."
-                value={query}
-                onChange={setQuery}
-                onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-                rightSection={
-                    loading ? (
-                        <ActionIcon onClick={handleCancel} variant="filled" color="red" title="Cancel Request">
-                             <IconX size={16} />
-                        </ActionIcon>
-                    ) : (
-                        <ActionIcon onClick={handleSearch} variant="filled" color="blue">
-                            <IconSend size={16} />
-                        </ActionIcon>
-                    )
-                }
-                data={(() => {
-                    const grouped = (suggestions || []).reduce((acc, s) => {
-                        if (!acc[s.category]) acc[s.category] = [];
-                        acc[s.category].push({ value: s.query, label: s.label });
-                        return acc;
-                    }, {} as Record<string, { value: string, label: string }[]>);
-                    
-                    return Object.entries(grouped).map(([group, items]) => ({ group, items }));
-                })()}
-                limit={20}
-            />
+        {/* Input Area — always pinned at bottom */}
+        <Paper p="sm" withBorder radius="lg" shadow="sm" style={{ flexShrink: 0 }}>
+            <Group gap="xs" align="flex-end">
+                <Autocomplete
+                    placeholder="Ask anything… e.g. 'Show map of negative emotions' or '/showmap'"
+                    value={query}
+                    onChange={setQuery}
+                    onKeyDown={(e) => e.key === 'Enter' && !loading && handleSearch()}
+                    size="md"
+                    radius="md"
+                    style={{ flex: 1 }}
+                    rightSectionWidth={0}
+                    data={(() => {
+                        const grouped = (suggestions || []).reduce((acc, s) => {
+                            if (!acc[s.category]) acc[s.category] = [];
+                            acc[s.category].push({ value: s.query, label: s.label });
+                            return acc;
+                        }, {} as Record<string, { value: string, label: string }[]>);
+                        return Object.entries(grouped).map(([group, items]) => ({ group, items }));
+                    })()}
+                    limit={20}
+                />
+                {loading ? (
+                    <ActionIcon
+                        onClick={handleCancel}
+                        variant="filled"
+                        color="red"
+                        size="42"
+                        radius="md"
+                        title="Cancel"
+                    >
+                        <IconX size={18} />
+                    </ActionIcon>
+                ) : (
+                    <ActionIcon
+                        onClick={handleSearch}
+                        variant="filled"
+                        color="blue"
+                        size="42"
+                        radius="md"
+                        disabled={!query.trim()}
+                        title="Send"
+                    >
+                        <IconSend size={18} />
+                    </ActionIcon>
+                )}
+            </Group>
         </Paper>
     </Stack>
   );

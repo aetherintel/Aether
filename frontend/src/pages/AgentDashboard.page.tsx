@@ -9,9 +9,7 @@ export function AgentDashboard() {
   }, []);
 
   return (
-    <Stack h="100%" gap="md">
-      <BreadcrumbsBar />
-      <Title order={2}>Conversation Agent</Title>
+    <Stack gap="md" style={{ height: 'calc(var(--app-shell-main-height, 100dvh) - 2 * var(--mantine-spacing-md))', minHeight: 0, display: 'flex', flexDirection: 'column' }}>
       <AgentChat />
     </Stack>
   );
