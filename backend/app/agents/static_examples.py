@@ -58,9 +58,23 @@ STATIC_EXAMPLES = [
         "question": "Visualize channels with the most negative emotions and the emotions they express",
         "cypher": (
             "MATCH (c:Channel)-[:HAS_MESSAGE]->(m:Message)-[:HAS_EMOTION]->(e:Emotion) "
-            "WHERE e.name CONTAINS 'Hass' OR e.name CONTAINS 'Wut' OR e.name CONTAINS 'Angst' "
+            "WHERE (e.name CONTAINS 'Hass' OR e.name CONTAINS 'Wut' OR e.name CONTAINS 'Angst' "
+            "OR e.name CONTAINS 'Verzweiflung' OR e.name CONTAINS 'Misstrauen') "
             "WITH c, e, count(m) AS cnt ORDER BY cnt DESC LIMIT 200 "
             "RETURN c, e, cnt"
+        )
+    },
+    {
+        "keywords": ["negative emotion messages", "sample messages emotion", "messages from negative", "5 messages", "show messages emotion", "emotion originate", "which channels negative"],
+        "question": "Show channels with most negative emotions, the emotion types, count and 5 sample messages",
+        "cypher": (
+            "MATCH (c:Channel)-[:HAS_MESSAGE]->(m:Message)-[:HAS_EMOTION]->(e:Emotion) "
+            "WHERE (e.name CONTAINS 'Hass' OR e.name CONTAINS 'Wut' OR e.name CONTAINS 'Angst' "
+            "OR e.name CONTAINS 'Verzweiflung' OR e.name CONTAINS 'Misstrauen') "
+            "WITH c.username AS channel, e.name AS emotion, count(m) AS cnt, collect(m)[..5] AS sample_msgs "
+            "RETURN channel, emotion, cnt, "
+            "[msg IN sample_msgs | {text: coalesce(msg.translated_text, msg.original_text), date: toString(msg.date)}] AS sample_messages "
+            "ORDER BY cnt DESC LIMIT 50"
         )
     },
     {
