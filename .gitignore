@@ -83,3 +83,5 @@ models/image/*
 *.gguf
 *.bin
 *.safetensorsgerman-emotions.tar.gz
+
+aether_tutorial/assets/*
