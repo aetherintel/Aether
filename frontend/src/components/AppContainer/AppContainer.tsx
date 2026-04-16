@@ -63,7 +63,7 @@ export default function AppContainer() {
           />
         )}
         <Suspense fallback={<div>Loading</div>}>
-          <Container size="xl" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+          <Container size="xl">
             <Outlet />
           </Container>
         </Suspense>

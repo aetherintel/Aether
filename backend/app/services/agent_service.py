@@ -29,9 +29,13 @@ class AgentService:
         """
         logger.info(f"Agent received: {message} with prompt {system_prompt_key}, owner_id={owner_id}")
 
-        # 1. Command Parsing
-        if message.startswith("/"):
-            return await self._handle_command(message, history, owner_id=owner_id)
+        # 1. Command Parsing — accept both "/showmap" and "showmap"
+        stripped = message.strip()
+        if stripped.startswith("/"):
+            return await self._handle_command(stripped, history, owner_id=owner_id)
+        first_word = stripped.split(" ", 1)[0].lower()
+        if first_word in ("help", "visualize", "showmap", "show_map", "summarize", "sys"):
+            return await self._handle_command("/" + stripped, history, owner_id=owner_id)
 
         # 2. Intent Detection: map-related questions bypass the LLM
         msg_lower = message.lower()
@@ -59,9 +63,11 @@ class AgentService:
         if command == "/help":
             return AgentResponse(
                 message="**Available Commands:**\n"
-                        "- `/visualize <query>`: Force a graph visualization.\n"
-                        "- `/showmap <query>`: Generate a map visualization of locations.\n"
-                        "- `/summarize <text/query>`: Summarize the results."
+                        "- `/visualize <query>` — force a graph visualization\n"
+                        "- `/showmap [filter]` — map of mentioned locations (optional filter, e.g. *negative emotions*)\n"
+                        "- `/summarize [query]` — summarize data or last context\n"
+                        "- `/sys list` — list available system prompts\n\n"
+                        "Or just ask in natural language — no slash needed!"
             )
         
         elif command == "/visualize":
@@ -267,8 +273,8 @@ class AgentService:
         Returns a list of suggested commands/queries for the frontend autocomplete.
         """
         return [
-            {"category": "Commands", "label": "Visualize Graph", "query": "/visualize "},
-            {"category": "Commands", "label": "Show Map", "query": "/showmap "},
-            {"category": "Commands", "label": "Summarize Data", "query": "/summarize "},
-            {"category": "Commands", "label": "Help", "query": "/help"}
+            {"category": "Commands", "label": "/showmap", "query": "/showmap"},
+            {"category": "Commands", "label": "/visualize", "query": "/visualize "},
+            {"category": "Commands", "label": "/summarize", "query": "/summarize"},
+            {"category": "Commands", "label": "/help", "query": "/help"},
         ]

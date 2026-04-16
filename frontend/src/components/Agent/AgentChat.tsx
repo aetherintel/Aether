@@ -29,7 +29,7 @@ interface ChatMessage {
 }
 
 const CHAT_STORAGE_KEY = 'aether_agent_chat_history';
-const MAX_MESSAGES = 40;
+const MAX_MESSAGES = 15; // Graphs and maps are heavy — keep DOM small
 
 function loadMessagesFromStorage(): ChatMessage[] {
     try {
@@ -311,7 +311,15 @@ export const AgentChat: React.FC<AgentChatProps> = ({ embedded = false }) => {
   };
 
   return (
-    <Stack gap="md" style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+    <Stack
+      gap="md"
+      style={{
+        height: 'calc(100dvh - 60px - 2 * var(--mantine-spacing-md))',
+        display: 'flex',
+        flexDirection: 'column',
+        overflow: 'hidden',
+      }}
+    >
         {/* Header / Toolbar */}
         <Paper p="xs" shadow="xs" radius="md" style={{ flexShrink: 0 }}>
             <Group justify="space-between">
@@ -327,7 +335,7 @@ export const AgentChat: React.FC<AgentChatProps> = ({ embedded = false }) => {
             </Group>
         </Paper>
 
-        {/* Chat Area — flex:1 + minHeight:0 lets it shrink to fit available space */}
+        {/* Chat Area */}
         <Paper p="md" radius="md" withBorder bg="var(--mantine-color-gray-0)" style={{ flex: 1, minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
             <ScrollArea viewportRef={scrollViewport} style={{ flex: 1, minHeight: 0 }}>
                 <Stack gap="lg" pb="xl">
@@ -597,7 +605,7 @@ export const AgentChat: React.FC<AgentChatProps> = ({ embedded = false }) => {
             </ScrollArea>
         </Paper>
 
-        {/* Input Area — always pinned at bottom */}
+        {/* Input — pinned at bottom, always visible */}
         <Paper p="sm" withBorder radius="lg" shadow="sm" style={{ flexShrink: 0 }}>
             <Group gap="xs" align="flex-end">
                 <Autocomplete
@@ -609,15 +617,8 @@ export const AgentChat: React.FC<AgentChatProps> = ({ embedded = false }) => {
                     radius="md"
                     style={{ flex: 1 }}
                     rightSectionWidth={0}
-                    data={(() => {
-                        const grouped = (suggestions || []).reduce((acc, s) => {
-                            if (!acc[s.category]) acc[s.category] = [];
-                            acc[s.category].push({ value: s.query, label: s.label });
-                            return acc;
-                        }, {} as Record<string, { value: string, label: string }[]>);
-                        return Object.entries(grouped).map(([group, items]) => ({ group, items }));
-                    })()}
-                    limit={20}
+                    data={(suggestions || []).map(s => s.query)}
+                    limit={10}
                 />
                 {loading ? (
                     <ActionIcon
