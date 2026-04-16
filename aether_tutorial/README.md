@@ -19,4 +19,4 @@ Welcome to the Æther user guide. Follow the steps below to get started with mon
 Register → Verify Email → Connect Telegram → Create Case → Add Channels → Analyze
 ```
 
-> **Prerequisites:** A Telegram account and valid API credentials (`TG_API_ID`, `TG_API_HASH`) configured in `.env.dev`. See the [main README](../../README.md) for setup.
+> **Prerequisites:** A Telegram account and valid API credentials (`TG_API_ID`, `TG_API_HASH`) configured in `.env.dev`. See the [main README](../README.md) for setup.
