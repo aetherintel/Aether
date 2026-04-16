@@ -38,4 +38,4 @@ Each report contains:
 
 ---
 
-**You're all set!** Return to the [Tutorial Overview](README.md) or check the [main README](../../README.md) for deployment and API details.
+**You're all set!** Return to the [Tutorial Overview](README.md) or check the [main README](../README.md) for deployment and API details.
