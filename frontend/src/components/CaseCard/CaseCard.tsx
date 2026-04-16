@@ -14,7 +14,6 @@ import {
 } from '@mantine/core';
 import { CaseFile } from '../CaseFileList/CaseFileList';
 import classes from './CaseCard.module.css';
-import { Icon } from 'iconsax-react';
 
 interface CaseCardProps {
   caseFile: CaseFile;

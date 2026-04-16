@@ -163,7 +163,7 @@ export function Reports() {
             <Title order={2}>Reports & Analytics</Title>
           </Group>
           <Text size="sm" c="dimmed">
-            Personalisiertes Dashboard mit Datenübersicht und Report-Downloads
+            Personalized Dashboard mit KPIs and Report-Downloads
           </Text>
         </div>
       </Group>
@@ -215,7 +215,7 @@ export function Reports() {
       <Paper withBorder p="md" radius="md" mb="xl">
         <Group mb="md">
           <IconChartBar size={20} />
-          <Title order={4}>Personalisiertes Dashboard</Title>
+          <Title order={4}>Personalized Dashboard</Title>
         </Group>
         <WidgetGrid category="dashboard" />
       </Paper>
@@ -226,7 +226,7 @@ export function Reports() {
           <Group justify="space-between">
             <Group>
               <IconFileAnalytics size={20} />
-              <Title order={4}>Generierte Reports</Title>
+              <Title order={4}>Generated Reports</Title>
             </Group>
             <Group>
               <Select
@@ -294,7 +294,7 @@ export function Reports() {
             </Table>
           ) : (
             <Text c="dimmed" ta="center" py="xl">
-              {reportsLoading ? 'Loading reports...' : 'Keine Reports verfügbar'}
+              {reportsLoading ? 'Loading reports...' : 'No reports found. Create your first report to see it here.'}
             </Text>
           )}
         </Stack>

@@ -39,8 +39,7 @@ export function Dashboard() {
           variant="subtle"
           leftSection={<IconHelp size={16} />}
           onClick={() => {
-            // TODO: Open help modal or documentation
-            console.log('Open help documentation');
+            window.open('https://github.com/aetherintel/Aether/blob/main/aether_tutorial/README.md', '_blank');
           }}
         >
           Help

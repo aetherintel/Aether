@@ -63,7 +63,7 @@ export const AgentChat: React.FC<AgentChatProps> = ({ embedded = false }) => {
       return [{
           id: 'init',
           sender: 'agent',
-          text: '👋 **Hello!** I am your **Aether Agent**. \n\nYou can ask me to `visualize data`, `summarize cases`, or run analysis.\n\nType `/help` for commands.',
+          text: '👋 **Hello!** I am your **Aether Agent**.\n\nAsk me anything in natural language, or use slash commands like `/visualize`, `/showmap`, `/summarize`. Type `/help` for a full list.',
           timestamp: new Date()
       }];
   });
@@ -311,7 +311,7 @@ export const AgentChat: React.FC<AgentChatProps> = ({ embedded = false }) => {
   };
 
   return (
-    <Stack gap="md" style={{ height: '100%', minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+    <Stack gap="md" style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         {/* Header / Toolbar */}
         <Paper p="xs" shadow="xs" radius="md" style={{ flexShrink: 0 }}>
             <Group justify="space-between">

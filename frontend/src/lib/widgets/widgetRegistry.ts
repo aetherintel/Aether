@@ -1,15 +1,11 @@
 // src/lib/widgets/widgetRegistry.ts
 import { WidgetDefinition, WidgetType } from '@/types/widgets.types';
-import { 
-  IconChartBar, 
-  IconUsers, 
-  IconMoodSmile, 
+import {
+  IconChartBar,
+  IconUsers,
+  IconMoodSmile,
   IconMapPin,
-  IconFiles,
-  IconChartLine,
-  IconTimeline,
   IconMap,
-  IconNetwork,
   IconRobot
 } from '@tabler/icons-react';
 

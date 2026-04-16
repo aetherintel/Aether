@@ -125,14 +125,14 @@ export const LocationMap: React.FC<LocationMapProps> = ({
 
         <Popover position="bottom-end" withArrow shadow="md" closeOnClickOutside={true} zIndex={2000}>
           <Popover.Target>
-            <ActionIcon variant="subtle" color="gray" size="md" title="POI-Filter konfigurieren">
+            <ActionIcon variant="subtle" color="gray" size="md" title="Configure POI Filter">
               <IconSettings size={18} />
             </ActionIcon>
           </Popover.Target>
           <Popover.Dropdown>
             <Checkbox.Group
-              label="POI-Kategorien"
-              description="Auswahl für den Umfeld-Scan"
+              label="POI-Categories"
+              description="Selection for the surrounding area scan (max. 500m radius)"
               value={selectedLayers}
               onChange={setSelectedLayers}
             >
@@ -146,7 +146,7 @@ export const LocationMap: React.FC<LocationMapProps> = ({
         </Popover>
 
         {firstPoint && (
-          <Tooltip label={hasOsint ? 'Umgebungsdaten aktualisieren' : 'Umgebungsdaten laden'} withArrow>
+          <Tooltip label={hasOsint ? 'Update surrounding data' : 'Load surrounding data'} withArrow>
             <Button
               size="xs"
               variant="filled"
@@ -158,7 +158,7 @@ export const LocationMap: React.FC<LocationMapProps> = ({
                 osintCenter?.lng ?? firstPoint.lng,
               )}
             >
-              Umfeld-Scan
+              Area Scan
             </Button>
           </Tooltip>
         )}
@@ -271,7 +271,7 @@ export const LocationMap: React.FC<LocationMapProps> = ({
                       {mentions} {mentions === 1 ? 'mention' : 'mentions'}
                     </div>
                     <div style={{ fontSize: '0.68rem', color: '#aaa', marginTop: 4 }}>
-                      ↓ Klicken um Umgebungsdaten zu laden
+                      ↓ Click to load surrounding data ↓
                     </div>
                     {sampleMsgs.length > 0 && (
                       <div style={{ borderTop: '1px solid #e9ecef', paddingTop: 6, marginTop: 6 }}>

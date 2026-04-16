@@ -39,25 +39,25 @@ async def get_media_by_message_id(
         message = await get_messages_by_id(message_id, owner)
 
         if not message:
-            raise HTTPException(status_code=404, detail=f"Nachricht {message_id} nicht gefunden")
+            raise HTTPException(status_code=404, detail=f"Message {message_id} not found")
 
         if not message.media_path:
-            raise HTTPException(status_code=404, detail=f"Keine Medien für diese {message_id} Nachricht")
+            raise HTTPException(status_code=404, detail=f"No Media for this {message_id} message found")
 
         file_path = Path(message.media_path)
 
         if not file_path.exists():
-            raise HTTPException(status_code=404, detail=f"Media-Datei {file_path} nicht gefunden")
+            raise HTTPException(status_code=404, detail=f"Media file {file_path} not found")
 
         if not file_path.resolve().is_relative_to(MEDIA_ROOT.resolve()):
-            raise HTTPException(status_code=403, detail=f"Media-Datei {file_path} ist nicht im Medienverzeichnis")
+            raise HTTPException(status_code=403, detail=f"Media file {file_path} is not in the media directory")
 
         return FileResponse(path = file_path)
 
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Fehler beim Abrufen der Medien: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error fetching media: {str(e)}")
     
 async def fetch_channels(owner: str | None, usernames: list[str] | None = None):
     all_channels = await get_channel_list(owner, usernames=usernames or [])

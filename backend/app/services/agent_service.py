@@ -167,8 +167,8 @@ class AgentService:
                 logger.error(f"LLM map query failed: {e}, falling back to all-locations query")
 
         fallback_note = (
-            "ℹ️ *Für deine Anfrage gibt es leider keine passenden Daten. "
-            "Hier ist stattdessen eine allgemeine Karte aller Orte.*\n\n"
+            "ℹ️ *No matching data found. "
+            "Here is a general map of all locations instead.*\n\n"
             if has_filter else ""
         )
 
@@ -194,7 +194,7 @@ class AgentService:
                     metadata={"cypher": cypher}
                 )
             return AgentResponse(
-                message=f"{fallback_note}**Karte mit {len(data)} Orten**",
+                message=f"{fallback_note}**Map with {len(data)} locations**",
                 widget_type="location_map",
                 widget_data=data,
                 metadata={"cypher": cypher}

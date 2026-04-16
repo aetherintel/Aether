@@ -191,7 +191,7 @@ export const MessageEnrichment: React.FC<MessageEnrichmentProps> = ({
               )}
 
               {data.emotions.length === 0 && data.classifications.length === 0 && data.locations.length === 0 && (
-                <Text size="xs" c="dimmed">Keine Details verfügbar.</Text>
+                <Text size="xs" c="dimmed">No details available.</Text>
               )}
             </>
           )}

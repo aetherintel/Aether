@@ -20,12 +20,12 @@ export const OSINT_ICONS: Record<string, L.DivIcon> = {
 };
 
 export const OSINT_LABELS: Record<string, string> = {
-  cameras:  "📷 Kameras",
+  cameras:  "📷 Cameras",
   atm:      "🏧 ATMs",
-  bank:     "🏦 Banken",
-  police:   "🚔 Polizei",
-  military: "🪖 Militär",
-  power:    "⚡ Strom-Infrastruktur",
-  water:    "💧 Wasser-Infrastruktur",
-  alpr:     "🚗 ALPR / Kennzeichenscanner",
+  bank:     "🏦 Banks",
+  police:   "🚔 Police",
+  military: "🪖 Military",
+  power:    "⚡ Power Infrastructure",
+  water:    "💧 Water Infrastructure",
+  alpr:     "🚗 ALPR / License Plate Readers",
 };
