@@ -231,13 +231,11 @@ export function Reports() {
             <Group>
               <Select
                 placeholder="Filter by case"
-                data={Array.from(new Set(reports?.map(r => JSON.stringify({ 
-                  value: r.case_id.toString(), 
-                  label: r.case_title || `Case ${r.case_id}` 
-                }))) || []).map(s => JSON.parse(s))}
+                data={(cases || []).map(c => ({ value: c.id.toString(), label: c.title }))}
                 value={selectedCase}
                 onChange={setSelectedCase}
                 clearable
+                searchable
                 style={{ width: 250 }}
               />
               <Button 
