@@ -242,9 +242,7 @@ async def get_total_message_count_for_channels(channel_ids: list[str], owner_id:
         MATCH (ch:Channel) WHERE ch.channel_id IN $channel_ids AND ($ownerId IS NULL OR ch.owner_id = $ownerId)
         MATCH (ch)-[:HAS_MESSAGE]->(m:Message)
         WHERE ($ownerId IS NULL OR m.owner_id = $ownerId) AND m.date IS NOT NULL
-          AND (m.original_text IS NOT NULL OR m.text IS NOT NULL)        
-          MATCH (u:User)-[:SENT]->(m)
-        WHERE ($ownerId IS NULL OR u.owner_id = $ownerId)
+          AND (m.original_text IS NOT NULL OR m.text IS NOT NULL)
         AND ($query IS NULL OR $query = '' OR toLower(m.text) CONTAINS toLower($query))
         AND ($before IS NULL OR m.date < $before)
         RETURN count(m) AS total_count

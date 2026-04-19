@@ -1,11 +1,10 @@
 import { useEffect, useState } from 'react';
-import { Container, Title, Text, Group, Paper, Grid, Stack, SimpleGrid, Button, Select, MultiSelect, Table, Anchor, ActionIcon, Modal } from '@mantine/core';
-import { IconFileAnalytics, IconDownload, IconChartBar, IconUsers, IconMessage, IconTrendingUp, IconSettings, IconDeviceFloppy, IconPlus, IconEye } from '@tabler/icons-react';
+import { Container, Title, Text, Group, Paper, Stack, SimpleGrid, Button, Select, MultiSelect, Table, Anchor, ActionIcon, Modal, ScrollArea } from '@mantine/core';
+import { IconFileAnalytics, IconDownload, IconChartBar, IconUsers, IconMessage, IconTrendingUp, IconPlus, IconEye } from '@tabler/icons-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { notifications } from '@mantine/notifications';
 import { useDisclosure } from '@mantine/hooks';
 import BreadcrumbsBar from '@/components/BreadcrumbsBar/BreadcrumbsBar';
-import { WidgetGrid } from '@/components/WidgetGrid/WidgetGrid';
 import { authFetch } from '@/utils/authFetch';
 import classes from './Reports.module.css';
 
@@ -218,15 +217,6 @@ export function Reports() {
         </Paper>
       </SimpleGrid>
 
-      {/* Widget Dashboard */}
-      <Paper withBorder p="md" radius="md" mb="xl">
-        <Group mb="md">
-          <IconChartBar size={20} />
-          <Title order={4}>Personalized Dashboard</Title>
-        </Group>
-        <WidgetGrid category="dashboard" />
-      </Paper>
-
       {/* Reports Section */}
       <Paper withBorder p="md" radius="md">
         <Stack gap="md">
@@ -255,48 +245,50 @@ export function Reports() {
           </Group>
 
           {filteredReports && filteredReports.length > 0 ? (
-            <Table striped highlightOnHover>
-              <Table.Thead>
-                <Table.Tr>
-                  <Table.Th>Filename</Table.Th>
-                  <Table.Th>Case</Table.Th>
-                  <Table.Th>Created</Table.Th>
-                  <Table.Th>Size</Table.Th>
-                  <Table.Th>Action</Table.Th>
-                </Table.Tr>
-              </Table.Thead>
-              <Table.Tbody>
-                {filteredReports.map((report) => (
-                  <Table.Tr key={report.filename}>
-                    <Table.Td>{report.filename}</Table.Td>
-                    <Table.Td>{report.case_title || `Case ${report.case_id}`}</Table.Td>
-                    <Table.Td>{new Date(report.created).toLocaleString()}</Table.Td>
-                    <Table.Td>{(report.size / 1024).toFixed(2)} KB</Table.Td>
-                    <Table.Td>
-                      <Group gap="xs">
-                        <ActionIcon 
-                          variant="light" 
-                          color="blue" 
-                          onClick={() => handlePreview(report.url)}
-                          title="View Report"
-                        >
-                          <IconEye size={16} />
-                        </ActionIcon>
-                        <Anchor href={report.url} target="_blank" download>
-                          <Button 
-                            leftSection={<IconDownload size={14} />} 
-                            variant="light" 
-                            size="xs"
-                          >
-                            Download
-                          </Button>
-                        </Anchor>
-                      </Group>
-                    </Table.Td>
+            <ScrollArea h={400}>
+              <Table striped highlightOnHover>
+                <Table.Thead>
+                  <Table.Tr>
+                    <Table.Th>Filename</Table.Th>
+                    <Table.Th>Case</Table.Th>
+                    <Table.Th>Created</Table.Th>
+                    <Table.Th>Size</Table.Th>
+                    <Table.Th>Action</Table.Th>
                   </Table.Tr>
-                ))}
-              </Table.Tbody>
-            </Table>
+                </Table.Thead>
+                <Table.Tbody>
+                  {filteredReports.map((report) => (
+                    <Table.Tr key={report.filename}>
+                      <Table.Td>{report.filename}</Table.Td>
+                      <Table.Td>{report.case_title || `Case ${report.case_id}`}</Table.Td>
+                      <Table.Td>{new Date(report.created).toLocaleString()}</Table.Td>
+                      <Table.Td>{(report.size / 1024).toFixed(2)} KB</Table.Td>
+                      <Table.Td>
+                        <Group gap="xs">
+                          <ActionIcon
+                            variant="light"
+                            color="blue"
+                            onClick={() => handlePreview(report.url)}
+                            title="View Report"
+                          >
+                            <IconEye size={16} />
+                          </ActionIcon>
+                          <Anchor href={report.url} target="_blank" download>
+                            <Button
+                              leftSection={<IconDownload size={14} />}
+                              variant="light"
+                              size="xs"
+                            >
+                              Download
+                            </Button>
+                          </Anchor>
+                        </Group>
+                      </Table.Td>
+                    </Table.Tr>
+                  ))}
+                </Table.Tbody>
+              </Table>
+            </ScrollArea>
           ) : (
             <Text c="dimmed" ta="center" py="xl">
               {reportsLoading ? 'Loading reports...' : 'No reports found. Create your first report to see it here.'}
