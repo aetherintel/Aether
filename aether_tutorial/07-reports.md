@@ -1,8 +1,8 @@
-# Step 6 — Reports
+# Step 7 — Reports
 
 Æther generates structured PDF reports for each case, summarizing collected messages, active channels, and timeline analysis.
 
-## 6.1 Reports List
+## 7.1 Reports List
 
 Navigate to **Reports** via the sidebar (📊 icon).
 
@@ -20,11 +20,11 @@ The table shows all generated reports with filename, associated case, creation t
 
 Use **Filter by case** to narrow the list to a specific case.
 
-## 6.2 Create a Report
+## 7.2 Create a Report
 
 Click **+ Create Report** to generate a new report on demand for any case.
 
-## 6.3 Report Content
+## 7.3 Report Content
 
 ![Report preview](assets/aether_report_preview.png)
 

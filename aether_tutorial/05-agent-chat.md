@@ -148,4 +148,4 @@ Use the **Re-Index** button (top right of Agent Chat) to rebuild the vector sear
 
 ---
 
-**Next:** [Step 6 — Reports](06-reports.md)
+**Next:** [Step 6 — Dashboard](06-dashboard.md)

@@ -60,8 +60,12 @@ async def list_all_reports(
     
     result = []
     for r, case_title in reports:
-        # Check if file exists
+        # Resolve file — stored path may be stale; try case subdirectory and root as fallbacks
         file_path = Path(r.path)
+        if not file_path.exists():
+            file_path = REPORTS_DIR / f"case_{r.case_id}" / r.filename
+        if not file_path.exists():
+            file_path = REPORTS_DIR / r.filename
         if file_path.exists():
             result.append({
                 "filename": r.filename,
@@ -72,7 +76,7 @@ async def list_all_reports(
                 "case_title": case_title,
                 "url": f"/api/reports/download/{r.filename}"
             })
-            
+
     return result
 
 @router.get("/list/{case_id}")
@@ -85,11 +89,15 @@ async def list_reports(
     reports = db.query(ReportModel).filter(
         ReportModel.case_id == case_id
     ).order_by(ReportModel.created_at.desc()).all()
-    
+
     result = []
     for r in reports:
-        # Check if file exists
+        # Resolve file — stored path may be stale; try case subdirectory and root as fallbacks
         file_path = Path(r.path)
+        if not file_path.exists():
+            file_path = REPORTS_DIR / f"case_{r.case_id}" / r.filename
+        if not file_path.exists():
+            file_path = REPORTS_DIR / r.filename
         if file_path.exists():
             result.append({
                 "filename": r.filename,
@@ -99,7 +107,7 @@ async def list_reports(
                 "case_id": r.case_id,
                 "url": f"/api/reports/download/{r.filename}"
             })
-            
+
     return result
 
 @router.get("/download/{filename}")

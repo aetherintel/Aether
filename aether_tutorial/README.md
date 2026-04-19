@@ -11,7 +11,8 @@ Welcome to the Æther user guide. Follow the steps below to get started with mon
 | 3 | [Cases](03-cases.md) | Create and manage monitoring cases |
 | 4 | [Analysis](04-analysis.md) | Search messages, run scrapers, monitor jobs |
 | 5 | [Agent Chat](05-agent-chat.md) | AI-powered analysis and geo-visualization |
-| 6 | [Reports](06-reports.md) | Generate and download case reports |
+| 6 | [Dashboard](06-dashboard.md) | Customizable widget dashboard for live monitoring |
+| 7 | [Reports](07-reports.md) | Generate and download case reports |
 
 ## Quick Start
 

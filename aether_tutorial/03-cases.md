@@ -30,7 +30,7 @@ Click **Next**.
 
 ![Case creation step 2](assets/aether_case_creation_2.png)
 
-Search for Telegram channel usernames (e.g. `nordfeuer`, `aktiv_berlin`) and add them to the case. You can add more channels later from the case detail view.
+Search for Telegram channel usernames (Telegram channels are case sensitive) and add them to the case. You can add more channels later from the case detail view. 
 
 Click **Create Case**. Scrapers start automatically.
 
