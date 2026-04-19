@@ -94,6 +94,7 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
       - tg_sessions:/app/sessions
       - ./shared/media:/shared/media
+      - ./shared/reports:/shared/reports
     depends_on:
       - postgres
       - keycloak
