@@ -73,7 +73,7 @@ export function Reports() {
     document.title = 'Reports & Analytics - Æther';
   }, []);
 
-  const { data: stats, isLoading: statsLoading } = useQuery<StatsOverview>({
+  const { data: stats } = useQuery<StatsOverview>({
     queryKey: ['stats-overview'],
     queryFn: fetchStats,
   });
@@ -88,6 +88,13 @@ export function Reports() {
     queryKey: ['all-cases'],
     queryFn: fetchAllCases,
   });
+
+  // Auto-select the first case when cases load
+  useEffect(() => {
+    if (cases && cases.length > 0 && selectedCase === null) {
+      setSelectedCase(cases[0].id.toString());
+    }
+  }, [cases]);
 
   useEffect(() => {
     if (casesError) {
