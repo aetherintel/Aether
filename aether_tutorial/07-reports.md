@@ -6,7 +6,7 @@
 
 Navigate to **Reports** via the sidebar (📊 icon).
 
-![Reports list](assets/aether_reports_list.png)
+![Reports list](assets/aether_reports_overview.png)
 
 The table shows all generated reports with filename, associated case, creation timestamp, and file size. Reports are named by pattern: `report_<case_id>_<schedule>_<date>.pdf`.
 
