@@ -93,7 +93,6 @@ export const LocationMap: React.FC<LocationMapProps> = ({
         `&layers=${selectedLayers.length > 0 ? selectedLayers.join(',') : 'none'}`,
       );
       const data: OsintData = await res.json();
-      console.log('[OSINT] received:', JSON.stringify(Object.fromEntries(Object.entries(data).map(([k,v]) => [k, v.length]))));
       setOsintData(data);
     } catch (err) {
       console.error('Failed to load OSINT layers:', err);

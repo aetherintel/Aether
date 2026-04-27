@@ -19,7 +19,6 @@ from services.neo4j_backend_client import (
     get_message_volume_over_time,
     get_channel_recommendation_graph,
     get_user_interaction_graph,
-    get_user_interaction_graph,
     get_active_channels_in_period,
     get_aggregated_emotions
 )

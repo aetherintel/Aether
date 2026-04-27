@@ -49,7 +49,6 @@ services:
     image: ghcr.io/${GITHUB_REPOSITORY_OWNER:-aetherintel}/aether-backend:latest
     container_name: backend
     restart: on-failure
-    user: "root"
     environment:
       DB_USER: ${DB_USER}
       DB_PASSWORD: ${DB_PASSWORD}
@@ -91,7 +90,6 @@ services:
       MODAL_EMOTION_URL: ${MODAL_EMOTION_URL}
       MODAL_CLASSIFICATION_URL: ${MODAL_CLASSIFICATION_URL}
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
       - tg_sessions:/app/sessions
       - ./shared/media:/shared/media
       - ./shared/reports:/shared/reports

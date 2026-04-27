@@ -33,8 +33,3 @@ from repository.neo4j.graph_repo import (
     get_top_locations,
     get_aggregated_emotions
 )
-
-# Placeholder or aliases if needed for backward compatibility
-async def get_top_entities(*args, **kwargs):
-    # This was a pass in the original file anyway
-    return []

@@ -1,3 +1,4 @@
+import ast
 import os
 import httpx
 import logging
@@ -164,7 +165,6 @@ class Text2CypherService:
                         "error": msg
                      }
                  # If plan_str was not JSON and not a valid query, cypher_query remains None, leading to error below.
-                 # cypher_query = cypher_result.get("raw_output", "") # Removed as per instruction
 
             if not cypher_query:
                 # Provide a friendly fallback if the LLM couldn't give us a query (often means it's offline or hallucinating)
@@ -745,9 +745,8 @@ class Text2CypherService:
                     # LLM sent: {"variable": "m.emotions", "operator": "IN", "value": ["angry"]}
                     # This is backwards! Should be: "'angry' IN m.emotions"
                     # Swap them
-                    logger.warning(f"Reversing IN operator: {val} IN {prop} → {val[0] if len(eval(val))==1 else val} IN {prop}")
-                    # For single value in list, extract it
                     val_list = f.get('value')
+                    logger.warning(f"Reversing IN operator: {val} IN {prop} → {val_list[0] if len(val_list)==1 else val} IN {prop}")
                     if len(val_list) == 1:
                         val = f"'{val_list[0]}'"
                         where_clauses.append(f"{val} IN {prop}")
@@ -761,7 +760,6 @@ class Text2CypherService:
                     # Also backwards - swap
                     logger.warning(f"Reversing IN operator with array syntax: {prop} IN {val}")
                     # Parse the array
-                    import ast
                     try:
                         val_list = ast.literal_eval(val)
                         if len(val_list) == 1:
@@ -769,7 +767,7 @@ class Text2CypherService:
                         else:
                             for v in val_list:
                                 where_clauses.append(f"'{v}' IN {prop}")
-                    except:
+                    except (ValueError, SyntaxError):
                         # Fallback: just reverse as-is
                         where_clauses.append(f"{val} IN {prop}")
                     continue

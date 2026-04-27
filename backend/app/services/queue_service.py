@@ -400,6 +400,17 @@ class QueueService:
     # JOB CANCELLATION
     # ========================================================================
 
+    def fetch_job(self, job_id: str) -> Optional[Job]:
+        """Fetch a job by ID across all queues without modifying it."""
+        for queue in self.queues.values():
+            try:
+                job = queue.fetch_job(job_id)
+                if job:
+                    return job
+            except Exception:
+                pass
+        return None
+
     def cancel_job(self, job_id: str) -> bool:
         for queue_name, queue in self.queues.items():
             try:

@@ -58,12 +58,16 @@ def cancel_job(
     Cancel a running or queued job
     Only the job owner or admin can cancel
     """
-    # TODO: Add ownership check before cancelling
-    success = queue_service.cancel_job(job_id)
-    
-    if not success:
+    job = queue_service.fetch_job(job_id)
+    if not job:
         raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
-    
+
+    if not is_admin(user):
+        job_owner = (job.meta or {}).get("owner_id") or (job.kwargs or {}).get("owner_id")
+        if job_owner != user["id"]:
+            raise HTTPException(status_code=403, detail="Not authorized to cancel this job")
+
+    job.cancel()
     return {"success": True, "job_id": job_id}
 
 

@@ -251,7 +251,7 @@ async def geocode_entity_with_arcgis(entity_name: str) -> Optional[Dict]:
     best = candidates[0]
     score = best.get("score", 0)
     if score < 75:
-        print(f"DEBUG: ArcGIS score {score} < 75 for '{entity_name}', discarding", flush=True)
+        logger.debug(f"ArcGIS score {score} < 75 for '{entity_name}', discarding")
         return None
 
     loc = best.get("location", {})
@@ -262,7 +262,7 @@ async def geocode_entity_with_arcgis(entity_name: str) -> Optional[Dict]:
 
     attrs = best.get("attributes", {})
     display_name = attrs.get("LongLabel") or best.get("address", entity_name)
-    print(f"DEBUG: ArcGIS geocoded '{entity_name}' → {display_name} ({lat}, {lng}) score={score}", flush=True)
+    logger.debug(f"ArcGIS geocoded '{entity_name}' → {display_name} ({lat}, {lng}) score={score}")
     return {
         "lat": lat,
         "lng": lng,
@@ -279,7 +279,7 @@ async def geocode_entity_with_arcgis(entity_name: str) -> Optional[Dict]:
 
 def extract_and_update_location(message_id: str, text: str, owner_id: str, case_id: int):
     """RQ worker entry point"""
-    print(f"DEBUG: Starting geolocation extraction... ESRI_API_KEY set={bool(ESRI_API_KEY)}", flush=True)
+    logger.debug(f"Starting geolocation extraction... ESRI_API_KEY set={bool(ESRI_API_KEY)}")
     job = get_current_job()
     job_id = job.id if job else 'unknown'
 
@@ -302,11 +302,11 @@ async def _extract_and_update_location_async(
         entities = extract_location_entities(text)
 
         if not entities:
-            print(f"DEBUG: GLiNER found no entities in {message_id}", flush=True)
+            logger.debug(f"GLiNER found no entities in {message_id}")
             await update_message_geolocation_status(message_id, 'no_location', owner_id)
             return {"status": "no_location", "message_id": message_id}
 
-        print(f"DEBUG: GLiNER found entities: {[e[0] for e in entities]}", flush=True)
+        logger.debug(f"GLiNER found entities: {[e[0] for e in entities]}")
 
         # Step 2: geocode each entity — ArcGIS primary, GeoNames fallback
         for entity_text, start, end in entities:
@@ -349,7 +349,7 @@ async def _extract_and_update_location_async(
                     'confidence': 'high' if geonames_data else 'medium',
                 })
             else:
-                print(f"DEBUG: Could not geocode '{entity_text}' via ArcGIS or GeoNames", flush=True)
+                logger.debug(f"Could not geocode '{entity_text}' via ArcGIS or GeoNames")
         
         if locations:
             await store_locations_neo4j(message_id, locations, owner_id)

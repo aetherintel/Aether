@@ -44,7 +44,6 @@ const fetchLocations = async (config: any): Promise<LocationData[]> => {
       channelIds.map(async (channelId: string) => {
         const url = `${base}/messages/channels/${channelId}/locations?limit=1000`;
         const res = await authFetch(url);
-        console.log('Fetched locations for channel', channelId, res);
         return await res.json();
       })
     );
